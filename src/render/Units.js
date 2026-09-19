@@ -7,6 +7,7 @@ import {
   loadCharacter, loadClips, MODEL_FACING_OFFSET, DEFAULT_CLIP,
 } from './ModelLoader.js';
 import { attachRifle } from './Weapon.js';
+import { StatusRim } from './StatusRim.js';
 
 // Squad units: a Mixamo skinned character per robot, with the procedural
 // chassis kept as a fallback if the model fails to load.
@@ -154,11 +155,15 @@ export class Unit {
   setStatus(status, { animate = true } = {}) {
     this.status = status;
     const color = new THREE.Color(STATUS_COLOR[status]);
+    if (this.rim) {
+      this.rim.setColor(color);
+      this.rim.setPulse(status !== STATUS.HEALTHY);
+    }
     if (this.modelMaterial) {
       this.modelMaterial.color.copy(color);
       this.modelMaterial.emissive.copy(color);
       this.modelMaterial.emissiveIntensity = status === STATUS.HEALTHY ? 0.35 : 0.6;
-    } else {
+    } else if (!this.rim) {
       for (const part of this.tintParts) {
         part.material.color.copy(color);
         part.material.emissive.copy(color);
@@ -220,35 +225,35 @@ export class Unit {
     model.position.y = character.footOffset;
     model.rotation.y = MODEL_FACING_OFFSET;
 
-    // The FBX references its textures by absolute paths from Mixamo's export
-    // machine, so nothing resolves and the stock materials render black. The
-    // art direction calls for untextured flat-shaded units anyway, so give
-    // the character one palette material per unit — which also makes status
-    // tinting a single assignment instead of a traversal.
-    this.modelMaterial = new THREE.MeshStandardMaterial({
-      color: STATUS_COLOR[this.status],
-      emissive: STATUS_COLOR[this.status],
-      emissiveIntensity: 0.35,
-      roughness: 0.5,
-      metalness: 0.25,
-      flatShading: true,
-    });
-
+    // Keep whatever materials the FBX shipped with. Materials are shared by
+    // SkeletonUtils.clone(), so clone them per unit — otherwise a status
+    // change on one robot repaints all three.
     model.traverse((child) => {
       if (!child.isMesh && !child.isSkinnedMesh) return;
-      child.material = this.modelMaterial;
+      child.material = Array.isArray(child.material)
+        ? child.material.map((m) => m.clone())
+        : child.material.clone();
       child.castShadow = true;
       child.receiveShadow = true;
       child.frustumCulled = false;
     });
 
+    // Status now reads as a coloured silhouette outline rather than a
+    // full-body tint, so the character's own look survives.
+    this.rim = new StatusRim(model, STATUS_COLOR[this.status]);
+    this.modelMaterial = null;
+
     this.group.remove(this.chassis);
     this.chassis = model;
     this.group.add(model);
-    // FX.hitFlash() animates emissiveIntensity on whatever is in tintParts.
-    this.tintParts = [{ material: this.modelMaterial, userData: { emissiveOnly: true } }];
-    this.group.userData.tintParts = this.tintParts;
     this.group.scale.setScalar(1.0);   // model carries its own scale
+
+    // FX.hitFlash() reaches in via group.userData.tintParts. The rim has its
+    // own flash, so this only needs to stay a valid list for the box path.
+    this.tintParts = this.rim.materials.map((material) => ({
+      material, userData: { emissiveOnly: true },
+    }));
+    this.group.userData.tintParts = this.tintParts;
 
     // Parented to the hand bone, so it follows every clip without extra work.
     this.rifle = attachRifle(model);
@@ -294,6 +299,7 @@ export class Unit {
   update(t, dt = 0) {
     this.cone.update(t);
     if (this.mixer) this.mixer.update(dt);
+    if (this.rim) this.rim.update(t);
   }
 }
 

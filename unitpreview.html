@@ -1,37 +1,41 @@
 <!doctype html>
 <html><body style="margin:0;background:#0a0d0a">
+<pre id="err" style="color:#f66;font:12px monospace;position:absolute;top:0;left:0"></pre>
 <canvas id="c" width="1000" height="620"></canvas>
+<script>
+  // Classic script so it is registered before the module parses.
+  const errBox = () => document.getElementById('err');
+  window.addEventListener('error', (e) => {
+    errBox().textContent = `ERROR: ${e.message}\n${e.error && e.error.stack || ''}`;
+  });
+  window.addEventListener('unhandledrejection', (e) => {
+    errBox().textContent = `REJECTED: ${e.reason && (e.reason.stack || e.reason.message || e.reason)}`;
+  });
+</script>
 <script type="module">
 import * as THREE from 'three';
 import { Unit } from '/src/render/Units.js';
 import { loadCharacter, loadClips, CLIP_FILES } from '/src/render/ModelLoader.js';
 
+const params = new URLSearchParams(location.search);
 const renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('c'), antialias: true });
-renderer.setClearColor(0x0a0d0a);
+renderer.setClearColor(params.get('bg') ? Number(params.get('bg')) : 0x0a0d0a);
 const scene = new THREE.Scene();
 scene.add(new THREE.AmbientLight(0xffffff, 1.4));
 const key = new THREE.DirectionalLight(0xffffff, 2.2); key.position.set(3, 6, 4); scene.add(key);
 
-// Two views of the same unit: 3/4 front and side, so the grip can be judged.
 const aspect = 1000 / 620;
 const cam = new THREE.OrthographicCamera(-1.6 * aspect, 1.6 * aspect, 1.9, -0.3, 0.1, 100);
-const angle = Number(new URLSearchParams(location.search).get('a') || 35) * Math.PI / 180;
+const angle = Number(params.get('a') || 35) * Math.PI / 180;
 cam.position.set(Math.sin(angle) * 6, 1.2, Math.cos(angle) * 6);
 cam.lookAt(0, 0.9, 0);
 
 const unit = new Unit({ id: 'ALPHA', x: 0, z: 0, heading: 0, scene });
 const [character, clips] = await Promise.all([loadCharacter(), loadClips(CLIP_FILES)]);
 unit.setModel(character, clips);
-unit.playAnimation(new URLSearchParams(location.search).get('clip') || 'idle', 0);
+if (params.get('status')) unit.setStatus(params.get('status'), { animate: false });
+unit.playAnimation(params.get('clip') || 'idle', 0);
 unit.update(0, 0.9);
-const params = new URLSearchParams(location.search);
-if (params.get('hide')) {
-  unit.chassis.traverse(o => { if (o.isSkinnedMesh || o.isMesh) o.visible = (o.parent?.name === 'rifle' || o.name === 'rifle'); });
-  unit.chassis.traverse(o => { if (o.parent && o.parent.name === 'rifle') o.visible = true; });
-  // mark the hand with a small sphere for reference
-  let hand=null; unit.chassis.traverse(o=>{ if(o.isBone && /RightHand$/i.test(o.name)) hand ||= o; });
-  if (hand) { const s=new THREE.Mesh(new THREE.SphereGeometry(3,12,12), new THREE.MeshBasicMaterial({color:0xff0000})); hand.add(s); }
-}
 renderer.render(scene, cam);
-renderer.render(scene, cam);
+document.title = 'rendered';
 </script></body></html>

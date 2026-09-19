@@ -51,10 +51,14 @@ export class FX {
   }
 
   hitFlash(unit) {
-    const parts = unit.group.userData.tintParts;
-    for (const p of parts) {
-      const from = p.material.emissiveIntensity;
-      gsap.fromTo(p.material, { emissiveIntensity: 5 }, { emissiveIntensity: from, duration: 0.6 });
+    // Outlined characters flash the rim; box placeholders flash emissive.
+    if (unit.rim) {
+      unit.rim.flash();
+    } else {
+      for (const p of unit.group.userData.tintParts) {
+        const from = p.material.emissiveIntensity;
+        gsap.fromTo(p.material, { emissiveIntensity: 5 }, { emissiveIntensity: from, duration: 0.6 });
+      }
     }
     gsap.fromTo(unit.group.position, { y: 0.25 }, { y: 0, duration: 0.5, ease: 'bounce.out' });
     this.burst(unit.position.x, unit.position.z);
