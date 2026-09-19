@@ -4,6 +4,7 @@ import { createRenderer, createScene } from './render/Scene.js';
 import { createCamera, resizeCamera, updateCamera, cutCamera, zoomCamera } from './render/Camera.js';
 import { createFogOfWar } from './render/FogOfWar.js';
 import { createLevel } from './render/Level.js';
+import { createSeabedLevel } from './render/SeabedLevel.js';
 import { createSquad } from './render/Units.js';
 import { FX } from './render/FX.js';
 import { UnitMarkers } from './render/UnitMarkers.js';
@@ -41,9 +42,11 @@ gsap.ticker.lagSmoothing(0);
 const canvas = document.getElementById('scene');
 const renderer = createRenderer(canvas);
 const camera = createCamera();
-const { scene, terrain } = createScene();
+const { scene, terrain } = createScene({ environment: mission1.environment, renderer });
 const fog = createFogOfWar(scene);
-const level = createLevel(scene);
+const level = mission1.environment === 'undersea'
+  ? createSeabedLevel(scene)
+  : createLevel(scene);
 const squad = createSquad(scene);
 const fx = new FX(scene);
 const markers = new UnitMarkers(scene, squad.all);
@@ -203,9 +206,13 @@ function startMission() {
     h.unit.cone.mesh.rotation.y = h.heading;
     h.unit.setStatus('healthy', { animate: false });
   }
-  level.door.rotation.set(0, 0, 0);
-  level.door.position.set(2.6, 0.855, 2);
-  level.door.material.emissiveIntensity = 0.18;
+  // Mission 1's breach door. Missions set somewhere without one hand back a
+  // placeholder, so only reset it if there is actually a door to reset.
+  if (level.door?.material) {
+    level.door.rotation.set(0, 0, 0);
+    level.door.position.set(2.6, 0.855, 2);
+    level.door.material.emissiveIntensity = 0.18;
+  }
   // Deploy push-in: cut wide over the treeline, then settle to tactical range.
   // A cut-then-ease means a restart never flies the camera across the map from
   // wherever the last run happened to end.
@@ -371,7 +378,7 @@ function tick() {
   markers.update(dt, t);
   objectiveMarkers.update(dt, t);
   soundscape.update(dt);
-  terrain?.dust.update(dt);
+  terrain?.dust.update(dt, t);
   input.poll(dt);
   updateCamera(camera, dt, t);
   renderer.render(scene, camera);

@@ -1,12 +1,19 @@
 import * as THREE from 'three';
 import { createSky } from './Sky.js';
 import { createTerrain } from './Terrain.js';
+import { createSeabed } from './Seabed.js';
 
 // 'day'   — late evening at a semi-arid installation: low sun, long shadows,
 //            warm key against a cool sky, practical lights doing real work.
 // 'night'  — the original cold compound, untouched.
 // Every light, the fog, the sky and the fog-of-war read this constant.
 export const ENVIRONMENT = 'day';
+
+// The environment actually in force this session. createScene() sets it from
+// the mission, and anything built afterwards — the fog of war especially —
+// has to read this rather than the default constant above.
+let activeEnvironment = ENVIRONMENT;
+export const getEnvironment = () => activeEnvironment;
 
 export const PALETTE = {
   bg: 0x0a0d0a,
@@ -114,12 +121,19 @@ export function createRenderer(canvas) {
   // Low sun, so less exposure lift than a scene lit by emissives alone — but
   // enough to keep the shadow side off the floor.
   if (ENVIRONMENT === 'day') renderer.toneMappingExposure = 1.15;
+  // Set again by createScene() once the environment is known — undersea runs
+  // darker than anything on the surface.
+  renderer.userData = { ...(renderer.userData || {}), baseExposure: renderer.toneMappingExposure };
   return renderer;
 }
 
-export function createScene() {
+export function createScene({ environment = ENVIRONMENT, renderer = null } = {}) {
+  const undersea = environment === 'undersea';
+  activeEnvironment = environment;
+  if (undersea && renderer) renderer.toneMappingExposure = 0.92;
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color(ENVIRONMENT === 'day' ? 0x6f7d8c : PALETTE.bg);
+  scene.background = new THREE.Color(
+    undersea ? 0x0a2a32 : ENVIRONMENT === 'day' ? 0x6f7d8c : PALETTE.bg);
 
   // Distance haze, linear and deliberately narrow-banded.
   //
@@ -133,9 +147,13 @@ export function createScene() {
   // Matched to the horizon band of the sky. Set past the playable area so
   // the compound stays crisp and only the ridges soften — the haze is depth,
   // not a wash over the gameplay.
-  scene.fog = ENVIRONMENT === 'day'
-    ? new THREE.Fog(0xb49878, 46, 230)
-    : new THREE.Fog(0x0b1211, 40, 78);
+  // Water kills range fast. The fog starts close and finishes well inside
+  // the map, which is what makes the place feel enclosed rather than open.
+  scene.fog = undersea
+    ? new THREE.Fog(0x0b333d, 16, 78)
+    : ENVIRONMENT === 'day'
+      ? new THREE.Fog(0xb49878, 46, 230)
+      : new THREE.Fog(0x0b1211, 40, 78);
 
   // The concrete only covers what the compound actually stands on. It used
   // to be a 30-unit slab — four times the footprint of the building — which
@@ -164,13 +182,18 @@ export function createScene() {
   // light and cannot blow the fragment budget on a demo laptop.
 
   // Key: high, cold, off the north-east. Moonlight, not a studio light.
-  const day = ENVIRONMENT === 'day';
+  const day = ENVIRONMENT === 'day' && !undersea;
 
   // Key: cold moonlight at night, a low warm sun by day.
   // Low and warm: the long raking shadows are what give flat ground its
   // shape. A high sun flattens terrain into a texture swatch.
-  const key = new THREE.DirectionalLight(day ? 0xffd4a0 : 0xc2e4de, day ? 3.0 : 2.9);
-  key.position.set(day ? 26 : 8, day ? 9 : 14, day ? 15 : 6);
+  // Undersea: the only real light comes near-straight down from the surface,
+  // cold and already half absorbed by the time it reaches 280 metres.
+  const key = new THREE.DirectionalLight(
+    undersea ? 0x9fd8dc : day ? 0xffd4a0 : 0xc2e4de,
+    undersea ? 1.15 : day ? 3.0 : 2.9);
+  key.position.set(undersea ? 6 : day ? 26 : 8, undersea ? 30 : day ? 9 : 14,
+                   undersea ? 9 : day ? 15 : 6);
   key.castShadow = true;
   key.shadow.mapSize.set(day ? 3072 : 2048, day ? 3072 : 2048);
   key.shadow.camera.near = 1;
@@ -199,19 +222,24 @@ export function createScene() {
   // the tops of things a cold sky and their undersides a dead floor, which is
   // most of what sells "outdoors at night" on flat-shaded geometry.
   // By day this is the big one: blue sky above, warm soil bounce below.
-  const bounce = day
-    ? new THREE.HemisphereLight(0xa8c4e4, 0xa08462, 2.1)
-    : new THREE.HemisphereLight(0x44635f, 0x0d1311, 1.45);
+  const bounce = undersea
+    ? new THREE.HemisphereLight(0x3d8c9c, 0x081d22, 1.5)
+    : day
+      ? new THREE.HemisphereLight(0xa8c4e4, 0xa08462, 2.1)
+      : new THREE.HemisphereLight(0x44635f, 0x0d1311, 1.45);
   scene.add(bounce);
 
   // Floor of ambient so nothing ever goes fully to black.
   // Deliberately low. Uniform ambient is what makes a scene read as a
   // render; the contrast between lit and unlit ground is the depth cue.
-  scene.add(new THREE.AmbientLight(day ? 0x7b8892 : 0x22302d, day ? 0.75 : 0.8));
+  scene.add(new THREE.AmbientLight(undersea ? 0x2c5a63 : day ? 0x7b8892 : 0x22302d, undersea ? 0.85 : day ? 0.75 : 0.8));
 
   let sky = null;
   let terrain = null;
-  if (day) {
+  if (undersea) {
+    terrain = createSeabed(scene);
+    ground.visible = false;   // no concrete pad on a seabed
+  } else if (day) {
     sky = createSky(scene, {
       top: 0x35506f,        // deep blue overhead
       horizon: 0xd79a62,    // sun band, low and warm

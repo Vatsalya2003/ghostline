@@ -31,6 +31,10 @@ export const mission2 = {
   subtitle: 'OPERATION BLACK CURRENT — TEST RANGE 9',
   objective: 'EXPLAIN THE ANOMALY · RECOVER THE FLEET',
 
+  // The world this mission is set in. Scene.js builds the seabed, the water
+  // column and the Range 9 installation instead of the desert compound.
+  environment: 'undersea',
+
   objectives: [
     { id: 'anomaly', label: 'EXPLAIN THE K-14 ANOMALY', flag: 'anomalyResolved' },
     { id: 'recover', label: 'RECOVER THE FLEET', survive: true },

@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { GROUND_SIZE, ENVIRONMENT } from './Scene.js';
+import { GROUND_SIZE, getEnvironment } from './Scene.js';
 
 // Three tiers, not two.
 //
@@ -104,20 +104,31 @@ export class FogOfWar {
       uniforms: {
         uMemory: { value: this.texture },
         uTime: { value: 0 },
-        // Daylight cannot use a black curtain — unswept ground reads as a
-        // hole punched in the landscape. It becomes a pale dust haze
-        // instead: the same "you cannot see this" signal, lit correctly.
-        // Light enough that terrain, ruts and vegetation still read through
-        // it. A heavy curtain in daylight flattens the ground back into the
-        // featureless plane this pass set out to fix.
-        uUnknown: { value: ENVIRONMENT === 'day' ? 0.34 : 0.78 },
-        uExplored: { value: ENVIRONMENT === 'day' ? 0.13 : 0.46 },
-        uColor: {
-          value: new THREE.Color(ENVIRONMENT === 'day' ? 0xcfc0a6 : 0x05070a),
-        },
-        uEdgeColor: {
-          value: new THREE.Color(ENVIRONMENT === 'day' ? 0xffffff : 0x0d2a2a),
-        },
+        // Three environments, three curtains. Daylight cannot use a black
+        // one — unswept ground reads as a hole punched in the landscape —
+        // and underwater it has to be the colour of the water, or the veil
+        // looks like sand lying on top of the sea.
+        ...(() => {
+          const env = getEnvironment();
+          if (env === 'undersea') return {
+            uUnknown: { value: 0.62 },
+            uExplored: { value: 0.28 },
+            uColor: { value: new THREE.Color(0x06222a) },
+            uEdgeColor: { value: new THREE.Color(0x67d4dc) },
+          };
+          if (env === 'day') return {
+            uUnknown: { value: 0.34 },
+            uExplored: { value: 0.13 },
+            uColor: { value: new THREE.Color(0xcfc0a6) },
+            uEdgeColor: { value: new THREE.Color(0xffffff) },
+          };
+          return {
+            uUnknown: { value: 0.78 },
+            uExplored: { value: 0.46 },
+            uColor: { value: new THREE.Color(0x05070a) },
+            uEdgeColor: { value: new THREE.Color(0x0d2a2a) },
+          };
+        })(),
         uReveal: { value: 1 },
       },
       transparent: true,
