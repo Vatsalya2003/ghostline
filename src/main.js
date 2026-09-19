@@ -65,7 +65,9 @@ turnManager.on('end', (summary) => { pendingEnd = summary; });
 
 async function handleAction(action) {
   if (director.busy) { ui.comms.skip(); return; }
-  audio.select();
+  // Taking the AI's recommendation gets its own affirmative, so agreeing with
+  // the machine sounds different from any other order you give.
+  if (action === 'CONFIRM') audio.confirm(); else audio.select();
   const resolution = turnManager.choose(action);
   if (!resolution) return;
 
@@ -87,6 +89,10 @@ function endMission() {
   ui.commandBar.setLocked(true);
   ui.commandBar.clear();
   stopSpeaking();
+  // Only a completed objective gets the resolving tone; a surviving squad that
+  // never brought the relay up does not.
+  if (summary.outcome === 'complete') audio.missionSuccess();
+  else audio.missionFail();
   debrief.show(summary);
 }
 

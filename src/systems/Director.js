@@ -152,14 +152,14 @@ export class Director {
         this.fx.ring(u.position.x, u.position.z, { radius: 9, duration: 1.1 });
         break;
       }
-      case 'move': audio.beep(); break;
+      case 'move': audio.moveStep(); break;
       case 'relay':
         audio.relay();
         this.fx.ring(this.level.tower.position.x, this.level.tower.position.z, { radius: 8, duration: 1.2 });
         gsap.to(this.level.beacon.material, { emissiveIntensity: 6, duration: 0.4, yoyo: true, repeat: 3 });
         break;
       case 'alarm': audio.alarm(); this.flash(0xe0a84c); break;
-      case 'nightvision': audio.scan(); break;
+      case 'nightvision': audio.nightvision(); break;
       default: break;
     }
 
@@ -191,7 +191,7 @@ export class Director {
   async playProbe(resolution) {
     this.busy = true;
     this.ui.commandBar.setLocked(true);
-    if (resolution.outcome.fx === 'nightvision') audio.scan();
+    if (resolution.outcome.fx === 'nightvision') audio.nightvision();
     this.ui.log.push(resolution.outcome.log);
     audio.radioOpen();
     await this.ui.comms.say(resolution.outcome.response, {

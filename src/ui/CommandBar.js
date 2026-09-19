@@ -1,4 +1,5 @@
 import { ACTION_LABELS } from '../data/mission1.js';
+import { audio } from '../systems/Audio.js';
 
 // Only the actions this turn allows, straight from mission data.
 export class CommandBar {
@@ -20,6 +21,7 @@ export class CommandBar {
       btn.innerHTML = `${ACTION_LABELS[action] || action}` +
         (reason ? `<span class="hint">${reason}</span>` : hint ? `<span class="hint">${hint}</span>` : '');
       btn.addEventListener('click', () => this.choose(action));
+      btn.addEventListener('pointerenter', () => { if (!btn.disabled) audio.hover(); });
       this.el.appendChild(btn);
       return btn;
     });
@@ -51,6 +53,7 @@ export class CommandBar {
     }
     this.focusIndex = i;
     this.paintFocus();
+    audio.hover();   // keyboard and pad get the same tick the mouse does
   }
 
   activateFocused() {
