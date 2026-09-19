@@ -14,7 +14,7 @@ import { GROUND_SIZE, getEnvironment } from './Scene.js';
 // as it sweeps. 128x128 over a 30-unit board is ~23cm per texel — far finer
 // than the frontier softness, so nothing reads as blocky.
 
-const MEM_SIZE = 128;
+const DEFAULT_MEM = 128;
 const UPDATE_HZ = 12;
 
 const VERT = /* glsl */ `
@@ -86,12 +86,21 @@ const FRAG = /* glsl */ `
 `;
 
 export class FogOfWar {
-  constructor(scene) {
+  // `size` is the board the veil covers and `height` is the ground it lies on.
+  // Both used to be fixed: a flat 30-unit quad at y = 0.01. On open terrain
+  // that is wrong twice over — it stops short of what the camera can see, and
+  // being flat it stands *proud of every hollow*, so the camera looks at the
+  // underside of an opaque slab wherever the ground dips below a centimetre.
+  // On the seabed that painted two enormous hard-edged black wedges across
+  // the map, which read as missing geometry rather than as fog.
+  constructor(scene, { size = GROUND_SIZE, height = null, memSize = DEFAULT_MEM } = {}) {
+    this.size = size;
+    this.mem = memSize;
     this.canvas = document.createElement('canvas');
-    this.canvas.width = this.canvas.height = MEM_SIZE;
+    this.canvas.width = this.canvas.height = this.mem;
     this.ctx = this.canvas.getContext('2d', { willReadFrequently: false });
     this.ctx.fillStyle = '#000';
-    this.ctx.fillRect(0, 0, MEM_SIZE, MEM_SIZE);
+    this.ctx.fillRect(0, 0, this.mem, this.mem);
 
     this.texture = new THREE.CanvasTexture(this.canvas);
     this.texture.minFilter = THREE.LinearFilter;
@@ -110,10 +119,15 @@ export class FogOfWar {
         // looks like sand lying on top of the sea.
         ...(() => {
           const env = getEnvironment();
+          // The veil now covers the whole visible board rather than a
+          // 30-unit square, so the old opacity blacked the map out entirely.
+          // Unswept seabed should read as unlit and flat — you can make out
+          // the shape of the ground, the way sonar would give it to you —
+          // while colour and detail stay the reward for putting a light on it.
           if (env === 'undersea') return {
-            uUnknown: { value: 0.62 },
-            uExplored: { value: 0.28 },
-            uColor: { value: new THREE.Color(0x06222a) },
+            uUnknown: { value: 0.26 },
+            uExplored: { value: 0.10 },
+            uColor: { value: new THREE.Color(0x0a2f38) },
             uEdgeColor: { value: new THREE.Color(0x67d4dc) },
           };
           if (env === 'day') return {
@@ -135,12 +149,24 @@ export class FogOfWar {
       depthWrite: false,
     });
 
-    this.mesh = new THREE.Mesh(
-      new THREE.PlaneGeometry(GROUND_SIZE, GROUND_SIZE),
-      this.material
-    );
+    // Drape it over the terrain rather than floating it above the origin.
+    // Enough segments that the veil hugs the ripples instead of tenting over
+    // them, and lifted a few centimetres so it never z-fights the sediment.
+    const segs = height ? 160 : 1;
+    const geo = new THREE.PlaneGeometry(size, size, segs, segs);
+    if (height) {
+      const p = geo.attributes.position;
+      // Local +y maps to world -z once the plane is laid flat — the same flip
+      // the terrain itself uses, and it has to match or the veil slides off
+      // the hills it is meant to be covering.
+      for (let i = 0; i < p.count; i++) p.setZ(i, height(p.getX(i), -p.getY(i)));
+      p.needsUpdate = true;
+      geo.computeVertexNormals();
+    }
+    this.mesh = new THREE.Mesh(geo, this.material);
     this.mesh.rotation.x = -Math.PI / 2;
-    this.mesh.position.y = 0.01;
+    // Clear of the ripple crests when draped, hard on the deck when flat.
+    this.mesh.position.y = height ? 0.12 : 0.01;
     this.mesh.renderOrder = 5;
     this.mesh.name = 'fog';
     this.mesh.frustumCulled = false;
@@ -153,7 +179,7 @@ export class FogOfWar {
   // World (x, z) -> canvas pixels. CanvasTexture uploads flipped, which lands
   // +z at increasing canvas y — so both axes read straight through.
   toPixels(x, z) {
-    return [(0.5 + x / GROUND_SIZE) * MEM_SIZE, (0.5 + z / GROUND_SIZE) * MEM_SIZE];
+    return [(0.5 + x / this.size) * this.mem, (0.5 + z / this.size) * this.mem];
   }
 
   // Stamp one unit's current cone into the memory. Wedge, not disc: a unit
@@ -163,7 +189,7 @@ export class FogOfWar {
     const [px, py] = this.toPixels(x, z);
     const scale = unit.cone?.mesh?.scale?.x ?? 1;
     const range = (unit.baseRange ?? 8.5) * scale;
-    const rPx = (range / GROUND_SIZE) * MEM_SIZE;
+    const rPx = (range / this.size) * this.mem;
     const half = THREE.MathUtils.degToRad((unit.coneFov ?? 58) / 2);
 
     // heading 0 faces +z, which is +y in canvas space.
@@ -187,7 +213,7 @@ export class FogOfWar {
     ctx.restore();
 
     // Always know your own footing, whichever way you are pointing.
-    const near = (1.9 / GROUND_SIZE) * MEM_SIZE;
+    const near = (1.9 / this.size) * this.mem;
     ctx.save();
     const g2 = ctx.createRadialGradient(px, py, 0, px, py, near);
     g2.addColorStop(0, 'rgba(255,255,255,0.9)');
@@ -203,7 +229,7 @@ export class FogOfWar {
   // Reveal a patch regardless of who can see it — drone sweeps, breaches.
   revealAt(x, z, radius = 6) {
     const [px, py] = this.toPixels(x, z);
-    const rPx = (radius / GROUND_SIZE) * MEM_SIZE;
+    const rPx = (radius / this.size) * this.mem;
     const ctx = this.ctx;
     ctx.save();
     const grad = ctx.createRadialGradient(px, py, 0, px, py, rPx);
@@ -221,7 +247,7 @@ export class FogOfWar {
   clear() {
     this.ctx.globalCompositeOperation = 'source-over';
     this.ctx.fillStyle = '#000';
-    this.ctx.fillRect(0, 0, MEM_SIZE, MEM_SIZE);
+    this.ctx.fillRect(0, 0, this.mem, this.mem);
     this.dirty = true;
   }
 
@@ -250,6 +276,6 @@ export class FogOfWar {
   }
 }
 
-export function createFogOfWar(scene) {
-  return new FogOfWar(scene);
+export function createFogOfWar(scene, opts) {
+  return new FogOfWar(scene, opts);
 }

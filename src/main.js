@@ -5,6 +5,7 @@ import { createCamera, resizeCamera, updateCamera, cutCamera, zoomCamera } from 
 import { createFogOfWar } from './render/FogOfWar.js';
 import { createLevel } from './render/Level.js';
 import { createSeabedLevel } from './render/SeabedLevel.js';
+import { attachSurveyLights } from './render/Seabed.js';
 import { createSquad } from './render/Units.js';
 import { FX } from './render/FX.js';
 import { UnitMarkers } from './render/UnitMarkers.js';
@@ -43,11 +44,21 @@ const canvas = document.getElementById('scene');
 const renderer = createRenderer(canvas);
 const camera = createCamera();
 const { scene, terrain } = createScene({ environment: mission1.environment, renderer });
-const fog = createFogOfWar(scene);
+// The veil has to cover what the camera can actually see and lie on the
+// ground it is hiding. On the seabed both matter: the board is far wider than
+// the old 30-unit quad, and the terrain has hollows a flat veil would tent
+// over. Mission 1's flat compound keeps the original defaults.
+const fog = createFogOfWar(scene, mission1.environment === 'undersea'
+  ? { size: 110, height: terrain.height, memSize: 256 }
+  : {});
 const level = mission1.environment === 'undersea'
   ? createSeabedLevel(scene)
   : createLevel(scene);
 const squad = createSquad(scene);
+// At 240 metres nothing is lit until a vehicle lights it. The survey lights
+// parent to the unit groups, so they travel with the fleet for free — and the
+// pool of warm light they carry is the only reason the seabed has any colour.
+if (mission1.environment === 'undersea') attachSurveyLights(squad.all);
 const fx = new FX(scene);
 const markers = new UnitMarkers(scene, squad.all);
 // Objectives as places on the board, not just rows in the corner.

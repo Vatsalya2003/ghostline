@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { spawnProp } from './AssetLoader.js';
-import { seabedHeight } from './Seabed.js';
+import { seabedHeight, CABLE } from './Seabed.js';
 
 // ============================================================================
 // TEST RANGE 9 — the installation
@@ -23,18 +23,47 @@ import { seabedHeight } from './Seabed.js';
 const SCAR_FROM = new THREE.Vector2(-1, 1);
 const SCAR_TO = new THREE.Vector2(4, -7);
 
-function onSeabed(object, x, z, { sink = 0, rotY = 0, tiltToSlope = true } = {}) {
+const MAX_TILT = THREE.MathUtils.degToRad(10);
+const clamp = THREE.MathUtils.clamp;
+
+function onSeabed(object, x, z,
+                  { sink = 0, rotY = 0, tiltToSlope = true, maxTilt = MAX_TILT } = {}) {
   object.position.set(x, seabedHeight(x, z) - sink, z);
-  object.rotation.y = rotY;
+  object.rotation.set(0, rotY, 0);
   if (tiltToSlope) {
-    // Sample the slope and lie with it. Nothing on a seabed sits level.
-    const e = 0.9;
+    // Wide baseline, and clamped. A 0.9 m sample straddles a single sand
+    // ripple and reads its flank as a 30-degree hillside — which is what
+    // stood every prop on this map up at an angle nothing on a seabed sits
+    // at, and made the range look like a dropped toybox.
+    const e = 2.2;
     const dx = seabedHeight(x + e, z) - seabedHeight(x - e, z);
     const dz = seabedHeight(x, z + e) - seabedHeight(x, z - e);
-    object.rotation.x = Math.atan2(dz, 2 * e);
-    object.rotation.z = -Math.atan2(dx, 2 * e);
+    object.rotation.x = clamp(Math.atan2(dz, 2 * e), -maxTilt, maxTilt);
+    object.rotation.z = clamp(-Math.atan2(dx, 2 * e), -maxTilt, maxTilt);
   }
   return object;
+}
+
+// Walk the cable polyline at a fixed step, staying on the bottom. Used for
+// both the cable itself and the mooring chain: anything long and flexible on
+// a seabed follows the ground, and rotating it as one rigid body — which is
+// what the chain used to do — throws it into the water column.
+function alongGround(points, step, sink) {
+  const out = [];
+  for (let i = 0; i < points.length - 1; i++) {
+    const a = points[i], b = points[i + 1];
+    const len = Math.hypot(b.x - a.x, b.y - a.y);
+    const n = Math.max(1, Math.round(len / step));
+    for (let k = 0; k < n; k++) {
+      const t = k / n;
+      const x = a.x + (b.x - a.x) * t;
+      const z = a.y + (b.y - a.y) * t;
+      out.push(new THREE.Vector3(x, seabedHeight(x, z) - sink, z));
+    }
+  }
+  const last = points[points.length - 1];
+  out.push(new THREE.Vector3(last.x, seabedHeight(last.x, last.y) - sink, last.y));
+  return out;
 }
 
 // Props, placed in composed groups rather than scattered.
@@ -106,76 +135,141 @@ function placeProps(group, table) {
   }
 }
 
+// The trunk cable. One continuous object running the length of the range,
+// lying in its own trench, passing every place the mission visits. This is
+// what ties six camera positions into one location instead of six sets:
+// wherever the player is looking, the cable is going somewhere else.
+function trunkCable(group) {
+  const path = alongGround(CABLE, 0.6, 0.12);
+  const curve = new THREE.CatmullRomCurve3(path, false, 'catmullrom', 0.4);
+  const cable = new THREE.Mesh(
+    new THREE.TubeGeometry(curve, path.length * 2, 0.11, 6, false),
+    new THREE.MeshStandardMaterial({ color: 0x3a4038, roughness: 0.95, metalness: 0.1 })
+  );
+  cable.castShadow = cable.receiveShadow = true;
+  cable.name = 'trunk-cable';
+  group.add(cable);
+
+  // Concrete tie-down saddles every few metres. Regular spacing is the tell
+  // that says "installed" against a seabed where nothing else is regular.
+  const saddleMat = new THREE.MeshStandardMaterial({
+    color: 0x8a8574, roughness: 1.0, flatShading: true,
+  });
+  for (let i = 6; i < path.length; i += 11) {
+    const pt = path[i];
+    const saddle = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.26, 0.34), saddleMat);
+    onSeabed(saddle, pt.x, pt.z, { sink: 0.1, rotY: i * 0.4 });
+    saddle.castShadow = saddle.receiveShadow = true;
+    group.add(saddle);
+  }
+  return cable;
+}
+
 // RANGE INSTRUMENT 7 — the anomaly. Four metres of hull, part buried, with
-// the sheared mooring plate and trailing chain that give the game away.
+// the sheared mooring plate and the chain that gives the game away.
 function rangeInstrument(group) {
   const pkg = new THREE.Group();
   pkg.name = 'range-instrument-7';
 
   const hullMat = new THREE.MeshStandardMaterial({
-    color: 0x6d7a72, roughness: 0.82, metalness: 0.35, flatShading: true,
+    color: 0xb4a894, roughness: 0.78, metalness: 0.32, flatShading: true,
   });
   const growthMat = new THREE.MeshStandardMaterial({
-    color: 0x55705a, roughness: 1.0, flatShading: true,
+    color: 0x6f8a5c, roughness: 1.0, flatShading: true,
+  });
+  const rustMat = new THREE.MeshStandardMaterial({
+    color: 0x9c5f38, roughness: 0.95, metalness: 0.12, flatShading: true,
   });
 
-  const hull = new THREE.Mesh(new THREE.CylinderGeometry(0.62, 0.62, 3.6, 12), hullMat);
+  // Lying on its side, nose down into the sediment it ploughed into. The
+  // attitude is the story: this thing arrived here sideways, under tow.
+  const hull = new THREE.Mesh(new THREE.CylinderGeometry(0.64, 0.58, 3.8, 14), hullMat);
   hull.rotation.z = Math.PI / 2;
-  hull.rotation.y = 0.35;
-  hull.position.y = 0.45;
+  hull.rotation.x = 0.12;
+  hull.position.set(0, 0.5, 0);
   hull.castShadow = hull.receiveShadow = true;
   pkg.add(hull);
 
-  // End caps and the instrument mast it was moored by.
-  const cap = new THREE.Mesh(new THREE.SphereGeometry(0.62, 12, 8), hullMat);
-  cap.position.set(1.72, 0.45, 0.62);
+  const cap = new THREE.Mesh(new THREE.SphereGeometry(0.58, 14, 9), hullMat);
+  cap.position.set(1.9, 0.46, 0);
+  cap.castShadow = true;
   pkg.add(cap);
 
-  const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.13, 1.5, 6), hullMat);
-  mast.position.set(-0.9, 1.15, 0.2);
-  mast.rotation.z = 0.4;
+  // Banding and a rusted collar — something that has been down here long
+  // enough to have a history, not a clean grey cylinder.
+  for (const [x, r] of [[-1.2, 0.67], [0.4, 0.67]]) {
+    const band = new THREE.Mesh(new THREE.CylinderGeometry(r, r, 0.22, 14), rustMat);
+    band.rotation.z = Math.PI / 2;
+    band.position.set(x, 0.5, 0);
+    pkg.add(band);
+  }
+
+  // The instrument mast it was moored by, bent where it took the load.
+  const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.13, 1.6, 7), hullMat);
+  mast.position.set(-1.0, 1.25, 0.18);
+  mast.rotation.z = 0.42;
+  mast.castShadow = true;
   pkg.add(mast);
 
-  // Marine growth along the upper surface — it has been down here a while.
-  for (let i = 0; i < 9; i++) {
-    const blob = new THREE.Mesh(new THREE.IcosahedronGeometry(0.16 + (i % 3) * 0.06, 0), growthMat);
-    blob.position.set(-1.5 + i * 0.4, 0.95, -0.1 + (i % 2) * 0.3);
+  // Marine growth along the upper surface. It only grows on the top, which
+  // is how you know the hull has not rolled since it settled.
+  for (let i = 0; i < 11; i++) {
+    const blob = new THREE.Mesh(
+      new THREE.IcosahedronGeometry(0.13 + (i % 3) * 0.07, 0), growthMat);
+    blob.position.set(-1.7 + i * 0.36, 1.02 - (i % 2) * 0.06, -0.12 + (i % 3) * 0.22);
     pkg.add(blob);
   }
 
-  // The sheared mooring plate and its chain, trailing back up the scar.
-  const plate = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.1, 0.7), hullMat);
-  plate.position.set(-1.9, 0.08, -0.4);
-  plate.rotation.y = 0.5;
+  // The sheared mooring plate: the actual cause, sitting in plain sight.
+  const plate = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.12, 0.72), rustMat);
+  plate.position.set(-2.0, 0.12, -0.35);
+  plate.rotation.set(0.2, 0.5, 0.1);
+  plate.castShadow = true;
   pkg.add(plate);
 
-  const linkMat = new THREE.MeshStandardMaterial({
-    color: 0x55605c, roughness: 0.9, metalness: 0.45,
-  });
-  const dir = SCAR_FROM.clone().sub(SCAR_TO).normalize();
-  for (let i = 0; i < 14; i++) {
-    const link = new THREE.Mesh(new THREE.TorusGeometry(0.13, 0.045, 6, 10), linkMat);
-    const d = 1.9 + i * 0.42;
-    link.position.set(dir.x * d - 1.4, 0.1 + Math.sin(i * 1.3) * 0.04, dir.y * d - 0.2);
-    link.rotation.x = Math.PI / 2;
-    link.rotation.z = i * 0.6;
-    pkg.add(link);
-  }
-
-  // The active emission source — turn 5's `relay` FX pulses on this, and it
-  // is the one thing on the range that is lit.
+  // The one lit thing on the range. Turn 5's `relay` FX pulses on it, which
+  // is exactly the beat where the anomaly is finally identified.
   const beacon = new THREE.Mesh(
-    new THREE.SphereGeometry(0.17, 10, 8),
+    new THREE.SphereGeometry(0.17, 12, 9),
     new THREE.MeshStandardMaterial({
-      color: 0x8fd8e0, emissive: 0x4ce0d8, emissiveIntensity: 1.6,
+      color: 0x9fe4ea, emissive: 0x4ce0d8, emissiveIntensity: 1.8,
     })
   );
-  beacon.position.set(-0.9, 1.95, 0.2);
+  beacon.position.set(-1.0, 2.0, 0.18);
   beacon.name = 'instrument-beacon';
   pkg.add(beacon);
 
-  onSeabed(pkg, SCAR_TO.x, SCAR_TO.y, { sink: 0.25, rotY: 0.6 });
+  // Nearly level: a 4-tonne package settles flat, and letting the terrain
+  // sampler tip it put the whole assembly on its ear.
+  onSeabed(pkg, SCAR_TO.x, SCAR_TO.y, {
+    sink: 0.3, rotY: 0.55, maxTilt: THREE.MathUtils.degToRad(5),
+  });
   group.add(pkg);
+
+  // The chain, laid in world space along the scar rather than parented to the
+  // hull. Parenting it meant the package's own tilt swung a seven-metre tail
+  // up into the water column — the bounding box came out nine metres tall.
+  // It belongs on the bottom, in the furrow it helped cut.
+  const chain = new THREE.Group();
+  chain.name = 'mooring-chain';
+  const linkMat = new THREE.MeshStandardMaterial({
+    color: 0x6e6455, roughness: 0.88, metalness: 0.5,
+  });
+  const dir = SCAR_FROM.clone().sub(SCAR_TO).normalize();
+  const linkGeo = new THREE.TorusGeometry(0.15, 0.05, 6, 10);
+  for (let i = 0; i < 22; i++) {
+    const d = 2.1 + i * 0.34;
+    const x = SCAR_TO.x + dir.x * d;
+    const z = SCAR_TO.y + dir.y * d;
+    const link = new THREE.Mesh(linkGeo, linkMat);
+    link.position.set(x, seabedHeight(x, z) + 0.07, z);
+    // Alternate links stand on edge, the way a real chain lies.
+    link.rotation.set(i % 2 ? Math.PI / 2 : 0, Math.atan2(dir.x, dir.y), 0);
+    link.castShadow = link.receiveShadow = true;
+    chain.add(link);
+  }
+  group.add(chain);
+
   return { tower: pkg, beacon };
 }
 
@@ -184,6 +278,7 @@ export function createSeabedLevel(scene) {
   group.name = 'range-9';
 
   placeProps(group, INSTALLATION);
+  trunkCable(group);
   const { tower, beacon } = rangeInstrument(group);
 
   // The junction box on the cable trench — stands in for `generator`.

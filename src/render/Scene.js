@@ -130,10 +130,13 @@ export function createRenderer(canvas) {
 export function createScene({ environment = ENVIRONMENT, renderer = null } = {}) {
   const undersea = environment === 'undersea';
   activeEnvironment = environment;
-  if (undersea && renderer) renderer.toneMappingExposure = 0.92;
+  // Deep water is dark, but an unreadable board is not a style. The survey
+  // lights on the vehicles carry the contrast; the exposure just has to keep
+  // the rest of the range above the floor.
+  if (undersea && renderer) renderer.toneMappingExposure = 1.3;
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(
-    undersea ? 0x0a2a32 : ENVIRONMENT === 'day' ? 0x6f7d8c : PALETTE.bg);
+    undersea ? 0x0d323b : ENVIRONMENT === 'day' ? 0x6f7d8c : PALETTE.bg);
 
   // Distance haze, linear and deliberately narrow-banded.
   //
@@ -150,7 +153,7 @@ export function createScene({ environment = ENVIRONMENT, renderer = null } = {})
   // Water kills range fast. The fog starts close and finishes well inside
   // the map, which is what makes the place feel enclosed rather than open.
   scene.fog = undersea
-    ? new THREE.Fog(0x0b333d, 16, 78)
+    ? new THREE.Fog(0x123f49, 30, 108)
     : ENVIRONMENT === 'day'
       ? new THREE.Fog(0xb49878, 46, 230)
       : new THREE.Fog(0x0b1211, 40, 78);
@@ -190,15 +193,20 @@ export function createScene({ environment = ENVIRONMENT, renderer = null } = {})
   // Undersea: the only real light comes near-straight down from the surface,
   // cold and already half absorbed by the time it reaches 280 metres.
   const key = new THREE.DirectionalLight(
-    undersea ? 0x9fd8dc : day ? 0xffd4a0 : 0xc2e4de,
-    undersea ? 1.15 : day ? 3.0 : 2.9);
-  key.position.set(undersea ? 6 : day ? 26 : 8, undersea ? 30 : day ? 9 : 14,
-                   undersea ? 9 : day ? 15 : 6);
+    undersea ? 0xd6e6e0 : day ? 0xffd4a0 : 0xc2e4de,
+    undersea ? 1.55 : day ? 3.0 : 2.9);
+  key.position.set(undersea ? 24 : day ? 26 : 8, undersea ? 56 : day ? 9 : 14,
+                   undersea ? 32 : day ? 15 : 6);
   key.castShadow = true;
   key.shadow.mapSize.set(day ? 3072 : 2048, day ? 3072 : 2048);
-  key.shadow.camera.near = 1;
-  key.shadow.camera.far = day ? 140 : 50;
-  const s = GROUND_SIZE * (day ? 1.5 : 0.75);
+  key.shadow.camera.near = undersea ? 10 : 1;
+  // The shadow frustum has to enclose everything the camera can see, or the
+  // ground outside it samples the clamped edge of the shadow map and goes
+  // fully black. On the seabed that showed up as two enormous hard-edged
+  // wedges of void across the map — it read as missing geometry, and it was
+  // a 22-unit shadow camera over a 200-unit floor.
+  key.shadow.camera.far = undersea ? 180 : day ? 140 : 50;
+  const s = undersea ? 48 : GROUND_SIZE * (day ? 1.5 : 0.75);
   key.shadow.camera.left = -s;
   key.shadow.camera.right = s;
   key.shadow.camera.top = s;
@@ -223,7 +231,7 @@ export function createScene({ environment = ENVIRONMENT, renderer = null } = {})
   // most of what sells "outdoors at night" on flat-shaded geometry.
   // By day this is the big one: blue sky above, warm soil bounce below.
   const bounce = undersea
-    ? new THREE.HemisphereLight(0x3d8c9c, 0x081d22, 1.5)
+    ? new THREE.HemisphereLight(0x4a93a6, 0x8a7550, 1.0)
     : day
       ? new THREE.HemisphereLight(0xa8c4e4, 0xa08462, 2.1)
       : new THREE.HemisphereLight(0x44635f, 0x0d1311, 1.45);
@@ -232,7 +240,7 @@ export function createScene({ environment = ENVIRONMENT, renderer = null } = {})
   // Floor of ambient so nothing ever goes fully to black.
   // Deliberately low. Uniform ambient is what makes a scene read as a
   // render; the contrast between lit and unlit ground is the depth cue.
-  scene.add(new THREE.AmbientLight(undersea ? 0x2c5a63 : day ? 0x7b8892 : 0x22302d, undersea ? 0.85 : day ? 0.75 : 0.8));
+  scene.add(new THREE.AmbientLight(undersea ? 0x2a555f : day ? 0x7b8892 : 0x22302d, undersea ? 0.30 : day ? 0.75 : 0.8));
 
   let sky = null;
   let terrain = null;
