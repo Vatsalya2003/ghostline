@@ -4,6 +4,9 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>GHOSTLINE</title>
+    <!-- Inline so there is no second request and no /favicon.ico 404 in the
+         console. A sensor cone, which is the one image the game is about. -->
+    <link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2032%2032'%3E%3Crect%20width='32'%20height='32'%20fill='%230a0d0a'/%3E%3Cpath%20d='M16%2028%20L5%2010%20A13%2013%200%200%201%2027%2010%20Z'%20fill='%234ce0d8'%20opacity='0.35'/%3E%3Ccircle%20cx='16'%20cy='25'%20r='3.2'%20fill='%234ce0d8'/%3E%3C/svg%3E" />
     <link rel="stylesheet" href="/src/style/main.css" />
   </head>
   <body>
@@ -22,7 +25,7 @@
 
           <div class="panel" id="health-box">
             <div class="label">Squad integrity</div>
-            <div id="health-bar"><div id="health-fill"></div></div>
+            <div id="health-bar"><div id="health-ghost"></div><div id="health-fill"></div></div>
             <div id="health-value">100%</div>
           </div>
 
@@ -80,6 +83,13 @@
 
       <div id="fx-overlay"></div>
       <div id="damage-flash"></div>
+      <div id="event-flash"></div>
+      <div id="deploy-sweep"></div>
+      <div id="screen-fade"></div>
+
+      <!-- Context-sensitive control prompts. Glyphs swap between keyboard and
+           controller the moment the active device changes. -->
+      <div id="prompt-bar"></div>
 
       <!-- ============ SCREENS ============ -->
       <div class="screen" id="screen-title">
@@ -95,6 +105,11 @@
         <h1 style="font-size: clamp(22px, 3.4vw, 38px)">RELAY STATION 7</h1>
         <ul id="briefing-list"></ul>
         <button class="btn" id="btn-deploy">DEPLOY</button>
+      </div>
+
+      <div class="screen hidden" id="screen-pause">
+        <h2 id="pause-title">PAUSED</h2>
+        <div id="pause-body"></div>
       </div>
 
       <div class="screen hidden" id="screen-debrief">

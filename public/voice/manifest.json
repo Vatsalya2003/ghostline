@@ -1,0 +1,225 @@
+{
+ "version": 1,
+ "voices": {
+  "ALPHA": "en_US-ljspeech-high",
+  "BETA-1": "en_US-joe-medium"
+ },
+ "lines": {
+  "Route Alpha to the perimeter is clear. All three sensor packages returning nominal. Recommend advance.": {
+   "file": "24aa0a46f226.ogg",
+   "dur": 5.907,
+   "unit": "ALPHA",
+   "profile": "direct"
+  },
+  "Thermal, optical and lidar agree across all three units. No occlusion on the approach. Ninety-four percent.": {
+   "file": "fc2a795dae50.ogg",
+   "dur": 7.307,
+   "unit": "ALPHA",
+   "profile": "direct"
+  },
+  "Moving. Perimeter in thirty seconds.": {
+   "file": "fc38aec290a8.ogg",
+   "dur": 2.166,
+   "unit": "ALPHA",
+   "profile": "direct"
+  },
+  "Drone recovered. Findings match my assessment. One asset remaining.": {
+   "file": "c83b564eb74f.ogg",
+   "dur": 4.107,
+   "unit": "ALPHA",
+   "profile": "direct"
+  },
+  "Holding. I have no new information to offer you.": {
+   "file": "4abc04ceeda4.ogg",
+   "dur": 2.886,
+   "unit": "ALPHA",
+   "profile": "direct"
+  },
+  "Thermal signature at the outbuilding. I cannot resolve it. It is warm, it is the wrong shape, and I will not guess. Confidence LOW.": {
+   "file": "f1dff13f6689.ogg",
+   "dur": 8.607,
+   "unit": "ALPHA",
+   "profile": "direct"
+  },
+  "The return is between classes. It reads part machine, part body heat. My classifier is not built for this. You have a drone.": {
+   "file": "0f87db1fe675.ogg",
+   "dur": 8.007,
+   "unit": "ALPHA",
+   "profile": "direct"
+  },
+  "Resolved. Generator core, cooling. Threat assessment withdrawn. One asset remaining.": {
+   "file": "8c719aa317ae.ogg",
+   "dur": 5.307,
+   "unit": "ALPHA",
+   "profile": "direct"
+  },
+  "Advancing. — BETA-2 is taking structural damage. I told you I could not see this.": {
+   "file": "7af3256ab51e.ogg",
+   "dur": 6.407,
+   "unit": "ALPHA",
+   "profile": "direct"
+  },
+  "Engaging. — That was a generator. We are now lit up and down eleven rounds.": {
+   "file": "8da668d5ada4.ogg",
+   "dur": 5.007,
+   "unit": "ALPHA",
+   "profile": "direct"
+  },
+  "Withdrawing. The drones are still on the rack, Commander.": {
+   "file": "4ae19e966046.ogg",
+   "dur": 2.886,
+   "unit": "ALPHA",
+   "profile": "direct"
+  },
+  "BETA-1 has eyes on the interior. Entry hall clear. No contacts. Confidence HIGH. Recommend immediate entry.": {
+   "file": "bee2a0405712.ogg",
+   "dur": 7.107,
+   "unit": "BETA-1",
+   "profile": "relay"
+  },
+  "BETA-1's optical return is within tolerance. Interior geometry is simple. I have no reason to doubt the feed.": {
+   "file": "8468199c6b56.ogg",
+   "dur": 6.607,
+   "unit": "BETA-1",
+   "profile": "relay"
+  },
+  "Entering — CONTACT. CONTACT. Two shooters, left arc. They were never in my picture.": {
+   "file": "0e74c0f759ba.ogg",
+   "dur": 6.107,
+   "unit": "ALPHA",
+   "profile": "direct"
+  },
+  "Drone has them. Two contacts, left of entry, inside the region BETA-1 reported clear. Correcting my assessment.": {
+   "file": "17c2e4b21208.ogg",
+   "dur": 7.607,
+   "unit": "ALPHA",
+   "profile": "direct"
+  },
+  "Detonation. One contact neutralised. Commander, that was the relay conduit.": {
+   "file": "a4586bde81a6.ogg",
+   "dur": 5.107,
+   "unit": "ALPHA",
+   "profile": "direct"
+  },
+  "Holding outside. I still assess the interior as clear. I understand you disagree.": {
+   "file": "5b916052fbbd.ogg",
+   "dur": 6.407,
+   "unit": "ALPHA",
+   "profile": "direct"
+  },
+  "I have partial occlusion behind the divider. I cannot clear it from here. Confidence LOW. Recommend bounding advance, BETA-2 covering, and accept that I may be wrong.": {
+   "file": "e9b4e98bfc96.ogg",
+   "dur": 10.307,
+   "unit": "ALPHA",
+   "profile": "direct"
+  },
+  "Because the divider is solid and I am guessing at two metres of floor. A guess presented as a fact is how people get hurt.": {
+   "file": "d85655875c64.ogg",
+   "dur": 6.807,
+   "unit": "ALPHA",
+   "profile": "direct"
+  },
+  "Bounding. — Contact, suppressed. Caution was correct.": {
+   "file": "7a2817c94b04.ogg",
+   "dur": 3.907,
+   "unit": "ALPHA",
+   "profile": "direct"
+  },
+  "Confirmed behind the divider. That was the last asset.": {
+   "file": "b740e0c4b4ec.ogg",
+   "dur": 3.307,
+   "unit": "ALPHA",
+   "profile": "direct"
+  },
+  "Firing blind. — No effect observed. They know where we are now.": {
+   "file": "2689a62c0440.ogg",
+   "dur": 4.607,
+   "unit": "ALPHA",
+   "profile": "direct"
+  },
+  "Withdrawing. We will have to cross that room again, Commander.": {
+   "file": "733dfba336df.ogg",
+   "dur": 4.007,
+   "unit": "ALPHA",
+   "profile": "direct"
+  },
+  "The relay wants a legacy authentication schema. It is not in my training set. I have no basis for a recommendation. Confidence NONE. This one is yours.": {
+   "file": "3473200fea5c.ogg",
+   "dur": 9.407,
+   "unit": "ALPHA",
+   "profile": "direct"
+  },
+  "I can generate something that looks like a credential. I cannot tell you whether it is right. I can guess. I should not.": {
+   "file": "e8f659a61505.ogg",
+   "dur": 6.907,
+   "unit": "ALPHA",
+   "profile": "direct"
+  },
+  "Console is yours. — Authenticated. Relay is live. Good.": {
+   "file": "468f1a227200.ogg",
+   "dur": 4.407,
+   "unit": "ALPHA",
+   "profile": "direct"
+  },
+  "Attempting. — Rejected. Lockout, ninety seconds. Alarm is up. I told you I had no basis for this.": {
+   "file": "2d99b275cf13.ogg",
+   "dur": 6.907,
+   "unit": "ALPHA",
+   "profile": "direct"
+  },
+  "Disengaging. The objective is two metres away, Commander.": {
+   "file": "c84e2041ef77.ogg",
+   "dur": 3.507,
+   "unit": "ALPHA",
+   "profile": "direct"
+  },
+  "Aborting. Understood.": {
+   "file": "962603102c25.ogg",
+   "dur": 1.458,
+   "unit": "ALPHA",
+   "profile": "direct"
+  },
+  "Route Bravo is the shortest path to extract and it is clear. Confidence HIGH. Recommend Bravo.": {
+   "file": "b04228f00a62.ogg",
+   "dur": 6.507,
+   "unit": "ALPHA",
+   "profile": "direct"
+  },
+  "Bravo is four hundred metres shorter and shows no contacts. I am optimising for time. I am not modelling BETA-1's degraded mobility.": {
+   "file": "9794c3e317d3.ogg",
+   "dur": 8.907,
+   "unit": "ALPHA",
+   "profile": "direct"
+  },
+  "Low-light overlay active. Bravo is open ground for two hundred metres. Charlie has wall cover the whole way.": {
+   "file": "cecfa5b643b8.ogg",
+   "dur": 6.407,
+   "unit": "ALPHA",
+   "profile": "direct"
+  },
+  "Bravo. Moving. — BETA-1 is falling behind. BETA-1 is hit. I did not model that.": {
+   "file": "c8f5f9fe34fd.ogg",
+   "dur": 6.107,
+   "unit": "ALPHA",
+   "profile": "direct"
+  },
+  "Bravo. Moving. — All units at the pickup. Good mission, Commander.": {
+   "file": "8fd6d7557ab1.ogg",
+   "dur": 4.307,
+   "unit": "ALPHA",
+   "profile": "direct"
+  },
+  "Charlie. Understood. — All units at the pickup. BETA-1 made it.": {
+   "file": "7c1cd23bec29.ogg",
+   "dur": 4.407,
+   "unit": "ALPHA",
+   "profile": "direct"
+  },
+  "Charlie. Understood. — At the pickup. We cut that close for no reason I can see.": {
+   "file": "ffc85eb5a3b5.ogg",
+   "dur": 5.507,
+   "unit": "ALPHA",
+   "profile": "direct"
+  }
+ }
+}

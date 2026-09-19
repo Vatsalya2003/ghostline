@@ -1,4 +1,6 @@
 import { CALIBRATION } from '../data/mission1.js';
+import { FocusRing } from './Focus.js';
+import { audio } from '../systems/Audio.js';
 
 // Two scores, reported separately and deliberately allowed to disagree:
 // you can bring the squad home and still be told your judgement was poor.
@@ -29,7 +31,10 @@ export class Debrief {
     this.verdict = document.getElementById('verdict');
     this.keyTurnLine = document.getElementById('key-turn-line');
     this.decisions = document.getElementById('decision-list');
-    document.getElementById('btn-replay').addEventListener('click', onReplay);
+    this.replayBtn = document.getElementById('btn-replay');
+    this.replayBtn.addEventListener('click', onReplay);
+    this.ring = new FocusRing({ onFocus: () => audio.hover() });
+    this.ring.setItems([this.replayBtn]);
   }
 
   show(summary) {
@@ -64,6 +69,7 @@ export class Debrief {
     }
 
     this.screen.classList.remove('hidden');
+    this.ring.paint();   // pad and keyboard land on RUN IT AGAIN immediately
   }
 
   hide() { this.screen.classList.add('hidden'); }

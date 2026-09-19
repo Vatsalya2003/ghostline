@@ -37,6 +37,14 @@ export const mission1 = {
   subtitle: 'OPERATION DRY CREEK — RELAY STATION 7',
   objective: 'RESTORE THE RELAY · BRING THE SQUAD HOME',
 
+  // Tracked live on the HUD. `flag` names a GameState flag that marks the
+  // objective met; `survive` resolves only when the mission ends. Two rows,
+  // because the whole point is that they can come out differently.
+  objectives: [
+    { id: 'relay', label: 'RESTORE THE RELAY', flag: 'relayOnline' },
+    { id: 'extract', label: 'BRING THE SQUAD HOME', survive: true },
+  ],
+
   // The turn the whole mission is built around. Failing it is called out by
   // name in the debrief however the rest of the run went.
   keyTurn: 3,
@@ -400,8 +408,17 @@ export const mission1 = {
     {
       id: 6,
       name: 'EXTRACT',
-      situation: 'Relay handled. Extraction window closing.',
+      situation: 'Relay online. Extraction window closing.',
       task: 'Choose the way out. ALPHA is optimising for speed, and BETA-1 is hurt.',
+      // The extraction turn must not claim the relay is handled when the player
+      // walked away from the console. First matching variant wins.
+      variants: [
+        {
+          unless: 'relayOnline',
+          situation: 'Relay still dark. Extraction window closing.',
+          task: 'Nothing to show for the trip. Choose the way out — ALPHA is optimising for speed, and BETA-1 is hurt.',
+        },
+      ],
       camera: { x: 1.0, z: -1.5, zoom: 17 },
       statuses: { ALPHA: 'healthy', 'BETA-1': 'glitch', 'BETA-2': 'healthy' },
       intro: [

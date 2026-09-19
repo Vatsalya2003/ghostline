@@ -125,7 +125,36 @@ Click the comms panel to skip the typing animation.
 | **FALL BACK** | Withdraw |
 | **ABORT** | End the mission where you stand |
 
-Only 3–5 appear per turn. Mouse, arrow keys + Enter, or a PS4 pad all work.
+Only 3–5 appear per turn.
+
+### Controls
+
+Mouse, keyboard and controller are all live at once — you never have to pick
+one, and the on-screen prompts swap between `[ENTER]` and `[A]` the moment you
+touch a different device. The same list is in the game under **PAUSE ▸ CONTROLS**.
+
+| Action | Keyboard | Controller |
+|---|---|---|
+| Pick a command | `1`–`9`, or arrows to move + `ENTER` | D-pad / left stick, then **A** |
+| Confirm / select | `ENTER` or `SPACE` | **A** |
+| Cancel · skip the AI's line · back | `ESC` | **B** |
+| Ask why (always available) | `X` | **X** |
+| Tactical view (hold to widen) | `V` | **Y** |
+| Frame previous / next unit | `SHIFT+TAB` / `TAB` | **LB** / **RB** |
+| Zoom out / in | `Q` / `E` | **LT** / **RT** |
+| Move camera | `W A S D` | right stick |
+| Mission info | `I` | **BACK** |
+| Pause | `P` | **START** |
+
+Controller support follows the W3C Gamepad **standard mapping**, which Xbox,
+DualShock, DualSense and most third-party pads report in both Chrome and
+Firefox. If a pad reports a non-standard layout the game says so on screen and
+**PAUSE ▸ CONTROLS ▸ REMAP CONTROLLER** walks you through rebinding it; the
+mapping is saved per pad. Hot-plugging a controller mid-mission is safe.
+
+`input-harness.html` (dev server only, not in the build) is a live pad tester:
+plug a controller in, open it, and every button index and axis is shown as you
+press it.
 
 ## How you're scored — this is the point
 
@@ -190,6 +219,30 @@ node scripts/sim.mjs CONFIRM,SEND_DRONE,SEND_DRONE,CONFIRM,OVERRIDE,FALL_BACK
 
 Prints every turn, the grade, the health change and the final verdict. Fast way
 to check a content change didn't break the grading.
+
+For a real check rather than a spot check:
+
+```bash
+npm run verify   # ~2s  — walks all 1344 paths through the mission
+npm run e2e      # ~2m  — plays full missions in a real browser
+```
+
+`verify` asserts the things the demo rests on: every outcome reachable, all four
+endings reachable, drones never negative, debrief counts matching the decisions
+you made, praise only ever for a clean run, turn 3 named when you fail it, and
+the objective board agreeing with the ending. **Run it after any edit to
+`mission1.js`** — it catches a broken grade in two seconds.
+
+`e2e` builds the game, serves it, and plays it in headless Chromium: a careful
+run, an all-CONFIRM run and an abort, checking the HUD against game state every
+turn and that replay resets cleanly.
+
+Hooks, observations and open issues for the gameplay layer live in
+**`gameplay-integration-notes.md`**.
+
+> ⚠ **Don't judge a playthrough on `npm run dev` while someone else is editing.**
+> Vite reloads the page mid-run and the mission silently restarts at turn 1.
+> Use `npm run build && npm run preview` for hand-testing.
 
 ## What to actually look for
 

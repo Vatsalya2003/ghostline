@@ -18,7 +18,43 @@ export class GameState {
     this.relayOnline = false;
     this.hostilesRevealed = false;
     this.missionOver = false;
-    this.outcome = null;          // 'complete' | 'lost' | 'aborted'
+    this.outcome = null;          // 'complete' | 'partial' | 'aborted' | 'lost'
+    this.objectiveSeen = {};      // id -> last state announced
+  }
+
+  // ---------------------------------------------------------------- objectives
+  // Derived from mission state rather than tracked alongside it, so the HUD,
+  // the log and the debrief cannot end up disagreeing about what was achieved.
+  //   { flag: 'relayOnline' }  met the moment that state flag turns true
+  //   { survive: true }        resolves only when the mission ends
+  objectiveState(objective) {
+    if (objective.flag) {
+      if (this[objective.flag]) return 'done';
+      return this.missionOver ? 'failed' : 'pending';
+    }
+    if (objective.survive) {
+      if (!this.missionOver) return 'pending';
+      return this.outcome === 'lost' ? 'failed' : 'done';
+    }
+    return 'pending';
+  }
+
+  objectives() {
+    return (this.mission.objectives || []).map((o) => ({
+      id: o.id, label: o.label, state: this.objectiveState(o),
+    }));
+  }
+
+  // Only what has changed since the last call, so a caller can announce
+  // transitions without keeping its own copy of the previous state.
+  settleObjectives() {
+    const changed = [];
+    for (const o of this.objectives()) {
+      if (this.objectiveSeen[o.id] === o.state) continue;
+      this.objectiveSeen[o.id] = o.state;
+      if (o.state !== 'pending') changed.push(o);
+    }
+    return changed;
   }
 
   applyHealth(delta) {
@@ -78,6 +114,7 @@ export class GameState {
       keyTurnLine: this.keyTurnFailure() ? this.mission.keyTurnVerdict : null,
       decisions: [...this.calibration],
       relayOnline: this.relayOnline,
+      objectives: this.objectives(),
     };
   }
 }

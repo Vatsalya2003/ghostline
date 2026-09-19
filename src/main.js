@@ -1,17 +1,21 @@
 import * as THREE from 'three';
 import gsap from 'gsap';
 import { createRenderer, createScene } from './render/Scene.js';
-import { createCamera, resizeCamera, applyCameraTransform, panCamera, zoomCamera } from './render/Camera.js';
+import { createCamera, resizeCamera, updateCamera, cutCamera, zoomCamera } from './render/Camera.js';
 import { createFogOfWar } from './render/FogOfWar.js';
 import { createLevel } from './render/Level.js';
 import { createSquad } from './render/Units.js';
 import { FX } from './render/FX.js';
+import { UnitMarkers } from './render/UnitMarkers.js';
+import { ObjectiveMarkers } from './render/ObjectiveMarkers.js';
 import { mission1 } from './data/mission1.js';
 import { GameState } from './systems/GameState.js';
 import { TurnManager } from './systems/TurnManager.js';
 import { Director } from './systems/Director.js';
+import { events, GAME_EVENT } from './systems/Events.js';
 import { Input } from './systems/Input.js';
 import { audio } from './systems/Audio.js';
+import { Soundscape } from './systems/Soundscape.js';
 import { initVoices, stopSpeaking } from './systems/Dialogue.js';
 import { CommsPanel } from './ui/CommsPanel.js';
 import { CommandBar } from './ui/CommandBar.js';
@@ -19,6 +23,9 @@ import { StatusHUD } from './ui/StatusHUD.js';
 import { MissionLog } from './ui/MissionLog.js';
 import { Debrief } from './ui/Debrief.js';
 import { Screens } from './ui/Screens.js';
+import { ScreenFX } from './ui/ScreenFX.js';
+import { Prompts } from './ui/Prompts.js';
+import { PauseMenu } from './ui/PauseMenu.js';
 
 // Beat timing is driven by timers, so tweens must keep real time even after a
 // frame hitch. With lag smoothing on, GSAP freezes tween time across a long
@@ -30,11 +37,18 @@ const canvas = document.getElementById('scene');
 const renderer = createRenderer(canvas);
 const camera = createCamera();
 const { scene } = createScene();
-createFogOfWar(scene);
+const fog = createFogOfWar(scene);
 const level = createLevel(scene);
 const squad = createSquad(scene);
 const fx = new FX(scene);
-applyCameraTransform(camera);
+const markers = new UnitMarkers(scene, squad.all);
+// Objectives as places on the board, not just rows in the corner.
+const objectiveMarkers = new ObjectiveMarkers(scene, mission1.objectives);
+// The key light is the one thing events borrow to make the world react.
+// Looked up rather than returned, so Scene.js stays untouched.
+const keyLight = scene.children.find((o) => o.isDirectionalLight && o.castShadow)
+  || scene.children.find((o) => o.isDirectionalLight);
+updateCamera(camera, 0);
 
 const HOME = squad.all.map((u) => ({
   unit: u, x: u.position.x, z: u.position.z, heading: u.heading,
@@ -50,8 +64,12 @@ const ui = {
   hud: new StatusHUD(mission1),
   log: new MissionLog(),
 };
+const screenFX = new ScreenFX();
 
-const director = new Director({ camera, squad, fx, ui, turnManager, state, level });
+const director = new Director({ camera, squad, fx, ui, turnManager, state, level, fog, screenFX, keyLight, markers });
+// Ambient beds, footsteps and stereo placement. Subscribes to Events on its
+// own, so it needs nothing from the turn spine beyond a frame tick.
+const soundscape = new Soundscape({ camera, squad, state, level });
 const debrief = new Debrief(mission1, replay);
 const screens = new Screens(mission1, {
   onBegin: () => { audio.unlock(); audio.select(); screens.hideTitle(); screens.showBriefing(); },
@@ -59,44 +77,116 @@ const screens = new Screens(mission1, {
 });
 
 let pendingEnd = null;
+// Bumped by every deploy and restart. A beat that was in flight when the player
+// hit RESTART finishes against the *old* mission, and without this its
+// continuation would advance a turn in the new one. Any long beat can strand a
+// promise — a tween killed mid-flight may never fire its onComplete — so the
+// guard is on the continuation rather than on any one system.
+let missionRun = 0;
 
-turnManager.on('turn', (turn) => { director.enterTurn(turn); });
+turnManager.on('turn', (turn) => { safely('turn intro', () => director.enterTurn(turn)); });
 turnManager.on('end', (summary) => { pendingEnd = summary; });
+
+// ---------------------------------------------------------------- hud wiring
+// Everything below reacts to the mission rather than being called by it, so the
+// turn spine stays free of HUD detail. See src/systems/Events.js.
+events.on(GAME_EVENT.TURN_START, ({ turn }) => {
+  ui.log.pushTurn(turn);
+  ui.hud.setObjectives(state.objectives());
+  objectiveMarkers.sync(state.objectives());
+  // Clear the previous turn's line before the intro plays. Turn 3's intro runs
+  // for the better part of ten seconds, and leaving the last answer sitting in
+  // the comms panel through a breach reads as the squad still talking.
+  ui.comms.reset?.();
+});
+
+events.on(GAME_EVENT.MISSION_START, () => {
+  ui.hud.setObjectives(state.objectives());
+  objectiveMarkers.sync(state.objectives());
+});
+
+for (const name of [GAME_EVENT.OBJECTIVE_COMPLETED, GAME_EVENT.OBJECTIVE_FAILED]) {
+  events.on(name, ({ id, label }) => {
+    ui.hud.setObjectives(state.objectives());
+    objectiveMarkers.sync(state.objectives());
+    const row = document.querySelector(`.obj[data-objective="${id}"]`);
+    if (row) row.classList.add('just-done');
+    ui.log.push(`OBJECTIVE ${name === GAME_EVENT.OBJECTIVE_COMPLETED ? 'MET' : 'FAILED'} — ${label}`);
+  });
+}
+
+// The Director sets `busy` on the way in and clears it on the way out. A throw
+// anywhere in a beat — a missing model, an FX call against a system that has
+// not loaded — used to leave it set forever, which locks the command bar and
+// ends the demo with no way back. Recover the turn instead: log it loudly, hand
+// control back, and let the player keep playing.
+async function safely(what, fn) {
+  try {
+    await fn();
+    return true;
+  } catch (err) {
+    console.error(`[ghostline] ${what} failed to play`, err);
+    director.busy = false;
+    ui.commandBar.render(turnManager.availableActions());
+    ui.commandBar.setLocked(state.missionOver);
+    return false;
+  }
+}
 
 async function handleAction(action) {
   if (director.busy) { ui.comms.skip(); return; }
+  const run = missionRun;
+  const resolution = turnManager.choose(action);
+  // A command the turn will not accept must not sound like an order that
+  // landed. choose() emits COMMAND_REJECTED on the way out and Soundscape
+  // answers it with the deny tone, so there is nothing to play here.
+  if (!resolution) return;
   // Taking the AI's recommendation gets its own affirmative, so agreeing with
   // the machine sounds different from any other order you give.
   if (action === 'CONFIRM') audio.confirm(); else audio.select();
-  const resolution = turnManager.choose(action);
-  if (!resolution) return;
 
   if (resolution.probe) {
-    await director.playProbe(resolution);
+    await safely('probe', () => director.playProbe(resolution));
     return;
   }
 
-  await director.playOutcome(resolution);
+  await safely('outcome', () => director.playOutcome(resolution));
+
+  // The mission was restarted while this outcome was playing. Everything below
+  // belongs to a run that no longer exists.
+  if (run !== missionRun) return;
 
   if (pendingEnd) return endMission();
   turnManager.advanceTurn();
   if (pendingEnd) endMission();
 }
 
-function endMission() {
+async function endMission() {
+  const run = missionRun;
   const summary = pendingEnd;
   pendingEnd = null;
   ui.commandBar.setLocked(true);
   ui.commandBar.clear();
   stopSpeaking();
+  director.clearFocus();
   // Only a completed objective gets the resolving tone; a surviving squad that
   // never brought the relay up does not.
   if (summary.outcome === 'complete') audio.missionSuccess();
   else audio.missionFail();
+  // Let the board settle and fade before the numbers land on top of it —
+  // cutting straight to the debrief threw away the ending.
+  const success = summary.outcome === 'complete';
+  if (success) zoomCamera(camera, 20, 1.2);
+  ui.hud.setObjectives(summary.objectives);
+  await screenFX.fadeOut(success ? 'success' : 'failure', 950);
+  // Restarted during the fade — do not drop last run's debrief over the new one.
+  if (run !== missionRun) return;
   debrief.show(summary);
+  events.emit(GAME_EVENT.DEBRIEF_SHOWN, { summary });
 }
 
 function startMission() {
+  missionRun += 1;
   pendingEnd = null;
   director.reset();
   ui.log.clear();
@@ -111,8 +201,16 @@ function startMission() {
   level.door.rotation.set(0, 0, 0);
   level.door.position.set(2.6, 0.855, 2);
   level.door.material.emissiveIntensity = 0.18;
-  zoomCamera(camera, 15, 0.6);
-  panCamera(camera, -5, 6.2, 0.8);
+  // Deploy push-in: cut wide over the treeline, then settle to tactical range.
+  // A cut-then-ease means a restart never flies the camera across the map from
+  // wherever the last run happened to end.
+  cutCamera(camera, -5, 6.2, 26);
+  zoomCamera(camera, 15, 1.7);
+  fog.clear();
+  fog.lift(1.6);
+  screenFX.reset();
+  screenFX.deploySweep();
+  input?.clearUnitSelection();
   turnManager.start();
   ui.hud.setHealth(state.health);
   ui.hud.setDrones(state.drones);
@@ -121,19 +219,103 @@ function startMission() {
 function replay() {
   audio.select();
   debrief.hide();
+  screenFX.fadeClear();
   if (screens.seenBriefing) startMission();
   else { screens.showBriefing(); }
 }
 
+// ---------------------------------------------------------------- input
+// Restart and abort are reachable from the pause menu, so they need to put the
+// screens back in a sane state as well as the mission.
+function restartMission() {
+  screens.hideTitle();
+  screens.hideBriefing();
+  screenFX.fadeClear();
+  input.clearUnitSelection();
+  startMission();
+}
+
+function abortToTitle() {
+  stopSpeaking();
+  state.missionOver = true;
+  pendingEnd = null;
+  ui.commandBar.setLocked(true);
+  ui.commandBar.clear();
+  director.clearFocus();
+  input.clearUnitSelection();
+  debrief.hide();
+  screens.hideBriefing();
+  screenFX.fadeClear();
+  screens.showTitle();
+}
+
+const prompts = new Prompts();
+let pauseMenu = null;
+
 const input = new Input({
   commandBar: ui.commandBar,
+  comms: ui.comms,
+  camera,
+  squad,
+  hud: ui.hud,
+  prompts,
+  isBusy: () => director.busy,
   onAction: (action) => {
     if (director.busy) { ui.comms.skip(); return; }
     const allowed = turnManager.availableActions().find((a) => a.action === action && !a.disabled);
     if (allowed) handleAction(action);
+    // A pad button bound to a command this turn does not offer never reaches
+    // choose(), so nothing would answer it. Silence reads as a dropped input.
+    else if (!state.missionOver) {
+      events.emit(GAME_EVENT.COMMAND_REJECTED, { turn: turnManager.turn, action, reason: 'NOT AVAILABLE' });
+    }
   },
   onSkip: () => ui.comms.skip(),
+  onPause: (pane) => pauseMenu?.toggle(pane),
 });
+
+pauseMenu = new PauseMenu({
+  mission: mission1,
+  input,
+  onRestart: restartMission,
+  onAbort: abortToTitle,
+  getTurn: () => turnManager.turn,
+});
+
+// Highest priority first. Contexts are picked by what is *visible*, so this
+// list can never disagree with the screen.
+input.addContext({
+  name: 'pause',
+  priority: 100,
+  allowCamera: false,
+  isActive: () => pauseMenu.open,
+  handle: (control) => pauseMenu.handle(control),
+  pick: (i) => {
+    const el = pauseMenu.ring.items[i];
+    if (!el || el.disabled) return false;
+    el.click();
+    return true;
+  },
+  prompts: () => pauseMenu.prompts(),
+});
+input.addContext(input.screenContext({
+  name: 'debrief', priority: 60,
+  el: document.getElementById('screen-debrief'),
+  ring: debrief.ring, label: 'RUN IT AGAIN',
+}));
+input.addContext(input.screenContext({
+  name: 'briefing', priority: 50,
+  el: document.getElementById('screen-briefing'),
+  ring: screens.briefingRing, label: 'DEPLOY',
+  onCancel: () => { screens.hideBriefing(); screens.showTitle(); },
+}));
+input.addContext(input.screenContext({
+  name: 'title', priority: 40,
+  el: document.getElementById('screen-title'),
+  ring: screens.titleRing, label: 'BEGIN MISSION',
+}));
+// The fallback: no screen up means the mission has the controls.
+input.addContext(input.missionContext({ isActive: () => true }));
 
 initVoices();
 ui.hud.setTurn(null);
@@ -153,6 +335,12 @@ if (params.has('skip') || params.has('auto')) {
   screens.hideBriefing();
   startMission();
 }
+// ?ui=pause|intel|controls opens the overlay straight away — demo rehearsal,
+// and the only way to check these screens in a headless capture.
+if (params.has('ui')) {
+  const pane = params.get('ui') === 'pause' ? 'menu' : params.get('ui');
+  pauseMenu.show(pane);
+}
 if (params.has('auto')) {
   const plan = params.get('auto').split(',').map((a) => a.trim()).filter(Boolean);
   let i = 0;
@@ -165,17 +353,25 @@ if (params.has('auto')) {
 }
 
 // ---------------------------------------------------------------- loop
-const clock = new THREE.Clock();
+// THREE.Clock is deprecated in r186. Timer is the replacement and wants an
+// explicit update() before either value is read.
+const clock = new THREE.Timer();
 function tick() {
+  clock.update();
   const dt = Math.min(clock.getDelta(), 0.05);
-  const t = clock.getElapsedTime();
+  const t = clock.getElapsed();
   squad.all.forEach((u) => u.update(t));
   fx.update(dt);
-  input.poll();
+  fog.update(squad.all, dt, t);
+  markers.update(dt, t);
+  objectiveMarkers.update(dt, t);
+  soundscape.update(dt);
+  input.poll(dt);
+  updateCamera(camera, dt, t);
   renderer.render(scene, camera);
   requestAnimationFrame(tick);
 }
 tick();
 
 // Console handles for tuning and for the plan's step-5 check.
-window.OP = { state, turnManager, director, squad, camera, scene, mission: mission1, startMission };
+window.OP = { state, turnManager, director, squad, camera, scene, fog, fx, screenFX, input, pauseMenu, audio, soundscape, mission: mission1, startMission };

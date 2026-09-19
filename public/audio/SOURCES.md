@@ -1,6 +1,9 @@
 # GHOSTLINE — AUDIO SOURCES
 
-All 16 sounds from `audio.md`, built to the filenames the code expects.
+All 16 sounds from `audio.md`, built to the filenames the code expects, plus a
+second pass that added the ambient beds and the feedback sounds the original
+list did not cover. **The AI's voice is a separate bundle — see
+[`../voice/SOURCES.md`](../voice/SOURCES.md).**
 
 **Every source is CC0 1.0 (public domain). No attribution is required and
 nothing here is non-commercial.** Credits below are courtesy, not obligation.
@@ -38,6 +41,115 @@ machine. They carry the original CC0 licence files verbatim.
 | 15 | `typing.mp3` | `tick_002` | 23 ms, set 10 dB below `ui-hover`, fired every second character |
 | 16 | `nightvision.mp3` | `switch_003` | trimmed to 0.4s |
 
+## What plays when
+
+Every audible moment in the mission, and which system owns it. `npm run audio`
+drives a real browser through a full mission and asserts that none of the rows
+marked **must** is silent.
+
+### Interface
+
+| Event | Sound | Owner |
+|---|---|---|
+| BEGIN / DEPLOY / RUN IT AGAIN | `ui-select` | main.js |
+| Command focused — mouse, arrow keys or D-pad | `ui-hover` | CommandBar / FocusRing |
+| Unit cycled with Tab or the pad | `ui-hover` | Input |
+| Command chosen | `ui-select` **must** | main.js |
+| CONFIRM chosen — agreeing with the machine | `confirm` **must** | main.js |
+| Command refused (no drones, probe spent, unbound pad button) | `ui-deny` **must** | Soundscape ← `COMMAND_REJECTED` |
+| Caption typing | `typing`, every second character | CommsPanel |
+| Log line lands | `ui-hover` at 1.6× | Director |
+
+### Transmissions
+
+| Event | Sound | Owner |
+|---|---|---|
+| AI opens a channel | `radio-open` **must**, carrier up, beds duck 45%, TX light on | Director + CommsPanel |
+| AI speaks | bundled voice clip; Web Speech if there is none | CommsPanel ← Voice |
+| AI closes | `radio-close` **must**, carrier down, beds released, TX light off | Director + CommsPanel |
+
+### The world
+
+| Event | Sound | Owner |
+|---|---|---|
+| A unit moves | `move-step` + `servo` on alternate steps, one per 0.95 units travelled, **placed** | Soundscape |
+| A unit is hit | `impact` **must**, placed | Director |
+| A sensor fails | `glitch` **must** | Director |
+| Breach charge | `explosion` **must** | Director |
+| Warning beat | `alert` **must** | Director |
+| Alarm outcome | `alert` ×2 | Director |
+| Drone ordered | `drone-launch` **must** → rotor bed → `objective` **must** when the reading lands | Soundscape ← `SENSOR_SCAN` |
+| Drone sweep | `drone-scan` **must** | Director |
+| Hostiles resolve out of the fog | `detect` **must**, placed | Soundscape ← `HOSTILES_REVEALED` |
+| Night vision | `nightvision` | Director |
+| Relay comes up | `mission-success` as the relay tone | Director |
+| Squad integrity falls to 30% or less | `alert` ×2, after a 0.9 s beat | Soundscape ← `HEALTH_CHANGED` |
+| Mission complete | `mission-success` **must** | main.js |
+| Mission lost, partial or aborted | `mission-fail` | main.js |
+
+### Beds
+
+| Condition | Layer |
+|---|---|
+| Always | `ambient-loop` |
+| Turns 1, 2, 6 — outside the wire | `ambient-field` full, `ambient-interior` off |
+| Turns 3, 4, 5 — inside the compound | `ambient-interior` full, `ambient-field` down to 18% |
+| Any sensor broken, or integrity ≤ 40% | `ambient-tension` faded in (62% / 45%, 100% for both) |
+| A channel is open | `radio-carrier` |
+| A drone is airborne | `drone-loop` |
+| Every 6.5–15 s | one of `relay-tick`, `distant-clank`, `distant-thump` |
+
+### Where a sound is
+
+One-shots marked **placed** are panned and attenuated to where the thing that
+made them actually is: `Soundscape` projects the world point through the live
+camera, so the pan follows the screen through every pan, zoom and wide-view
+the camera rig does. Off-screen sources drop to a third of level rather than
+vanishing — a robot taking a hit out of frame still reports. Transmissions are
+never placed; they arrive on a headset, not from across the compound.
+
+## Added in the soundscape pass
+
+Three of these come from the same CC0 Kenney packs as everything above, so they
+sit in the same family. The rest are **synthesised from scratch** — original
+work, no licence to track — because a seamless wind or room-tone loop is hard
+to find under CC0, and something built from periodic functions whose periods
+divide the loop length is seamless by construction rather than by luck.
+
+### Derived from the Kenney packs (CC0)
+
+Built by [`scripts/build-sfx.mjs`](../../scripts/build-sfx.mjs).
+
+| File | Source | What it is |
+|---|---|---|
+| `ui-deny.mp3` | `error_004` | A refused command. Short, dark and dull on purpose — on a pad it is easy to hit repeatedly |
+| `detect.mp3` | `bong_001` ×2 | Contacts resolving out of the fog. Pitched down 28%, doubled at 170 ms — a contact report, not an alarm |
+| `objective.mp3` | `bong_001` | A reading coming back. Pitched down 12%, long tail. Deliberately smaller than `mission-success` |
+
+### Synthesised — original work, public domain
+
+Built by [`scripts/build-ambience.mjs`](../../scripts/build-ambience.mjs) from
+a seeded PRNG, so a rebuild is byte-identical and a diff stays honest.
+
+| File | Loop | What it is |
+|---|---|---|
+| `ambient-field.ogg` | 24.0s | Exterior air. Filtered noise under three gust LFOs at 1, 3 and 7 cycles per loop |
+| `ambient-interior.ogg` | 24.0s | Inside the compound. 50 Hz mains and four harmonics, beating slightly, over a noise floor, with a transformer whine |
+| `ambient-tension.ogg` | 16.0s | Unease. A 38/57/76 Hz sub drone breathing twice per loop. Held under the mix only while a sensor is broken or the squad is hurt |
+| `radio-carrier.ogg` | 4.0s | The open channel. Band-limited hiss, up for exactly as long as a transmission is |
+| `drone-loop.ogg` | 2.0s | Rotors. Four close partials beating against each other |
+| `servo.mp3` | — | The mechanical half of a step. Kenney has no servo, and a footstep alone does not read as a machine walking |
+| `drone-launch.mp3` | — | Spin-up, a second before the sweep |
+| `distant-clank.mp3` | — | Metal settling somewhere out in the compound. Inharmonic partials, twice low-passed for distance |
+| `distant-thump.mp3` | — | Something heavy, further out |
+| `relay-tick.mp3` | — | A relay dropping out on the commander's own console — played centre, never placed in the world |
+
+Loop seams were measured rather than trusted: the sample-to-sample step at each
+wrap point sits at or below the 99th-percentile step found anywhere else in the
+same file, so no seam is a larger discontinuity than the signal already makes
+on its own. The largest is `ambient-interior` at −53 dBFS, which is 15 dB below
+the bed it sits in.
+
 ## Levels
 
 Every file was level-matched by measured RMS rather than by ear, on a
@@ -54,6 +166,26 @@ move-step     -25           glitch          -15
 radio-open    -24           impact          -20
 alert         -20           explosion       -16
 ```
+
+Added in the soundscape pass, on the same ladder — the beds sit at or below the
+original `ambient-loop`, the world detail below that again, and only `detect`
+comes up near the alarm:
+
+```
+radio-carrier -41 dBFS      objective       -23
+ambient-field -38           ui-deny         -24
+ambient-int.  -38           drone-launch    -26
+relay-tick    -34           servo           -27
+ambient-tens. -34           drone-loop      -30
+distant-clank -33           detect          -19
+distant-thump -32
+```
+
+Every one of these also clears the −0.5 dBFS post-encode peak bar; the two
+peakiest (`detect`, `objective`) land at −1.0 and −1.1 dBFS. `build-sfx.mjs`
+enforces that in a loop: encode, measure the *encoded* file, pull the ceiling
+down, repeat. (ffmpeg's `alimiter` normalises back to 0 dB unless you pass
+`level=disabled`, which is a quiet way to lose all your headroom.)
 
 Every peak sits below −0.5 dBFS **after** MP3 encoding, which is the number
 that matters — lossy encoding overshoots the PCM peak, so three files

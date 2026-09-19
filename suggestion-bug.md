@@ -28,15 +28,20 @@ Newest at the top. Status: `OPEN` · `FIXING` · `DONE` · `WONTFIX`.
 | # | Sev | What happened / what to change | Where | Found by | Status |
 |---|---|---|---|---|---|
 | 1 | P1 | _TTS voice untested — does it fire, sound robotic, stay in sync with the caption?_ | Comms panel | handoff | OPEN |
-| 2 | P1 | _Gamepad button indices unverified on macOS — PS4 pad, `PAD_MAP` in `src/systems/Input.js`_ | Input | handoff | OPEN |
+| 2 | P1 | **Gamepad button indices unverified.** Root cause was the design, not the numbers: the old `PAD_MAP` bound raw indices straight to game actions on a PS4 assumption. Now resolved through the W3C `mapping === 'standard'` contract, with a heuristic fallback, an in-game remap for non-standard pads, and 69 headless tests. **Still needs a human with a physical pad** — see the detail block. | Input | Nikhil | FIXED (unverified on hardware) |
 | 3 | P1 | _Two-metre test on turn 3: is the broken cone unmissable from across the room?_ | Sensor cones | handoff | OPEN |
 | 4 | P1 | _Does a fresh player hesitate before choosing on turn 3? If not, the game isn't working._ | Turn 3 | handoff | OPEN |
 | 5 | P1 | **Can't tell which cone belongs to which robot.** All three units are the same cyan. Partly addressed: squad renamed ALPHA / BETA-1 / BETA-2 and each robot now wears its number (1/2/3) over its head, matching its HUD chip. Still open: cones themselves carry no identity once they overlap. | Units / cones | Vatsalya | FIXING |
 | 6 | P1 | **Debrief praised a run that failed turn 3.** Good calls outnumbered mistakes, so the verdict said "you read the sensor, not the number" to a player who walked into the ambush. | Debrief / scoring | Vatsalya | DONE |
 | 7 | P1 | **Hard to tell what the mission and the current task are while playing.** Objective was only on the briefing screen; nothing on screen said what you were deciding this turn. | HUD | Vatsalya | DONE |
-| 8 | | | | | |
-| 9 | | | | | |
-| 10 | | | | | |
+| 8 | P0 | **Any exception inside the Director locked the game permanently.** `busy` is set entering a beat and cleared leaving it; a throw anywhere between — a missing model, an FX call into a system that had not loaded — left it set, which locks the command bar with no way back. With several people adding calls into `Director` at once this was a live demo-killer. `main.js` now catches, logs `[ghostline] … failed to play`, and hands control back. | Director / main | Nikhil | DONE |
+| 9 | P1 | **Turn 6 opened "Relay handled" even when the player never brought the relay up.** Walk away from the console on turn 5 and the extraction turn still congratulated you. Turn data now takes `variants` keyed on mission state, same idea as `altIfHealthAbove` on outcomes. | Turn data | Nikhil | DONE |
+| 10 | P1 | **Objectives never updated while playing.** The HUD showed one static line from the briefing. Now two live rows (`RESTORE THE RELAY` / `BRING THE SQUAD HOME`) that go done/failed independently — which makes the two-score split visible *during* the mission instead of only at the debrief. | HUD | Nikhil | DONE |
+| 11 | P1 | **Do not judge a playthrough on the dev server while others are editing.** Vite HMR does a full page reload mid-run and the mission silently restarts at turn 1. Cost an hour chasing a bug that did not exist. Use `npm run build && npm run preview`, or `npm run e2e`, which serves `dist/` on its own port. | process | Nikhil | NOTED |
+| 12 | P2 | **Comms panel kept the previous turn's line through the next intro.** Turn 3's breach runs the better part of ten seconds with the last answer still sitting in the panel — it reads as the squad still talking, which is exactly wrong when the silence after the breach is the point. `CommsPanel.reset()` on turn start. | Comms | Nikhil | DONE |
+| 13 | P2 | **`outcome.reveal` was dead data.** Turn 2's `reveal: 'generator'` had nothing reading it, so the one calibrated call on that turn was the only choice with no visible payoff. Director now rings and un-fogs the named level object. | Director / turn data | Nikhil | DONE |
+| 14 | P1 | **No TTS voices exist in this environment** — `speechSynthesis.getVoices()` returns empty in headless Chromium and nothing on this machine provides a speech engine. `Dialogue.js` degrades correctly (the caption still plays), but **#1 cannot be closed by testing here.** Needs Chrome on the demo machine. A `public/voice/` directory has appeared, so this may already be handled with baked audio. | Comms / TTS | Nikhil | OPEN |
+| 15 | P2 | **`turn.camera` in mission data is dead.** Every turn declares it, nothing reads it — the intro `pan` beats carry the real values. Two sources of truth for one camera position. Left for whoever owns the camera. | Turn data | Nikhil | OPEN |
 
 ---
 
@@ -54,6 +59,43 @@ Copy the block. Only for things a one-liner can't carry.
 ```
 
 <!-- paste blocks below this line -->
+
+### [#2] Gamepad button indices unverified — fixed by design, needs a hardware pass
+**Sev:** P1   **Area:** input
+**Repro:** 1. plug in any controller  2. press every button  3. check the labels
+**Expected:** A is confirm, B is back, START pauses, on any normal pad.
+**Actual (before):** `PAD_MAP` bound raw indices straight to *game actions*
+(`6: 'GRENADE'`, `4: 'SWITCH_WEAPON'`) against a PS4 layout nobody had tested.
+Two problems, and the indices were the smaller one: `SWITCH_WEAPON` appears in
+no turn at all, and `GRENADE` only in turn 3 — so most buttons did nothing on
+most turns, and the player had to memorise which of ten actions sat where.
+
+**What changed.** Buttons now resolve to *semantic controls* (confirm, cancel,
+navigate, pause…), and the command list is navigated rather than mapped: the
+D-pad or left stick walks it, A takes the highlighted one. That is layout-proof
+by construction — it only needs A, B and a direction to be right.
+
+The indices themselves come from the W3C Gamepad spec's **standard mapping**.
+When `gamepad.mapping === 'standard'` the button table is *guaranteed* by the
+spec, not guessed; Xbox, DualShock, DualSense and most third-party pads report
+it in Chrome and Firefox. Non-standard pads get a hat-switch fallback, a
+visible on-screen warning, and **PAUSE ▸ CONTROLS ▸ REMAP CONTROLLER**, which
+asks the player to press each button and saves the result per pad.
+
+**Verified:** 69 headless checks in `npm test` — every standard index, debounce,
+nav repeat timing, stick deadzone and hysteresis, analog triggers, disconnect
+mid-hold, reconnect, two pads at once, the remap capture, and the hat fallback.
+The same suite also runs in-browser at `/input-harness.html`.
+
+**Still needs a human.** No controller exists on the build machine
+(`/dev/input/js0` is keyd's virtual pointer). Nobody has pressed a physical
+button. Plug a pad in, open `/input-harness.html`, press everything, and check
+each index lights the label the spec says it should. Two minutes, and it closes
+this properly.
+
+**Notes:** `src/systems/Gamepad.js` is deliberately DOM-free so it can be
+driven from Node. If a real pad disagrees with the table, the fix is the remap
+flow, not a code edit.
 
 ### [#5] Every robot is the same colour — can't tell whose cone is whose
 **Sev:** P1   **Area:** units / cones
@@ -102,6 +144,12 @@ above the verdict.
 ## THINGS TO CHECK EACH PLAYTEST
 
 Tick them off. If one fails, log it above.
+
+**Automated — run these first, they take two minutes together**
+- [ ] `npm run verify` — 1344 mission paths, scoring and objective invariants
+- [ ] `npm run e2e` — two full missions in real Chromium, HUD vs state, replay reset
+- [ ] `npm test` — gamepad mapping suite
+- [ ] `npm run build` — clean
 
 **Does it run**
 - [ ] Loads with wifi off (the venue's wifi is not a dependency)

@@ -2,6 +2,7 @@ import gsap from 'gsap';
 import { wait } from './Pause.js';
 import { panCamera, zoomCamera, shakeCamera, punchZoom, focusOn } from '../render/Camera.js';
 import { audio } from './Audio.js';
+import { reconTarget } from '../render/Level.js';
 
 
 // Sequences a turn: plays the scripted intro beats from mission data, lets
@@ -25,6 +26,22 @@ export class Director {
   }
 
   unit(id) { return this.squad.all.find((u) => u.id === id); }
+
+  // Where the two contacts stand once painted. Held here rather than inline so
+  // the reveal, the ambush tracers and the grenade all aim at the same ground.
+  get contacts() { return [[4.2, -0.6], [1.6, -1.8]]; }
+
+  // The contact a shot or a throw should be aimed at. Before the hostiles are
+  // painted the squad is firing at a *report*, not a target, so it aims at the
+  // unresolved return instead — which is the mission's whole point on turn 2.
+  aimPoint() {
+    if (this.hostilesShown) {
+      const [x, z] = this.contacts[0];
+      return { x, z };
+    }
+    const gen = this.level.generator?.position;
+    return gen ? { x: gen.x, z: gen.z } : { x: 2.6, z: -1 };
+  }
 
   // A short lift on the key light. Cheaper and calmer than adding a second
   // light for every event, and it reads as the world reacting rather than the
@@ -88,6 +105,9 @@ export class Director {
           gsap.to(door.material, { emissiveIntensity: 0.02, duration: 1.2 });
           this.fx.ring(2.6, 2, { color: 0xe0a84c, radius: 7, duration: 0.8 });
           this.fx.burst(2.6, 2, { color: 0xe0a84c, count: 34, spread: 3.4, life: 1.0 });
+          // A breaching charge is an explosion, and it now looks like one — at
+          // the door, not as a screen flash standing in for one.
+          this.fx.explosion({ x: 2.6, y: 0.8, z: 2 }, { radius: 3.2, color: 0xe0a84c, debris: 14 });
           // The charge is the loudest thing in the mission: light kick, hard
           // white-amber bloom, and the camera pushes in a touch on the blast.
           this.lightKick(4.2, 0.7);
@@ -194,37 +214,142 @@ export class Director {
     this.screenFX?.transmission(false);
   }
 
+  // Weapons, drawn where they were used.
+  //
+  // The mission tags every violent outcome `fx: 'impact'`, because from the
+  // scoring layer's point of view a collapsing gantry, a burst of own fire and
+  // a frag are the same event: the squad lost health. Visually they are not,
+  // and the action the player chose is what tells them apart.
+  //
+  // Returns the delay, in seconds, before the squad's own damage should land —
+  // a grenade hurts you when it goes off, not when you throw it.
+  weaponFX(resolution) {
+    const { outcome, action } = resolution;
+    const target = reconTarget({ turnId: resolution.turn?.id, reveal: outcome.reveal });
+    const aim = this.hostilesShown ? this.aimPoint() : { x: target.x, z: target.z };
+
+    if (action === 'FIRE') {
+      // The squad engages. Every unit that still has a working sensor fires;
+      // the tracers all converge on the same ground, which is what makes
+      // "rounds into an unidentified return" legible as one engagement.
+      const shooters = this.squad.all.filter((u) => u.status !== 'damaged');
+      shooters.forEach((u, i) => {
+        gsap.delayedCall(i * 0.09, () => {
+          u.faceTowards(aim.x, aim.z, 0.2);
+          this.fx.gunfire(u.position, aim, { rounds: 3, spread: 0.7 });
+        });
+      });
+      // Turn 2's own-fire outcome ruptures the generator. The mission says so
+      // in its log; this is that sentence happening on the board.
+      if (/ruptur|generator/i.test(outcome.log || '')) {
+        gsap.delayedCall(0.45, () => {
+          this.fx.explosion({ x: aim.x, y: 0.7, z: aim.z }, { radius: 3.0, color: 0xffa24a, debris: 12 });
+          shakeCamera(this.camera, 0.5, 0.45);
+          this.lightKick(3.4, 0.6);
+        });
+      }
+      panCamera(this.camera, aim.x, aim.z, 1.1);
+      return 0.35;
+    }
+
+    if (action === 'GRENADE') {
+      // Thrown by whoever is closest to the ground being cleared, so the arc
+      // starts from a unit the player can see is in a position to throw it.
+      const thrower = this.squad.all.reduce((best, u) => {
+        const d = (u.position.x - aim.x) ** 2 + (u.position.z - aim.z) ** 2;
+        return !best || d < best.d ? { u, d } : best;
+      }, null)?.u || this.squad.all[0];
+
+      const FUSE = 0.8;
+      thrower.faceTowards(aim.x, aim.z, 0.25);
+      this.fx.grenade(thrower.position, aim, {
+        fuse: FUSE,
+        onDetonate: () => {
+          shakeCamera(this.camera, 0.6, 0.5);
+          punchZoom(this.camera, -0.9);
+          this.lightKick(3.6, 0.6);
+          this.screenFX?.flash('breach', 420);
+          this.fog?.revealAt(aim.x, aim.z, 4.5);
+        },
+      });
+      panCamera(this.camera, aim.x, aim.z, 1.0);
+      return FUSE;
+    }
+
+    return 0;
+  }
+
   async playOutcome(resolution) {
     this.busy = true;
     this.ui.commandBar.setLocked(true);
     const { outcome } = resolution;
 
+    // Muzzle flashes, tracers and thrown ordnance, if the player reached for a
+    // weapon. Returns how long to hold the squad's own damage back for.
+    const hurtDelay = this.weaponFX(resolution);
+
     switch (outcome.fx) {
       case 'impact': case 'ambush': {
         const u = this.unit(outcome.impactUnit || 'ALPHA');
-        if (u) { this.fx.hitFlash(u); this.focusUnit(u.id); this.markers?.flare(u.id); }
-        audio.impact();
-        shakeCamera(this.camera, 0.7, 0.5);
-        punchZoom(this.camera, -1.0);
-        this.lightKick(3.0, 0.5);
-        this.flash();
+        const takeHit = () => {
+          if (u) {
+            this.fx.hitFlash(u);
+            this.focusUnit(u.id);
+            this.markers?.flare(u.id);
+            this.fx.unitHit(u.position);
+          }
+          audio.impact();
+          shakeCamera(this.camera, 0.7, 0.5);
+          punchZoom(this.camera, -1.0);
+          this.lightKick(3.0, 0.5);
+          this.flash();
+        };
+        // A grenade hurts you when it detonates, not when it leaves your hand.
+        if (hurtDelay > 0) gsap.delayedCall(hurtDelay, takeHit);
+        else takeHit();
+
+        if (outcome.fx === 'ambush') {
+          // Shooters in BETA-1's blind arc. Tracers run from the contacts to
+          // the unit that was hit, so the player can see the arc that was
+          // never in the picture.
+          for (const [hx, hz] of this.contacts) {
+            this.fx.gunfire({ x: hx, z: hz }, u ? u.position : { x: 0, z: 0 },
+              { rounds: 4, color: 0xff7a5e, spread: 0.7 });
+          }
+        }
         break;
       }
       case 'scan': {
         const u = this.unit('ALPHA');
         audio.scan();
-        // The drone now actually launches from ALPHA and flies the sweep; the
-        // expanding ring fires from inside it, at the point it scans.
+
+        // Where this turn's sweep is actually going. Every SEND_DRONE beat in
+        // the mission describes a different piece of ground — the perimeter,
+        // the outbuilding, the entry hall, the divider — and the player is
+        // meant to be able to see that the aircraft went somewhere different
+        // each time. `reveal` wins when the mission names a place outright.
+        const place = reconTarget({
+          turnId: resolution.turn?.id,
+          reveal: outcome.reveal,
+        });
+
         this.fx.droneSweep(
           { x: u.position.x, z: u.position.z },
-          { x: this.level.tower.position.x, z: this.level.tower.position.z + 2.5 }
+          place,
+          {
+            // Fog lifts where the drone looked, when it gets there — not
+            // where it launched from, and not before it arrives.
+            onArrive: (p) => this.fog?.revealAt(p.x, p.z, 6),
+          }
         );
-        // The sweep leaves ground behind it: ripple through ALPHA's own cone,
-        // and the drone's footprint is committed to the explored map.
+        // The sortie leaves ground behind it: ripple through ALPHA's own cone,
+        // and the launch point is committed to the explored map.
         u?.ping(1.1, 1);
         this.focusUnit('ALPHA');
-        this.fog?.revealAt(u.position.x, u.position.z, 9);
+        this.fog?.revealAt(u.position.x, u.position.z, 5);
         this.screenFX?.flash('scan', 420);
+        // Follow the aircraft out. Gentle — the player still needs the board.
+        panCamera(this.camera, (u.position.x + place.x) / 2, (u.position.z + place.z) / 2, 1.3);
         break;
       }
       case 'move': audio.moveStep(); break;

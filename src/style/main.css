@@ -243,3 +243,476 @@ html, body {
 .outcome-complete { color: var(--cyan); }
 .outcome-lost { color: var(--red); }
 .outcome-partial, .outcome-aborted { color: var(--amber); }
+
+/* ==========================================================================
+   VISUAL POLISH — event overlays and UI motion.
+
+   Everything here composites over the canvas instead of going through a
+   post-processing pass. The stack doc rules those out for this build, and the
+   GPU cost of a second render target is not worth it for effects that are
+   fundamentally 2D. Timings live here so a beat can be retuned without a
+   rebuild of the JS.
+   ========================================================================== */
+
+/* ---------- held frame states ---------- */
+#fx-overlay {
+  transition: box-shadow 260ms ease;
+}
+
+/* Scanlines drift very slowly. Static scanlines read as a texture; moving
+   ones read as a live signal. 12s is slow enough not to draw the eye. */
+#fx-overlay::before {
+  animation: scan-drift 12s linear infinite;
+}
+@keyframes scan-drift {
+  to { transform: translateY(4px); }
+}
+
+/* The AI is talking. Warm cyan bloom at the frame edge — visible in
+   peripheral vision, so you register a transmission without reading. */
+#fx-overlay.transmitting {
+  box-shadow: inset 0 0 150px rgba(76, 224, 216, 0.16);
+}
+#fx-overlay.transmitting::after {
+  animation: transmit-breathe 2.4s ease-in-out infinite;
+}
+@keyframes transmit-breathe {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.82; }
+}
+
+/* A sensor is broken and stays broken. Low-level unease that persists rather
+   than firing once — the player should feel it during the pause before the
+   decision, which is the whole point of turn 3. */
+#fx-overlay.degraded::before {
+  opacity: 0.75;
+  animation: scan-drift 12s linear infinite, degraded-jitter 3.7s steps(2, end) infinite;
+}
+@keyframes degraded-jitter {
+  0%, 92%, 100% { filter: none; }
+  94% { filter: brightness(2.1); }
+  96% { filter: none; }
+  98% { filter: brightness(1.7); }
+}
+
+#fx-overlay.alerting {
+  box-shadow: inset 0 0 170px rgba(224, 168, 76, 0.22);
+  animation: alert-throb 1.1s ease-in-out infinite;
+}
+@keyframes alert-throb {
+  0%, 100% { box-shadow: inset 0 0 130px rgba(224, 168, 76, 0.16); }
+  50% { box-shadow: inset 0 0 190px rgba(224, 168, 76, 0.30); }
+}
+
+/* Signal break. Scanlines tear and roll for a few frames. */
+#fx-overlay.glitching::before {
+  animation: glitch-roll 420ms steps(6, end) 1;
+  opacity: 1;
+}
+@keyframes glitch-roll {
+  0% { transform: translate(0, 0); opacity: 1; }
+  20% { transform: translate(-3px, 9px); opacity: 0.35; }
+  40% { transform: translate(4px, -14px); opacity: 1; }
+  60% { transform: translate(-2px, 22px); opacity: 0.5; }
+  80% { transform: translate(3px, -6px); opacity: 1; }
+  100% { transform: translate(0, 0); opacity: 1; }
+}
+#fx-overlay.glitching::after {
+  animation: glitch-tint 420ms steps(4, end) 1;
+}
+@keyframes glitch-tint {
+  0%, 100% { background: radial-gradient(ellipse at center, transparent 52%, rgba(0, 0, 0, 0.72) 100%); }
+  35% { background: radial-gradient(ellipse at center, transparent 40%, rgba(224, 168, 76, 0.28) 100%); }
+  70% { background: radial-gradient(ellipse at center, transparent 55%, rgba(224, 82, 76, 0.22) 100%); }
+}
+
+/* ---------- one-shot event bloom ---------- */
+/* Tinted per event by ScreenFX via --tint. Edge-weighted rather than a full
+   white-out: it punctuates without blinding anyone mid-decision. */
+#event-flash {
+  position: absolute; inset: 0; z-index: 41; pointer-events: none;
+  --tint: rgba(76, 224, 216, 0.4);
+  background: radial-gradient(ellipse at center, transparent 34%, var(--tint) 100%);
+  opacity: 0;
+}
+#event-flash.on { animation: event-bloom 380ms ease-out 1; }
+@keyframes event-bloom {
+  0% { opacity: 0; transform: scale(1.04); }
+  14% { opacity: 1; transform: scale(1); }
+  100% { opacity: 0; transform: scale(1); }
+}
+
+/* ---------- mission start: deploy sweep ---------- */
+#deploy-sweep {
+  position: absolute; inset: 0; z-index: 42; pointer-events: none;
+  opacity: 0;
+  background: linear-gradient(
+    to bottom,
+    transparent 0%,
+    rgba(76, 224, 216, 0.00) 42%,
+    rgba(76, 224, 216, 0.22) 49%,
+    rgba(180, 255, 248, 0.42) 50%,
+    rgba(76, 224, 216, 0.22) 51%,
+    rgba(76, 224, 216, 0.00) 58%,
+    transparent 100%);
+}
+#deploy-sweep.on { animation: deploy-wipe 1.5s cubic-bezier(0.22, 0.61, 0.36, 1) 1; }
+@keyframes deploy-wipe {
+  0% { opacity: 0; transform: translateY(-100%); }
+  10% { opacity: 1; }
+  85% { opacity: 1; }
+  100% { opacity: 0; transform: translateY(100%); }
+}
+
+/* ---------- mission end: fade under the debrief ---------- */
+#screen-fade {
+  position: absolute; inset: 0; z-index: 45; pointer-events: none;
+  opacity: 0; background: #050807;
+  transition: opacity 900ms ease-in;
+}
+#screen-fade.on { opacity: 1; }
+#screen-fade.success { background: radial-gradient(ellipse at center, #07201f 0%, #04100e 70%, #050807 100%); }
+#screen-fade.failure { background: radial-gradient(ellipse at center, #250e0d 0%, #120706 70%, #050807 100%); }
+
+/* ==========================================================================
+   UI MOTION
+   ========================================================================== */
+
+/* Panels settle in on load instead of appearing fully formed. Staggered so
+   the HUD assembles rather than popping. */
+#hud .panel, #middle .panel, #comms {
+  animation: panel-in 520ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+#hud .panel:nth-child(2) { animation-delay: 60ms; }
+#hud .panel:nth-child(3) { animation-delay: 120ms; }
+#hud .panel:nth-child(4) { animation-delay: 180ms; }
+#middle .panel:nth-child(2) { animation-delay: 90ms; }
+#comms { animation-delay: 220ms; }
+@keyframes panel-in {
+  from { opacity: 0; transform: translateY(-8px); border-color: rgba(76, 224, 216, 0.75); }
+  to { opacity: 1; transform: none; border-color: var(--hairline); }
+}
+
+/* ---------- commands ---------- */
+.cmd {
+  transition: background 120ms linear, color 120ms linear,
+              border-color 120ms linear, transform 90ms ease-out,
+              box-shadow 160ms ease-out;
+}
+.cmd:hover:not(:disabled), .cmd.focused:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 0 18px rgba(76, 224, 216, 0.35);
+}
+.cmd:active:not(:disabled) { transform: translateY(0); }
+
+/* Focus marker and the commit flare are the input agent's, further down this
+   file — CommandBar.choose() sets .committed and their rule animates it. Only
+   the hover lift above is added here, which composes with both.
+*/
+
+/* New commands arrive rather than appear. */
+#commands .cmd { animation: cmd-in 260ms ease-out both; }
+#commands .cmd:nth-child(2) { animation-delay: 50ms; }
+#commands .cmd:nth-child(3) { animation-delay: 100ms; }
+#commands .cmd:nth-child(4) { animation-delay: 150ms; }
+#commands .cmd:nth-child(5) { animation-delay: 200ms; }
+@keyframes cmd-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: none; }
+}
+
+/* ---------- squad integrity ---------- */
+#health-box.hit { animation: health-hit 420ms ease-out 1; }
+@keyframes health-hit {
+  0% { border-color: var(--red); box-shadow: inset 0 0 30px rgba(224, 82, 76, 0.45); }
+  100% { border-color: var(--hairline); box-shadow: none; }
+}
+#health-fill { transition: width 620ms cubic-bezier(0.22, 0.61, 0.36, 1), background 300ms linear; }
+#health-fill.crit { animation: crit-pulse 1.05s ease-in-out infinite; }
+@keyframes crit-pulse {
+  0%, 100% { box-shadow: 0 0 10px rgba(224, 82, 76, 0.55); }
+  50% { box-shadow: 0 0 22px rgba(224, 82, 76, 0.95); }
+}
+
+/* Ghost of the integrity you just lost, left behind for a beat. */
+#health-ghost {
+  position: absolute; top: 1px; bottom: 1px;
+  background: rgba(224, 82, 76, 0.55);
+  opacity: 0; pointer-events: none;
+}
+#health-ghost.on { animation: ghost-drain 700ms ease-out 1; }
+@keyframes ghost-drain {
+  0% { opacity: 1; }
+  70% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+/* ---------- confidence + status ---------- */
+.conf-seg { transition: background 220ms ease-out, box-shadow 220ms ease-out; }
+.conf-seg.on { animation: seg-fill 300ms ease-out 1; }
+#conf-bar .conf-seg:nth-child(2).on { animation-delay: 70ms; }
+#conf-bar .conf-seg:nth-child(3).on { animation-delay: 140ms; }
+@keyframes seg-fill {
+  from { transform: scaleY(0.2); opacity: 0.4; }
+  to { transform: scaleY(1); opacity: 1; }
+}
+#conf-label { transition: color 200ms linear; }
+
+.unit-chip { transition: color 320ms linear, border-color 320ms linear; }
+.unit-chip.damaged { animation: chip-warn 1.4s ease-in-out infinite; }
+@keyframes chip-warn {
+  0%, 100% { box-shadow: 0 0 0 rgba(224, 82, 76, 0); }
+  50% { box-shadow: 0 0 14px rgba(224, 82, 76, 0.5); }
+}
+
+#comms.speaking { box-shadow: 0 0 26px rgba(76, 224, 216, 0.12) inset; }
+#comms { transition: border-color 240ms linear, box-shadow 240ms linear; }
+
+/* ---------- mission log ---------- */
+#log-lines div { animation: log-in 280ms ease-out both; }
+@keyframes log-in {
+  from { opacity: 0; transform: translateX(-6px); }
+  to { opacity: 1; transform: none; }
+}
+#log-lines div.new { text-shadow: 0 0 10px rgba(76, 224, 216, 0.35); }
+
+/* ---------- situation ---------- */
+#situation-text, #task-text { transition: opacity 220ms linear; }
+#situation.changing #situation-text, #situation.changing #task-text { opacity: 0.15; }
+
+/* ---------- screens ---------- */
+/* The debrief is taller than a 900px laptop viewport, and plain `center`
+   overflows off both ends — which silently ate the "DEBRIEF — SQUAD INTEGRITY"
+   header on exactly the screen the demo runs on. `safe center` falls back to
+   start-aligned once the content stops fitting, and the scroll is there for
+   the rest. */
+.screen { overflow-y: auto; overflow-x: hidden; justify-content: safe center; }
+.screen:not(.hidden) { animation: screen-in 420ms ease-out 1; }
+
+/* Tighten the debrief so the header and the replay button are both on screen
+   at 900px, and give the decision list the overflow instead of the page. The
+   list is the one block that can grow without bound. */
+#screen-debrief { gap: 12px; padding: 3vh 6vw calc(3vh + 40px); }
+#decision-list { max-height: 24vh; overflow-y: auto; width: 100%; max-width: 720px; }
+#decision-list::-webkit-scrollbar { width: 6px; }
+#decision-list::-webkit-scrollbar-thumb { background: rgba(76, 224, 216, 0.3); }
+@keyframes screen-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+#screen-debrief:not(.hidden) > * {
+  animation: debrief-row 460ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+#screen-debrief:not(.hidden) > *:nth-child(2) { animation-delay: 110ms; }
+#screen-debrief:not(.hidden) > *:nth-child(3) { animation-delay: 200ms; }
+#screen-debrief:not(.hidden) > *:nth-child(4) { animation-delay: 280ms; }
+#screen-debrief:not(.hidden) > *:nth-child(5) { animation-delay: 350ms; }
+#screen-debrief:not(.hidden) > *:nth-child(6) { animation-delay: 410ms; }
+@keyframes debrief-row {
+  from { opacity: 0; transform: translateY(14px); }
+  to { opacity: 1; transform: none; }
+}
+
+.btn { transition: background 140ms linear, color 140ms linear, box-shadow 200ms ease-out, transform 120ms ease-out; }
+.btn:hover, .btn.focused { box-shadow: 0 0 28px rgba(76, 224, 216, 0.4); transform: translateY(-2px); }
+
+/* Respect the OS setting. Everything above is decoration; none of it carries
+   information the player cannot get elsewhere. */
+@media (prefers-reduced-motion: reduce) {
+  #fx-overlay::before, #fx-overlay.degraded::before, #fx-overlay.alerting,
+  #fx-overlay.transmitting::after, .cmd.focused:not(:disabled)::after,
+  #health-fill.crit, .unit-chip.damaged, .unit-chip.glitch, #comms-source.glitch {
+    animation: none;
+  }
+  #deploy-sweep.on, #event-flash.on { animation-duration: 1ms; }
+  * { scroll-behavior: auto; }
+}
+
+/* ================================================================
+   INPUT LAYER — prompts, focus, pause menu
+   Focus has to be readable from two metres, because on a controller
+   it is the only thing telling you what a press will do.
+   ================================================================ */
+
+/* ---------- prompt strip ---------- */
+#prompt-bar {
+  position: absolute; left: 0; right: 0; bottom: 0; z-index: 60;
+  display: flex; align-items: center; justify-content: center;
+  gap: 18px; flex-wrap: wrap;
+  padding: 7px 18px; min-height: 30px;
+  background: linear-gradient(to top, rgba(5, 8, 7, 0.92), rgba(5, 8, 7, 0.55));
+  border-top: 1px solid rgba(76, 224, 216, 0.16);
+  pointer-events: none;
+}
+#prompt-bar .prompt {
+  display: inline-flex; align-items: center; gap: 7px;
+  font-size: 10px; letter-spacing: 0.18em; color: var(--dim);
+  text-transform: uppercase; white-space: nowrap;
+}
+#prompt-bar .prompt b {
+  font-weight: 400; font-size: 10px; letter-spacing: 0.1em;
+  color: var(--cyan); border: 1px solid rgba(76, 224, 216, 0.5);
+  padding: 2px 6px; min-width: 20px; text-align: center;
+  background: rgba(76, 224, 216, 0.07);
+}
+/* Controller glyphs read as buttons, keyboard glyphs as keycaps. */
+body.pad-active #prompt-bar .prompt b { border-radius: 9px; }
+#prompt-bar .prompt-note { font-size: 10px; letter-spacing: 0.14em; color: var(--amber); }
+
+/* The HUD and the screens both have to clear the strip. */
+#ui { padding-bottom: 46px; }
+.screen { padding-bottom: calc(6vh + 40px); }
+
+/* ---------- focus ---------- */
+/* Never the browser's default outline: it is invisible on this palette. */
+.cmd:focus, .btn:focus, .cmd:focus-visible, .btn:focus-visible { outline: none; }
+
+.cmd.focused:not(:disabled), .btn.focused {
+  box-shadow: 0 0 0 1px var(--cyan), 0 0 16px rgba(76, 224, 216, 0.45);
+}
+/* A moving marker on the selected command, so the ring is not just "the
+   bright one" — it reads even in a photo of the screen. */
+.cmd.focused:not(:disabled)::after {
+  content: ''; position: absolute; left: 50%; bottom: -7px;
+  width: 8px; height: 8px; margin-left: -4px;
+  background: var(--cyan);
+  clip-path: polygon(50% 0, 100% 100%, 0 100%);
+  animation: focus-bob 1.1s ease-in-out infinite;
+}
+@keyframes focus-bob {
+  0%, 100% { transform: translateY(0); opacity: 1; }
+  50% { transform: translateY(2px); opacity: 0.6; }
+}
+
+/* Number badge: the keyboard shortcut, and the D-pad order, in one mark. */
+.cmd .key {
+  display: inline-block; margin-right: 9px; font-size: 9px;
+  color: var(--dim); border: 1px solid rgba(74, 90, 82, 0.55);
+  padding: 1px 4px; line-height: 1.2; vertical-align: 1px;
+}
+.cmd.focused:not(:disabled) .key, .cmd:hover:not(:disabled) .key {
+  color: #04100e; border-color: rgba(4, 16, 14, 0.45);
+}
+body.pad-active .cmd .key { opacity: 0.35; }   /* pad navigates, it does not type */
+
+/* Order committed — a visual receipt, in case the room is too loud to hear it. */
+.cmd.committed { animation: cmd-commit 400ms ease-out; }
+@keyframes cmd-commit {
+  0% { background: var(--cyan); color: #04100e; }
+  100% { background: rgba(8, 14, 13, 0.9); }
+}
+
+/* Unit framed by LB/RB. */
+.unit-chip.selected {
+  box-shadow: 0 0 0 1px currentColor, 0 0 14px rgba(76, 224, 216, 0.4);
+  background: rgba(76, 224, 216, 0.10);
+}
+
+/* ---------- pause / intel / controls ---------- */
+#screen-pause { gap: 16px; }
+#pause-body { display: flex; flex-direction: column; align-items: center; gap: 14px; width: min(760px, 92vw); }
+.menu-list { display: flex; flex-direction: column; gap: 8px; width: min(340px, 80vw); }
+.menu-row { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+.menu-btn { width: 100%; padding: 11px 20px; font-size: 13px; letter-spacing: 0.2em; }
+
+.intel { display: flex; flex-direction: column; gap: 14px; text-align: left; width: 100%; }
+.intel-block { border-left: 2px solid var(--amber); padding: 4px 0 4px 12px; }
+.intel-objective { font-size: 14px; color: var(--amber); letter-spacing: 0.08em; margin-top: 4px; }
+.intel-list { list-style: none; padding: 0; margin: 6px 0 0; }
+.intel-list li { font-size: 12px; line-height: 1.7; color: #9fc4bd; }
+.intel-list li::before { content: '// '; color: var(--dim); }
+.intel-sit { font-size: 12px; line-height: 1.6; color: #9fc4bd; margin-top: 5px; }
+.intel-task { font-size: 13px; line-height: 1.6; color: var(--cyan); margin-top: 6px; }
+
+.controls-table { width: 100%; display: flex; flex-direction: column; }
+.ctl-row {
+  display: grid; grid-template-columns: 1fr 130px 110px; gap: 10px;
+  font-size: 12px; padding: 5px 0; align-items: center;
+  border-bottom: 1px dashed rgba(74, 90, 82, 0.3);
+}
+.ctl-head { color: var(--dim); font-size: 10px; letter-spacing: 0.22em; text-transform: uppercase; }
+.ctl-name { text-align: left; color: #9fc4bd; letter-spacing: 0.08em; }
+.ctl-key, .ctl-pad { color: var(--cyan); font-size: 11px; letter-spacing: 0.1em; }
+.ctl-head .ctl-key, .ctl-head .ctl-pad { color: var(--dim); }
+.pad-status {
+  font-size: 10px; letter-spacing: 0.16em; color: var(--dim);
+  text-align: center; line-height: 1.8;
+}
+
+.remap { display: flex; flex-direction: column; gap: 10px; align-items: center; }
+.remap-prompt { font-size: 11px; letter-spacing: 0.26em; color: var(--dim); }
+.remap-control { font-size: clamp(22px, 4vw, 34px); letter-spacing: 0.18em; color: var(--cyan); }
+.remap-hint { font-size: 11px; color: var(--dim); letter-spacing: 0.1em; }
+.remap-done { font-size: 16px; letter-spacing: 0.2em; color: var(--cyan); }
+
+/* ---------- objective board + turn rules (gameplay layer) ---------- */
+/* Appended as one block so it merges cleanly alongside other work. */
+
+#objective.rows { display: flex; flex-direction: column; gap: 2px; margin: 2px 0 5px; }
+
+.obj {
+  display: flex; align-items: baseline; gap: 6px;
+  font-size: 11px; letter-spacing: 0.1em;
+  color: var(--dim);
+  transition: color 240ms ease;
+}
+.obj .mark { width: 9px; flex: none; text-align: center; font-size: 10px; }
+
+/* Pending is the live objective — amber, the colour the HUD already uses for
+   "your attention is wanted here". */
+.obj.pending { color: var(--amber); }
+.obj.pending .mark { opacity: 0.55; }
+
+.obj.done { color: var(--cyan); }
+.obj.done .mark { color: var(--cyan); }
+/* Struck through, because an objective that is met stops being a thing to do. */
+.obj.done { text-decoration: line-through; text-decoration-thickness: 1px; opacity: 0.75; }
+
+.obj.failed { color: var(--red); }
+.obj.failed .mark { color: var(--red); }
+
+/* A completed objective is worth one beat of attention and no more. */
+.obj.just-done { animation: obj-land 700ms ease-out; }
+@keyframes obj-land {
+  0%   { text-shadow: 0 0 14px rgba(76, 224, 216, 0.9); opacity: 1; }
+  100% { text-shadow: none; }
+}
+
+/* Turn rule in the mission log. */
+#log-lines div.turn-mark {
+  margin: 6px 0 2px;
+  font-size: 9px; letter-spacing: 0.26em;
+  color: var(--dim);
+  border-top: 1px solid rgba(76, 224, 216, 0.18);
+  padding-top: 5px;
+}
+#log-lines div.turn-mark::before { content: ''; }
+#log-lines div.turn-mark:first-child { margin-top: 0; border-top: none; }
+
+/* ---------------------------------------------------------------- comms TX
+   The third half of a transmission, next to the voice and the caption: a
+   light that is lit for exactly as long as the channel is open. Built by
+   CommsPanel, so the markup lives with the code that drives it. */
+#comms-tx {
+  margin-left: auto;
+  font-size: 10px;
+  letter-spacing: 0.22em;
+  color: var(--dim);
+  border: 1px solid rgba(74, 90, 82, 0.5);
+  padding: 1px 6px;
+  opacity: 0.45;
+  transition: opacity 160ms linear, color 160ms linear, border-color 160ms linear;
+}
+#comms-tx.on {
+  color: var(--cyan);
+  border-color: rgba(76, 224, 216, 0.7);
+  opacity: 1;
+  animation: tx-live 1.1s steps(1, end) infinite;
+}
+@keyframes tx-live {
+  0%, 60% { box-shadow: 0 0 10px rgba(76, 224, 216, 0.35) inset; }
+  61%, 100% { box-shadow: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  #comms-tx.on { animation: none; }
+}

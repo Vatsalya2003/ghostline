@@ -6,7 +6,12 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "node scripts/input-test.mjs",
+    "sim": "node scripts/sim.mjs",
+    "verify": "node scripts/verify.mjs",
+    "e2e": "node scripts/e2e.mjs",
+    "audio": "node scripts/verify-audio.mjs"
   },
   "dependencies": {
     "gsap": "^3.15.0",

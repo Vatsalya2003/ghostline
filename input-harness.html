@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>GHOSTLINE — INPUT HARNESS</title>
+    <link rel="stylesheet" href="/src/style/main.css" />
+    <style>
+      body { overflow: auto; padding: 24px; }
+      h1 { font-size: 16px; letter-spacing: 0.3em; margin: 0 0 4px; }
+      h3 { font-size: 11px; letter-spacing: 0.24em; color: var(--dim); font-weight: 400; margin: 22px 0 8px; }
+      .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 6px; }
+      .b { border: 1px solid var(--hairline); padding: 6px 8px; font-size: 11px; color: var(--dim); }
+      .b.on { background: var(--cyan); color: #04100e; border-color: var(--cyan); }
+      .b i { font-style: normal; color: var(--amber); }
+      .b.on i { color: #04100e; }
+      #result { font-size: 14px; letter-spacing: 0.2em; padding: 10px 0; }
+      .ok { color: var(--cyan); } .bad { color: var(--red); }
+      #fails div { font-size: 11px; color: var(--red); }
+      #padinfo { font-size: 11px; color: #9fc4bd; line-height: 1.7; }
+      .bar { height: 8px; background: #0c1412; border: 1px solid var(--hairline); position: relative; }
+      .bar span { position: absolute; inset: 1px auto 1px 50%; background: var(--cyan); width: 0; }
+      #axes { display: grid; grid-template-columns: 90px 1fr; gap: 6px 10px; align-items: center; font-size: 11px; }
+    </style>
+  </head>
+  <body>
+    <h1>GHOSTLINE — INPUT HARNESS</h1>
+    <p class="label">Dev tool. Not part of the game build.</p>
+
+    <h3>Synthetic suite (runs on load, no hardware needed)</h3>
+    <div id="result">running…</div>
+    <div id="fails"></div>
+
+    <h3>Live controller — press every button and confirm the label matches</h3>
+    <div id="padinfo">No pad seen yet. Press a button on a controller.</div>
+    <div class="grid" id="buttons"></div>
+
+    <h3>Axes</h3>
+    <div id="axes"></div>
+
+    <h3>Semantic controls firing right now</h3>
+    <div class="grid" id="controls"></div>
+
+    <h3>Focus ring — real FocusRing driving real buttons</h3>
+    <div id="ringout" style="font-size:11px;color:#9fc4bd;line-height:1.8"></div>
+    <div id="ringdemo" style="display:flex;gap:10px;margin-top:8px"></div>
+
+    <h3>Command bar — real CommandBar, focused entry + number glyphs</h3>
+    <div id="commands" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px"></div>
+
+    <h3>Prompt strip (live — swaps glyphs when you touch a pad)</h3>
+    <div id="prompt-bar" style="position: static; margin-top: 8px;"></div>
+
+    <script type="module">
+      import { PadReader, CONTROL, STANDARD_BUTTONS } from '/src/systems/Gamepad.js';
+      import { Prompts } from '/src/ui/Prompts.js';
+
+      // ---- synthetic suite: the same checks scripts/input-test.mjs runs, so a
+      // browser regression cannot hide behind a passing Node run.
+      const fails = [];
+      let passed = 0;
+      const check = (n, c) => { if (c) passed++; else fails.push(n); };
+      const padOf = (down = [], axes = [0,0,0,0], mapping = 'standard') => ({
+        index: 0, id: 'Synthetic', mapping, connected: true, axes,
+        buttons: Array.from({ length: 17 }, (_, i) => {
+          const hit = down.find((d) => (Array.isArray(d) ? d[0] : d) === i);
+          const v = hit === undefined ? 0 : (Array.isArray(hit) ? hit[1] : 1);
+          return { pressed: v >= 0.5, value: v };
+        }),
+      });
+      {
+        const r = new PadReader();
+        r.update([padOf()], 0);
+        let t = 10;
+        for (const [i, expected] of Object.entries(STANDARD_BUTTONS)) {
+          const ev = r.update([padOf([Number(i)])], t += 10);
+          check(`button ${i} -> ${expected}`,
+            ev.filter((e) => e.type === 'press').map((e) => e.control).join() === expected);
+          r.update([padOf()], t += 10);
+        }
+        let extra = 0;
+        r.update([padOf([0])], t += 10);
+        for (let k = 0; k < 30; k++) extra += r.update([padOf([0])], t += 100).length;
+        check('held A does not repeat', extra === 0);
+        r.update([padOf()], t += 10);
+        check('deadzone swallows drift',
+          r.update([padOf([], [0.2, -0.18, 0.22, 0.15])], t += 10).length === 0);
+        check('no pan inside deadzone', r.axes.panX === 0 && r.axes.panY === 0);
+        check('disconnect is clean', r.update([], t += 10).some((e) => e.type === 'disconnected'));
+        check('no phantoms after disconnect', r.update([], t += 10).length === 0);
+        check('reconnect works', r.update([padOf()], t += 10).some((e) => e.type === 'connected'));
+      }
+      // ---- focus ring, against real DOM buttons
+      {
+        const { FocusRing } = await import('/src/ui/Focus.js');
+        const host = document.getElementById('ringdemo');
+        const mk = (text, disabled) => {
+          const b = document.createElement('button');
+          b.className = 'btn'; b.textContent = text; b.disabled = disabled;
+          host.appendChild(b); return b;
+        };
+        const a = mk('FIRST'), b = mk('DISABLED', true), c = mk('THIRD');
+        const ring = new FocusRing();
+        ring.setItems([a, b, c]);
+        const lines = [];
+        lines.push(`after setItems: index=${ring.index} FIRST.class="${a.className}"`);
+        ring.move(1);
+        lines.push(`after move(1):  index=${ring.index} (skipped disabled) THIRD.class="${c.className}"`);
+        check('ring paints .focused on a real button', a.className.includes('focused') === false && c.className.includes('focused'));
+        check('ring skips a disabled real button', ring.index === 2);
+        document.getElementById('ringout').innerHTML = lines.join('<br>');
+      }
+
+      // ---- real CommandBar
+      {
+        const { CommandBar } = await import('/src/ui/CommandBar.js');
+        const bar = new CommandBar(() => {});
+        bar.render([
+          { action: 'CONFIRM' }, { action: 'ASK_WHY', probe: true },
+          { action: 'SEND_DRONE' }, { action: 'FIRE', disabled: true, reason: 'NO DRONES' },
+          { action: 'FALL_BACK' },
+        ]);
+        bar.setLocked(false);
+        bar.moveFocus(1);
+        check('command bar focuses an entry', !!document.querySelector('#commands .cmd.focused'));
+        check('disabled command stays disabled after unlock',
+          document.querySelectorAll('#commands .cmd:disabled').length === 1);
+        check('command bar renders number glyphs',
+          document.querySelectorAll('#commands .cmd .key').length === 5);
+      }
+
+      const el = document.getElementById('result');
+      el.textContent = `${fails.length ? 'FAIL' : 'PASS'}  ${passed}/${passed + fails.length} checks`;
+      el.className = fails.length ? 'bad' : 'ok';
+      document.getElementById('fails').innerHTML = fails.map((f) => `<div>✗ ${f}</div>`).join('');
+      document.title = fails.length ? `FAIL ${fails.length}` : `PASS ${passed}`;
+
+      // ---- live inspector
+      const reader = new PadReader();
+      const prompts = new Prompts();
+      prompts.show([
+        { control: CONTROL.CONFIRM, label: 'CONFIRM' },
+        { control: CONTROL.CANCEL, label: 'BACK' },
+        { control: CONTROL.CONTEXT, label: 'ASK WHY' },
+        { control: CONTROL.PAUSE, label: 'PAUSE' },
+      ]);
+
+      const btnBox = document.getElementById('buttons');
+      const ctlBox = document.getElementById('controls');
+      const axesBox = document.getElementById('axes');
+      const info = document.getElementById('padinfo');
+      const active = new Set();
+
+      for (const c of Object.values(CONTROL)) {
+        const d = document.createElement('div');
+        d.className = 'b'; d.dataset.control = c; d.textContent = c;
+        ctlBox.appendChild(d);
+      }
+      for (const name of ['LX', 'LY', 'RX', 'RY', 'pan X', 'pan Y', 'zoom']) {
+        const l = document.createElement('div'); l.textContent = name;
+        const b = document.createElement('div'); b.className = 'bar';
+        b.innerHTML = '<span></span>'; b.dataset.axis = name;
+        axesBox.append(l, b);
+      }
+      const setBar = (name, v) => {
+        const s = axesBox.querySelector(`[data-axis="${name}"] span`);
+        if (!s) return;
+        const w = Math.min(50, Math.abs(v) * 50);
+        s.style.width = `${w}%`;
+        s.style.left = v < 0 ? `${50 - w}%` : '50%';
+      };
+
+      function frame() {
+        const pads = navigator.getGamepads ? navigator.getGamepads() : [];
+        const events = reader.update(pads, performance.now());
+        for (const e of events) {
+          if (e.type === 'press') active.add(e.control);
+          if (e.type === 'release') active.delete(e.control);
+          if (e.type === 'connected') prompts.setDevice('pad');
+        }
+        for (const d of ctlBox.children) d.classList.toggle('on', active.has(d.dataset.control));
+
+        const pad = [...pads].find(Boolean);
+        if (pad) {
+          info.innerHTML = `<b>${pad.id}</b><br>mapping: <b>${pad.mapping || 'NON-STANDARD — use REMAP in the pause menu'}</b>` +
+            `<br>buttons: ${pad.buttons.length} · axes: ${pad.axes.length}`;
+          if (btnBox.children.length !== pad.buttons.length) {
+            btnBox.innerHTML = '';
+            pad.buttons.forEach((_, i) => {
+              const d = document.createElement('div');
+              d.className = 'b';
+              d.innerHTML = `${i} <i>${STANDARD_BUTTONS[i] || '—'}</i>`;
+              btnBox.appendChild(d);
+            });
+          }
+          pad.buttons.forEach((b, i) => {
+            btnBox.children[i]?.classList.toggle('on', b.pressed || b.value > 0.5);
+          });
+          ['LX', 'LY', 'RX', 'RY'].forEach((n, i) => setBar(n, pad.axes[i] || 0));
+        }
+        setBar('pan X', reader.axes.panX);
+        setBar('pan Y', reader.axes.panY);
+        setBar('zoom', reader.axes.zoom);
+        requestAnimationFrame(frame);
+      }
+      frame();
+    </script>
+  </body>
+</html>
