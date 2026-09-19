@@ -6,6 +6,7 @@ import { SensorCone } from './SensorCones.js';
 import {
   loadCharacter, loadClips, MODEL_FACING_OFFSET, DEFAULT_CLIP,
 } from './ModelLoader.js';
+import { attachRifle } from './Weapon.js';
 
 // Squad units: a Mixamo skinned character per robot, with the procedural
 // chassis kept as a fallback if the model fails to load.
@@ -248,6 +249,9 @@ export class Unit {
     this.tintParts = [{ material: this.modelMaterial, userData: { emissiveOnly: true } }];
     this.group.userData.tintParts = this.tintParts;
     this.group.scale.setScalar(1.0);   // model carries its own scale
+
+    // Parented to the hand bone, so it follows every clip without extra work.
+    this.rifle = attachRifle(model);
 
     this.mixer = new THREE.AnimationMixer(model);
     this.actions.clear();
