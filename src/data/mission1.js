@@ -188,10 +188,17 @@ export const mission1 = {
         { type: 'breach' },
         { type: 'shake', strength: 0.9, duration: 0.6 },
         { type: 'impact', unit: 'UNIT-2', fx: 'impact' },
-        { type: 'wait', duration: 0.5 },
+        { type: 'wait', duration: 0.4 },
+        // Push in on the unit that just took the fragment, so the player is
+        // looking straight at the cone while it comes apart.
+        { type: 'pan', x: 2.7, z: 3.0, zoom: 9, duration: 0.8 },
         { type: 'status', unit: 'UNIT-2', status: 'glitch' },
         { type: 'log', text: 'UNIT-2 SENSOR PACKAGE — FRAGMENT DAMAGE' },
-        { type: 'wait', duration: 1.2 },
+        { type: 'wait', duration: 1.4 },
+        // Pull back out before the recommendation arrives. The contradiction
+        // only works if the broken cone is still on screen when it speaks.
+        { type: 'pan', x: 2.6, z: 1.2, zoom: 13, duration: 0.9 },
+        { type: 'wait', duration: 0.5 },
       ],
       ai: {
         unit: 'UNIT-2',
