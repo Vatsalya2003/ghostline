@@ -1,12 +1,44 @@
 import * as THREE from 'three';
 
-export const PALETTE = {
+// Flip to true for the light scheme. Everything downstream reads PALETTE and
+// the `light` class on <body>, so this constant is the only switch.
+export const LIGHT_MODE = false;
+
+const DARK = {
   bg: 0x0a0d0a,
   cyan: 0x4ce0d8,
   amber: 0xe0a84c,
   red: 0xe0524c,
   dim: 0x4a5a52,
+  grid: 'rgba(96, 132, 120, 0.55)',
+  gridMajor: 'rgba(120, 170, 156, 0.9)',
+  ground: '#131a16',
+  fog: 0x05070a,
+  fogOpacity: 0.70,
+  ambient: 0x2a3a38,
+  key: 0xbfe8e2,
 };
+
+// Cyan has to drop into the #0f7d76 range to hold against a light ground,
+// and the fog inverts from "dark unseen" to "washed-out unseen".
+const LIGHT = {
+  bg: 0xf4f4f0,
+  cyan: 0x0f7d76,
+  amber: 0xa96f10,
+  red: 0xb63229,
+  dim: 0x6d7d76,
+  grid: 'rgba(90, 110, 102, 0.40)',
+  gridMajor: 'rgba(60, 80, 74, 0.65)',
+  ground: '#e8e8e2',
+  fog: 0xf4f4f0,
+  fogOpacity: 0.62,
+  ambient: 0xbfcdc8,
+  key: 0xffffff,
+};
+
+// Exported as a single mutable object so every module that already imported
+// PALETTE picks up the active scheme without changing its import.
+export const PALETTE = { ...(LIGHT_MODE ? LIGHT : DARK) };
 
 export const GROUND_SIZE = 30;
 
@@ -17,10 +49,10 @@ function makeGridTexture(tiles = GROUND_SIZE, px = 64) {
   canvas.width = canvas.height = size;
   const ctx = canvas.getContext('2d');
 
-  ctx.fillStyle = '#131a16';
+  ctx.fillStyle = PALETTE.ground;
   ctx.fillRect(0, 0, size, size);
 
-  ctx.strokeStyle = 'rgba(96, 132, 120, 0.55)';
+  ctx.strokeStyle = PALETTE.grid;
   ctx.lineWidth = 1;
   for (let i = 0; i <= tiles; i++) {
     const p = i * px + 0.5;
@@ -31,7 +63,7 @@ function makeGridTexture(tiles = GROUND_SIZE, px = 64) {
   }
 
   // Heavier line every 5 tiles for readable scale.
-  ctx.strokeStyle = 'rgba(120, 170, 156, 0.9)';
+  ctx.strokeStyle = PALETTE.gridMajor;
   ctx.lineWidth = 2;
   for (let i = 0; i <= tiles; i += 5) {
     const p = i * px + 0.5;
@@ -74,7 +106,7 @@ export function createScene() {
   ground.name = 'ground';
   scene.add(ground);
 
-  const key = new THREE.DirectionalLight(0xbfe8e2, 1.5);
+  const key = new THREE.DirectionalLight(PALETTE.key, LIGHT_MODE ? 2.1 : 1.5);
   key.position.set(8, 14, 6);
   key.castShadow = true;
   key.shadow.mapSize.set(2048, 2048);
@@ -88,7 +120,7 @@ export function createScene() {
   key.shadow.bias = -0.0005;
   scene.add(key);
 
-  scene.add(new THREE.AmbientLight(0x2a3a38, 1.1));
+  scene.add(new THREE.AmbientLight(PALETTE.ambient, LIGHT_MODE ? 2.2 : 1.1));
 
   return { scene, ground };
 }

@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { LIGHT_MODE } from './Scene.js';
 
 // The signature visual. Flat wedge meshes on the ground with additive
 // blending — deliberately NOT SpotLights (no shadow maps, no tuning, and it
@@ -138,7 +139,10 @@ export class SensorCone {
       transparent: true,
       depthWrite: false,
       depthTest: false,
-      blending: THREE.AdditiveBlending,
+      // Additive can only brighten, so it vanishes on a light ground.
+      // Normal blending paints the wedge on instead; multiply was tried and
+      // barely darkened a light cyan against a near-white floor.
+      blending: LIGHT_MODE ? THREE.NormalBlending : THREE.AdditiveBlending,
       side: THREE.DoubleSide,
     });
 

@@ -243,3 +243,44 @@ html, body {
 .outcome-complete { color: var(--cyan); }
 .outcome-lost { color: var(--red); }
 .outcome-partial, .outcome-aborted { color: var(--amber); }
+
+/* ---------- light mode ----------
+   Driven by LIGHT_MODE in src/render/Scene.js, which adds .light to <body>.
+   Cyan drops to #0f7d76 so it holds against a light ground; panels invert
+   from translucent-dark to translucent-light. */
+body.light {
+  --bg: #f4f4f0;
+  --cyan: #0f7d76;
+  --amber: #a96f10;
+  --red: #b63229;
+  --dim: #6d7d76;
+  --panel: rgba(255, 255, 255, 0.82);
+  --hairline: rgba(15, 125, 118, 0.35);
+  color: var(--cyan);
+}
+
+body.light #log-lines div { color: #47554f; }
+body.light .screen { background: rgba(244, 244, 240, 0.94); }
+body.light .screen h1 { text-shadow: 0 0 18px rgba(15, 125, 118, 0.25); }
+body.light .screen p, body.light .screen li { color: #47554f; }
+body.light .report .sub, body.light #decision-list .d { color: #47554f; }
+body.light .cmd { background: rgba(255, 255, 255, 0.9); }
+body.light .cmd:hover:not(:disabled), body.light .cmd.focused:not(:disabled) {
+  background: var(--cyan); color: #f4f4f0;
+}
+body.light .btn:hover, body.light .btn.focused { color: #f4f4f0; }
+body.light #health-bar { background: #dcdcd4; }
+
+/* Scanlines lighten on dark; on light they have to darken instead. */
+body.light #fx-overlay::before {
+  background: repeating-linear-gradient(
+    to bottom,
+    rgba(15, 125, 118, 0.05) 0px,
+    rgba(15, 125, 118, 0.05) 1px,
+    transparent 1px,
+    transparent 4px);
+  mix-blend-mode: multiply;
+}
+body.light #fx-overlay::after {
+  background: radial-gradient(ellipse at center, transparent 55%, rgba(60, 70, 66, 0.28) 100%);
+}

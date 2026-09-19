@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import gsap from 'gsap';
-import { createRenderer, createScene } from './render/Scene.js';
+import { createRenderer, createScene, LIGHT_MODE } from './render/Scene.js';
 import { createCamera, resizeCamera, applyCameraTransform, panCamera, zoomCamera } from './render/Camera.js';
 import { createFogOfWar } from './render/FogOfWar.js';
 import { createLevel } from './render/Level.js';
@@ -26,6 +26,8 @@ import { Screens } from './ui/Screens.js';
 gsap.ticker.lagSmoothing(0);
 
 // ---------------------------------------------------------------- render
+document.body.classList.toggle('light', LIGHT_MODE);
+
 const canvas = document.getElementById('scene');
 const renderer = createRenderer(canvas);
 const camera = createCamera();
