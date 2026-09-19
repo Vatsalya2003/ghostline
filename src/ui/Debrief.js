@@ -27,6 +27,7 @@ export class Debrief {
     this.sub = document.getElementById('mission-sub');
     this.rows = document.getElementById('mode-rows');
     this.verdict = document.getElementById('verdict');
+    this.keyTurnLine = document.getElementById('key-turn-line');
     this.decisions = document.getElementById('decision-list');
     document.getElementById('btn-replay').addEventListener('click', onReplay);
   }
@@ -50,6 +51,7 @@ export class Debrief {
       this.rows.appendChild(row);
     }
 
+    this.keyTurnLine.textContent = summary.keyTurnLine || '';
     this.verdict.textContent = summary.verdict;
 
     this.decisions.innerHTML = '';

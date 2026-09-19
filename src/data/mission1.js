@@ -35,15 +35,20 @@ export const mission1 = {
   id: 'mission-1',
   title: 'OVERRIDE PROTOCOL',
   subtitle: 'OPERATION DRY CREEK — RELAY STATION 7',
-  objective: 'Restore the relay. Bring the squad home.',
+  objective: 'RESTORE THE RELAY · BRING THE SQUAD HOME',
+
+  // The turn the whole mission is built around. Failing it is called out by
+  // name in the debrief however the rest of the run went.
+  keyTurn: 3,
+  keyTurnVerdict: 'Turn 3 was the one that counted. HIGH confidence, from a sensor you had just watched break. You took the number.',
 
   briefing: [
-    'You are the commander. You are not in the field.',
-    'Your squad is three autonomous units. You see only what their sensors see.',
-    'LEAD relays the squad AI\'s recommendation each turn, with a stated confidence.',
-    'Confidence is what the machine says. The sensor cone is what it can actually see.',
-    'When those two disagree, believe the cone.',
-    'You are graded twice: whether the squad survives, and whether you trusted well.',
+    'YOUR JOB — Restore the relay at Station 7 and bring all three units home.',
+    'HOW IT WORKS — You are at base. Your squad is three robots. You see only what their sensors see.',
+    'EACH TURN — The squad AI tells you what it recommends and how confident it is. You pick one command. That is the whole game.',
+    'THE CATCH — Confidence is what the machine says. The cone on the ground is what it can actually see. Sensors break. Broken sensors still sound confident.',
+    'WHEN THEY DISAGREE — Believe the cone.',
+    'YOU ARE SCORED TWICE — Did the squad survive, and did you trust the machine at the right moments. These can disagree.',
   ],
 
   drones: 2,
@@ -55,6 +60,7 @@ export const mission1 = {
       id: 1,
       name: 'APPROACH',
       situation: 'Squad holds at the south treeline. Relay Station 7, two hundred metres.',
+      task: 'Advance on LEAD\'s word, or spend a drone double-checking it.',
       camera: { x: -3, z: 4, zoom: 16 },
       statuses: { LEAD: 'healthy', 'UNIT-2': 'healthy', 'UNIT-3': 'healthy' },
       intro: [
@@ -110,6 +116,7 @@ export const mission1 = {
       id: 2,
       name: 'CONTACT',
       situation: 'Heat bloom at the west outbuilding. Nothing resolves.',
+      task: 'Something is warm out there and LEAD cannot name it. Resolve it, or move anyway.',
       camera: { x: -4, z: 0, zoom: 14 },
       statuses: { LEAD: 'healthy', 'UNIT-2': 'healthy', 'UNIT-3': 'healthy' },
       intro: [
@@ -175,6 +182,7 @@ export const mission1 = {
       id: 3,
       name: 'BREACH',
       situation: 'Breach charge on the south door. UNIT-2 stacks closest.',
+      task: 'UNIT-2 just lost its sensor — and UNIT-2 is the unit calling the room clear. Decide what that call is worth.',
       camera: { x: 2.6, z: 1.5, zoom: 14 },
       statuses: { LEAD: 'healthy', 'UNIT-2': 'glitch', 'UNIT-3': 'healthy' },
       // The demo beat. Order matters: damage first, silence, then the
@@ -262,6 +270,7 @@ export const mission1 = {
       id: 4,
       name: 'INTERIOR',
       situation: 'Entry hall. A divider wall cuts the room in half.',
+      task: 'LEAD admits it is unsure and offers a careful plan. Take it, or do something else.',
       camera: { x: 3.0, z: -3.0, zoom: 13 },
       statuses: { LEAD: 'healthy', 'UNIT-2': 'glitch', 'UNIT-3': 'healthy' },
       intro: [
@@ -327,6 +336,7 @@ export const mission1 = {
       id: 5,
       name: 'RELAY',
       situation: 'Relay console. Authentication challenge on screen.',
+      task: 'The relay wants a credential LEAD does not have. Someone has to handle it.',
       camera: { x: 1.2, z: -5.0, zoom: 10.5 },
       statuses: { LEAD: 'healthy', 'UNIT-2': 'glitch', 'UNIT-3': 'healthy' },
       intro: [
@@ -391,6 +401,7 @@ export const mission1 = {
       id: 6,
       name: 'EXTRACT',
       situation: 'Relay handled. Extraction window closing.',
+      task: 'Choose the way out. LEAD is optimising for speed, and UNIT-2 is hurt.',
       camera: { x: -1, z: 1, zoom: 16 },
       statuses: { LEAD: 'healthy', 'UNIT-2': 'glitch', 'UNIT-3': 'healthy' },
       intro: [

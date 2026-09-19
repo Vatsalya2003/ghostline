@@ -14,7 +14,8 @@
         <!-- ============ HUD ============ -->
         <div id="hud">
           <div class="panel" id="turn-box">
-            <div class="label">Operation</div>
+            <div class="label">Objective</div>
+            <div id="objective">—</div>
             <div id="turn-name">STANDBY</div>
             <div id="turn-count">TURN — / —</div>
           </div>
@@ -41,6 +42,10 @@
           <div class="panel" id="situation">
             <div class="label">Situation</div>
             <div id="situation-text">—</div>
+            <div id="task-line">
+              <span class="label">Your call</span>
+              <div id="task-text">—</div>
+            </div>
           </div>
           <div class="panel" id="log">
             <div class="label">Mission log</div>
@@ -68,6 +73,7 @@
               <div id="conf-note"></div>
             </div>
           </div>
+          <div id="command-label" class="label">Choose one command</div>
           <div id="commands"></div>
         </div>
       </div>
@@ -104,6 +110,7 @@
             <div id="mode-rows"></div>
           </div>
         </div>
+        <div id="key-turn-line"></div>
         <div id="verdict"></div>
         <div id="decision-list"></div>
         <button class="btn" id="btn-replay">RUN IT AGAIN</button>

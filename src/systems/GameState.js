@@ -42,8 +42,10 @@ export class GameState {
     return out;
   }
 
-  // The verdict names the habit to fix: the most frequent failure mode, or
-  // well-calibrated if the player made no more errors than good calls.
+  // The verdict names the habit to fix. Praise is only for a clean run —
+  // outnumbering your mistakes with good calls is not the same as trusting
+  // well, and saying otherwise lets a player walk out of the ambush turn
+  // being told they read the sensor correctly.
   dominantTag() {
     const counts = this.counts();
     let worst = null;
@@ -52,8 +54,17 @@ export class GameState {
       if (tag === CALIBRATION.CALIBRATED) continue;
       if (n > worstN) { worst = tag; worstN = n; }
     }
-    if (!worst || counts[CALIBRATION.CALIBRATED] > worstN) return CALIBRATION.CALIBRATED;
-    return worst;
+    return worst || CALIBRATION.CALIBRATED;
+  }
+
+  // The mission names one turn as the lesson it is built around. Failing it
+  // gets called out by name, however the rest of the run went.
+  keyTurnFailure() {
+    const keyTurn = this.mission.keyTurn;
+    if (!keyTurn) return null;
+    const entry = this.calibration.find((d) => d.turn === keyTurn);
+    if (!entry || entry.tag === CALIBRATION.CALIBRATED) return null;
+    return entry;
   }
 
   summary() {
@@ -63,6 +74,8 @@ export class GameState {
       counts: this.counts(),
       dominant: this.dominantTag(),
       verdict: this.mission.verdicts[this.dominantTag()],
+      keyTurnFailed: !!this.keyTurnFailure(),
+      keyTurnLine: this.keyTurnFailure() ? this.mission.keyTurnVerdict : null,
       decisions: [...this.calibration],
       relayOnline: this.relayOnline,
     };

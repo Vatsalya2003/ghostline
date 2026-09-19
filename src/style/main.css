@@ -78,7 +78,8 @@ html, body {
 }
 #hud .panel { padding: 8px 12px; display: flex; flex-direction: column; gap: 6px; }
 
-#turn-box { min-width: 190px; }
+#turn-box { min-width: 260px; }
+#objective { font-size: 11px; letter-spacing: 0.1em; color: var(--amber); }
 #turn-name { font-size: 17px; letter-spacing: 0.14em; }
 #turn-count { color: var(--dim); font-size: 11px; letter-spacing: 0.18em; }
 
@@ -121,9 +122,14 @@ html, body {
 /* ---------- middle: situation + log ---------- */
 #middle { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
 #situation {
-  max-width: 460px; padding: 10px 12px; font-size: 13px; line-height: 1.5;
+  max-width: 470px; padding: 10px 12px; font-size: 13px; line-height: 1.5;
   border-left: 2px solid var(--amber);
 }
+#situation-text { color: #9fc4bd; }
+#task-line {
+  margin-top: 9px; padding-top: 8px; border-top: 1px dashed rgba(74, 90, 82, 0.5);
+}
+#task-text { font-size: 13px; line-height: 1.5; color: var(--cyan); margin-top: 3px; }
 #log {
   width: 330px; max-height: 42vh; overflow: hidden; padding: 8px 10px;
   display: flex; flex-direction: column; gap: 4px;
@@ -157,6 +163,7 @@ html, body {
 #confidence.suspect #conf-label { color: var(--amber); }
 #conf-note { font-size: 10px; color: var(--dim); letter-spacing: 0.1em; }
 
+#command-label { margin-bottom: -2px; }
 #commands { display: flex; gap: 8px; flex-wrap: wrap; }
 .cmd {
   font-family: var(--mono); font-size: 13px; letter-spacing: 0.16em;
@@ -215,6 +222,11 @@ html, body {
 .mode-row.hit { color: var(--amber); }
 .mode-row.hit .n { color: var(--amber); }
 .mode-desc { font-size: 10px; color: var(--dim); }
+#key-turn-line {
+  max-width: 720px; text-align: left; font-size: 13px; line-height: 1.6;
+  color: var(--amber); letter-spacing: 0.04em;
+}
+#key-turn-line:empty { display: none; }
 #verdict {
   border-left: 2px solid var(--amber); padding: 12px 16px; max-width: 720px;
   font-size: 15px; line-height: 1.6; text-align: left; color: var(--cyan);

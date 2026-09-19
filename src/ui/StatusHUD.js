@@ -11,6 +11,8 @@ export class StatusHUD {
     this.squad = document.getElementById('squad-list');
     this.pips = document.getElementById('drone-pips');
     this.situation = document.getElementById('situation-text');
+    this.task = document.getElementById('task-text');
+    document.getElementById('objective').textContent = mission.objective;
   }
 
   setTurn(turn) {
@@ -19,6 +21,7 @@ export class StatusHUD {
       ? `TURN ${turn.id} / ${this.mission.turns.length}`
       : `TURN — / ${this.mission.turns.length}`;
     this.situation.textContent = turn ? turn.situation : '—';
+    this.task.textContent = turn ? turn.task : '—';
   }
 
   setHealth(health) {
