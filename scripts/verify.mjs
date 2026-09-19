@@ -39,6 +39,48 @@ function checkData() {
     ok(!!o.flag || !!o.survive, `objective "${o.id}" says how it is met (flag or survive)`);
   }
 
+  // ---------------------------------------------------------------- the squad
+  // A roster the engine cannot read is a squad with no state behind it, which
+  // is the failure this whole layer exists to prevent.
+  const roster = m.roster || m.fleet;
+  ok(!!roster && Object.keys(roster).length > 0, 'mission declares a roster');
+  const unitIds = new Set(Object.keys(roster || {}));
+  const payloadKinds = new Set();
+  for (const [id, spec] of Object.entries(roster || {})) {
+    ok(typeof (spec.integrity ?? m.startHealth) === 'number', `roster "${id}" starts with integrity`);
+    for (const [kind, n] of Object.entries(spec.ammo || {})) {
+      ok(typeof n === 'number' && n >= 0, `roster "${id}" payload "${kind}" is a count`);
+      payloadKinds.add(kind);
+    }
+  }
+  ok(typeof m.criticalIntegrity === 'number', 'mission says what counts as critical damage');
+
+  // Every mechanical field an outcome declares has to name something real —
+  // a unit that exists, a payload the squad actually carries. A typo here is
+  // a resource that silently never gets spent.
+  for (const turn of m.turns) {
+    for (const [action, o] of Object.entries(turn.outcomes)) {
+      const what = `turn ${turn.id} ${action}`;
+      for (const variant of [o, o.altIfHealthAbove, o.altIfHealthBelow, ...(o.variants || [])].filter(Boolean)) {
+        for (const [kind, n] of Object.entries(variant.spends || {})) {
+          ok(kind === 'drones' || payloadKinds.has(kind), `${what}: spends "${kind}", which the squad carries`);
+          ok(typeof n === 'number' && n > 0, `${what}: spends a positive amount of "${kind}"`);
+        }
+        for (const id of [variant.unitLost, variant.losesUnit, variant.unitDisabled,
+          variant.disablesUnit, variant.requiresUnit, variant.impactUnit].flat()) {
+          if (id) ok(unitIds.has(id), `${what}: names unit "${id}", which is on the roster`);
+        }
+        for (const id of Object.keys(variant.damages || {})) {
+          ok(unitIds.has(id), `${what}: damages "${id}", which is on the roster`);
+        }
+      }
+      for (const v of o.variants || []) {
+        ok(!!v.when || !!v.unless, `${what}: outcome variant states a condition`);
+        ok(Object.keys(v).some((k) => k !== 'when' && k !== 'unless'), `${what}: outcome variant overrides something`);
+      }
+    }
+  }
+
   for (const turn of m.turns) {
     const where = `turn ${turn.id} (${turn.name})`;
     for (const v of turn.variants || []) {
@@ -96,7 +138,9 @@ function spokenLines() {
   for (const turn of mission1.turns) {
     out.push({ where: `turn ${turn.id} AI line`, text: turn.ai.line });
     for (const [action, o] of Object.entries(turn.outcomes)) {
-      for (const [label, variant] of [['', o], ['/high', o.altIfHealthAbove], ['/low', o.altIfHealthBelow]]) {
+      const variants = [['', o], ['/high', o.altIfHealthAbove], ['/low', o.altIfHealthBelow],
+        ...(o.variants || []).map((v, i) => [`/variant${i}`, v])];
+      for (const [label, variant] of variants) {
         if (variant?.response) {
           out.push({ where: `turn ${turn.id} ${action}${label} response`, text: variant.response });
         }
@@ -129,6 +173,9 @@ function checkVoice() {
 const endings = {};
 const tagTotals = {};
 const seenOutcomes = new Set();
+const lostSeen = new Set();
+const disabledSeen = new Set();
+const ROSTER_SIZE = Object.keys(mission1.roster || mission1.fleet || {}).length;
 let paths = 0;
 let deepestHealth = 100;
 
@@ -173,7 +220,13 @@ function walk(plan) {
         `${where}: turn text matches mission state (relayOnline=${state.relayOnline})`);
     }
 
-    const before = { drones: state.drones, graded: state.calibration.length };
+    const before = {
+      drones: state.drones,
+      graded: state.calibration.length,
+      resources: state.resources(),
+      integrity: Object.fromEntries(state.roster().map((u) => [u.id, u.integrity])),
+      down: new Set(state.roster().filter((u) => !u.operational).map((u) => u.id)),
+    };
     const issued = heard[GAME_EVENT.COMMAND_ISSUED] || 0;
     const res = tm.choose(action);
     if (!res) continue;                       // not offered on this turn; skip
@@ -190,9 +243,35 @@ function walk(plan) {
     ok(state.health >= 0 && state.health <= 100, `${where}: health stays in range (got ${state.health})`);
     deepestHealth = Math.min(deepestHealth, state.health);
 
+    // ------------------------------------------------------ the squad itself
+    // SQUAD INTEGRITY is a summary of three machines, not a pool of its own:
+    // if the bar and the roster can disagree, per-unit damage is decorative.
+    const roster = state.roster();
+    ok(roster.length === ROSTER_SIZE, `${where}: the squad is still ${ROSTER_SIZE} machines (got ${roster.length})`);
+    ok(state.health === Math.round(roster.reduce((n, u) => n + u.integrity, 0) / roster.length),
+      `${where}: squad integrity is the average of the units (bar ${state.health})`);
+    for (const u of roster) {
+      ok(u.integrity >= 0 && u.integrity <= u.maxIntegrity,
+        `${where}: ${u.id} integrity in range (got ${u.integrity})`);
+      ok(u.integrity <= before.integrity[u.id], `${where}: ${u.id} never repairs itself mid-mission`);
+      if (!u.operational) {
+        ok(u.integrity === 0, `${where}: ${u.id} is ${u.state} with zero integrity (got ${u.integrity})`);
+        ok(u.sensor === 'damaged', `${where}: ${u.id} reads DAMAGED while it is ${u.state}`);
+      }
+      // Out is out. A wreck that quietly returns to duty would make every
+      // decision downstream of losing it meaningless.
+      if (before.down.has(u.id)) ok(!u.operational, `${where}: ${u.id} stays down once it is down`);
+      if (u.state === 'lost') lostSeen.add(u.id);
+      if (u.state === 'disabled') disabledSeen.add(u.id);
+    }
+    for (const [kind, n] of Object.entries(state.resources())) {
+      ok(n >= 0, `${where}: "${kind}" never goes negative (got ${n})`);
+      ok(n <= before.resources[kind], `${where}: "${kind}" never refills mid-mission`);
+    }
+
     if (!state.missionOver) tm.advanceTurn();
   }
-  if (!state.missionOver) tm.endMission(state.relayOnline ? 'complete' : 'partial');
+  if (!state.missionOver) tm.endMission(tm.completionOutcome());
 
   // ------------------------------------------------------------ the summary
   const s = state.summary();
@@ -229,12 +308,28 @@ function walk(plan) {
   ok(s.objectives.length === mission1.objectives.length, `${trail}: every objective is reported`);
   ok(objectives.relay === (s.relayOnline ? 'done' : 'failed'),
     `${trail}: relay objective matches the relay (${objectives.relay}, online=${s.relayOnline})`);
-  ok(objectives.extract === (s.outcome === 'lost' ? 'failed' : 'done'),
-    `${trail}: extraction objective matches the ending (${objectives.extract}, outcome=${s.outcome})`);
+  ok(objectives.extract === (s.outcome === 'lost' || s.losses.length ? 'failed' : 'done'),
+    `${trail}: extraction objective matches the squad (${objectives.extract}, outcome=${s.outcome}, lost=${s.losses.length})`);
   ok(s.objectives.every((o) => o.state !== 'pending'), `${trail}: no objective is left pending`);
   // MISSION COMPLETE must mean both objectives met, and nothing less.
   ok((s.outcome === 'complete') === s.objectives.every((o) => o.state === 'done'),
     `${trail}: MISSION COMPLETE agrees with the objective board`);
+
+  // ------------------------------------------------------- squad consequence
+  // The ending has to describe the squad that actually finished the mission.
+  ok(s.units.length === ROSTER_SIZE, `${trail}: every machine is still reported at the debrief`);
+  ok(s.losses.every((id) => s.units.find((u) => u.id === id)?.state === 'lost'),
+    `${trail}: the loss list agrees with the roster`);
+  ok(s.recovered.length + s.losses.length === ROSTER_SIZE,
+    `${trail}: every machine is either recovered or lost`);
+  ok(s.extracted === (s.outcome !== 'lost'), `${trail}: extraction flag matches the ending`);
+  if (s.outcome === 'lost') ok(s.losses.length === ROSTER_SIZE, `${trail}: SQUAD LOST means nothing came home`);
+  if (s.outcome === 'complete') {
+    ok(s.losses.length === 0, `${trail}: MISSION COMPLETE implies the whole squad came home`);
+  }
+  for (const [kind, n] of Object.entries(s.resources)) {
+    ok(n >= 0, `${trail}: "${kind}" ends non-negative (got ${n})`);
+  }
 
   // ------------------------------------------------------------ hooks
   ok(heard[GAME_EVENT.MISSION_END] === 1, `${trail}: missionEnd fired once`);
@@ -277,12 +372,17 @@ console.log(`  assertions        ${checks}`);
 console.log(`  outcomes covered  ${seenOutcomes.size} / ${totalOutcomes}`);
 console.log(`  lowest health     ${deepestHealth}%`);
 console.log(`  endings reached   ${Object.entries(endings).map(([k, v]) => `${k}:${v}`).join('  ')}`);
+console.log(`  squad             ${ROSTER_SIZE} machines · disabled on some path: ${[...disabledSeen].join(', ') || 'none'} · lost: ${[...lostSeen].join(', ') || 'none'}`);
 checkVoice();
 console.log(`  grades scored     ${Object.entries(tagTotals).map(([k, v]) => `${k}:${v}`).join('  ')}`);
 
 ok(seenOutcomes.size === totalOutcomes, `every turn-ending outcome is reachable`);
 for (const ending of ENDINGS) ok(endings[ending] > 0, `ending "${ending}" is reachable`);
 for (const tag of TAGS) ok(tagTotals[tag] > 0, `grade "${tag}" is reachable`);
+// Losing a machine has to be something the mission can actually do to you, or
+// the disabled/lost states are scenery.
+ok(disabledSeen.size > 0, 'a machine can be disabled somewhere in the mission');
+ok(lostSeen.size > 0, 'a machine can be lost somewhere in the mission');
 
 if (failures.length) {
   const shown = [...new Set(failures)].slice(0, 25);

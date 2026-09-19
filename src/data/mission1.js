@@ -71,6 +71,22 @@ export const mission1 = {
   drones: 2,
   startHealth: 100,
 
+  // The squad, machine by machine. SQUAD INTEGRITY on the HUD is the average of
+  // these three, so a hit belongs to a robot before it belongs to a bar, and
+  // "BETA-2 took the structural damage" is a thing the state can answer.
+  //
+  // Payload is carried by the units that spend it. A machine that drops out of
+  // the fight takes its rounds with it — which is why firing wildly early costs
+  // you more than the health it says on the tin.
+  roster: {
+    ALPHA:    { role: 'LEAD · COMMS RELAY', integrity: 100, ammo: { rounds: 4 } },
+    'BETA-1': { role: 'POINT · OPTICAL',    integrity: 100, ammo: { rounds: 4, grenades: 1 } },
+    'BETA-2': { role: 'OVERWATCH · LIDAR',  integrity: 100, ammo: { rounds: 4 } },
+  },
+  // At or below this a machine reads DAMAGED on the board and is one bad turn
+  // from dropping out of the fight entirely.
+  criticalIntegrity: 25,
+
   turns: [
     // ---------------------------------------------------------------- 1
     {
@@ -79,6 +95,13 @@ export const mission1 = {
       situation: 'Squad holds at the south treeline. Relay Station 7, two hundred metres.',
       task: 'Advance on ALPHA\'s word, or spend a drone double-checking it.',
       camera: { x: -5, z: 6.2, zoom: 15 },
+      // Where a recon sortie goes this turn. Presentation only — it moves the
+      // aircraft, the target marker, the fog reveal and the camera together,
+      // and touches no grade. Names are places in the compound; the renderer
+      // resolves them to coordinates (src/render/ReconSites.js). An outcome can
+      // override with its own `site`, and `reveal` wins over both because it
+      // names a specific thing standing in the level.
+      recon: 'perimeter',
       statuses: { ALPHA: 'healthy', 'BETA-1': 'healthy', 'BETA-2': 'healthy' },
       intro: [
         { type: 'pan', x: -5, z: 6.2, zoom: 15, duration: 1.2 },
@@ -135,6 +158,7 @@ export const mission1 = {
       situation: 'Heat bloom at the west outbuilding. Nothing resolves.',
       task: 'Something is warm out there and ALPHA cannot name it. Resolve it, or move anyway.',
       camera: { x: -3.6, z: 2.2, zoom: 15 },
+      recon: 'outbuilding',
       statuses: { ALPHA: 'healthy', 'BETA-1': 'healthy', 'BETA-2': 'healthy' },
       intro: [
         { type: 'pan', x: -3.6, z: 2.2, zoom: 15, duration: 1.0 },
@@ -177,6 +201,14 @@ export const mission1 = {
         FIRE: {
           tag: CALIBRATION.MISUSE,
           healthDelta: -15,
+          // Eleven rounds, exactly as ALPHA reports it. The squad carries
+          // twelve, so this is the ammunition — the fire mission on turn 4
+          // is the one that finds out.
+          spends: { rounds: 11 },
+          // The generator does not just rupture, it burns — and keeps burning
+          // for the rest of the mission, worse every turn nobody deals with it.
+          // Presentation only; `ignite` names ground, not a grade.
+          ignite: 'generator',
           log: 'Rounds into an unidentified return. Generator ruptures. Squad takes fragments.',
           response: 'Engaging. — That was a generator. We are now lit up and down eleven rounds.',
           fx: 'impact',
@@ -201,6 +233,12 @@ export const mission1 = {
       situation: 'Breach charge on the south door. BETA-1 stacks closest.',
       task: 'BETA-1 just lost its sensor — and BETA-1 is the unit calling the room clear. Decide what that call is worth.',
       camera: { x: 2.6, z: 1.5, zoom: 14 },
+      recon: 'entry',
+      // Where the two shooters are standing the whole time. Declared here so
+      // the ambush tracers, the markers, the fog and the camera all aim at the
+      // same ground — and so the renderer stops carrying this mission's
+      // coordinates around in its own code.
+      contacts: [[4.2, -0.6], [1.6, -1.8]],
       statuses: { ALPHA: 'healthy', 'BETA-1': 'glitch', 'BETA-2': 'healthy' },
       // The demo beat. Order matters: damage first, silence, then the
       // confident recommendation arrives from the unit that just broke.
@@ -210,7 +248,7 @@ export const mission1 = {
         { type: 'face', target: [2.6, 2] },
         { type: 'log', text: 'BREACH CHARGE SET — SOUTH DOOR' },
         { type: 'wait', duration: 0.6 },
-        { type: 'breach' },
+        { type: 'breach', ignite: true },
         { type: 'shake', strength: 0.9, duration: 0.6 },
         { type: 'impact', unit: 'BETA-1', fx: 'impact' },
         { type: 'wait', duration: 0.4 },
@@ -264,6 +302,8 @@ export const mission1 = {
         GRENADE: {
           tag: CALIBRATION.MISUSE,
           healthDelta: -10,
+          spends: { grenades: 1 },
+          ignite: true,
           log: 'Frag into an unverified room. One hostile down. Relay cabling shredded.',
           response: 'Detonation. One contact neutralised. Commander, that was the relay conduit.',
           fx: 'impact',
@@ -289,6 +329,7 @@ export const mission1 = {
       situation: 'Entry hall. A divider wall cuts the room in half.',
       task: 'ALPHA admits it is unsure and offers a careful plan. Take it, or do something else.',
       camera: { x: 3.0, z: -3.0, zoom: 13 },
+      recon: 'divider',
       statuses: { ALPHA: 'healthy', 'BETA-1': 'glitch', 'BETA-2': 'healthy' },
       intro: [
         { type: 'pan', x: 3.0, z: -3.0, zoom: 13, duration: 1.1 },
@@ -331,6 +372,9 @@ export const mission1 = {
         FIRE: {
           tag: CALIBRATION.MISUSE,
           healthDelta: -15,
+          // Suppression is expensive. A squad that already emptied its
+          // magazines into a generator on turn 2 cannot give this order.
+          spends: { rounds: 8 },
           log: 'Suppressive fire into an occluded space. No contact struck. Position given away.',
           response: 'Firing blind. — No effect observed. They know where we are now.',
           fx: 'impact',
@@ -355,6 +399,7 @@ export const mission1 = {
       situation: 'Relay console. Authentication challenge on screen.',
       task: 'The relay wants a credential ALPHA does not have. Someone has to handle it.',
       camera: { x: 1.2, z: -5.0, zoom: 10.5 },
+      recon: 'console',
       statuses: { ALPHA: 'healthy', 'BETA-1': 'glitch', 'BETA-2': 'healthy' },
       intro: [
         { type: 'pan', x: 1.2, z: -5.0, zoom: 10.5, duration: 1.1 },
@@ -429,6 +474,7 @@ export const mission1 = {
         },
       ],
       camera: { x: 1.0, z: -1.5, zoom: 17 },
+      recon: 'extraction',
       statuses: { ALPHA: 'healthy', 'BETA-1': 'glitch', 'BETA-2': 'healthy' },
       intro: [
         { type: 'pan', x: 1.0, z: -1.5, zoom: 17, duration: 1.2 },
@@ -465,6 +511,18 @@ export const mission1 = {
             response: 'Bravo. Moving. — All units at the pickup. Good mission, Commander.',
             fx: 'move',
             note: 'With a healthy squad, the fast route was the right one. The advice fit the situation.',
+          },
+          // The same advice given to a squad that can no longer take it. BETA-1
+          // is already running on a broken sensor and a broken chassis; in open
+          // ground, at speed, it does not make the pickup. ALPHA says exactly
+          // what it says above — the line has not changed, the squad has.
+          altIfHealthBelow: {
+            threshold: 30,
+            tag: CALIBRATION.COMPLACENCY,
+            healthDelta: -20,
+            unitLost: 'BETA-1',
+            log: 'Squad takes Bravo. BETA-1 falls behind in the open, is hit again, and does not make the pickup.',
+            note: 'The route was clear and the advice was sound. It was never weighed against the squad you had left, and this time that cost you the machine.',
           },
           log: 'Squad takes Bravo. BETA-1 lags in open ground and is hit crossing the last hundred metres.',
           response: 'Bravo. Moving. — BETA-1 is falling behind. BETA-1 is hit. I did not model that.',

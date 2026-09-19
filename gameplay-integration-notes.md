@@ -13,6 +13,54 @@ four things only a human can close. §0 is the chronological log, newest first.
 
 ## 0. RUNNING LOG
 
+### 16:05 — the squad is three machines, not one health bar
+
+`GameState` now tracks every robot separately: integrity, payload, and an
+`operational` / `disabled` / `lost` state. **SQUAD INTEGRITY is derived** — it
+is the average of the three units, so a hit belongs to a machine before it
+belongs to a bar, and nothing can quietly subtract from the bar without saying
+who paid for it.
+
+The tuned curve is untouched. A squad-level `healthDelta` is spread as a pool
+of `delta × 3`, weighted toward the outcome's `impactUnit`, so the average moves
+by exactly the number the mission was balanced on — the all-CONFIRM run still
+reads 100 → 90 → 55 → 55 → 40 → 20 — while the units underneath it now differ.
+Clamping redistributes: once a machine bottoms out, the rest of the hit lands on
+whoever is still standing.
+
+**What mission data can now say, and the engine actually does:**
+
+| Field | Means |
+|---|---|
+| `roster` (or `fleet`, mission 2's spelling) | per-unit integrity, role, payload |
+| `criticalIntegrity` | at or below this a machine reads DAMAGED and is one turn from dropping out |
+| `damages: { 'BETA-2': { integrity: -70, battery: -20 } }` | per-unit damage, applied as written — mission 2 declared these months ago and nothing read them until now |
+| `unitLost: 'BETA-1'` | the machine is destroyed. Same field the Director already plays the wreck sequence from |
+| `spends: { rounds: 11, grenades: 1 }` | payload drawn from the machines that carry it. Probes pay too |
+| `requiresUnit` / `requiresOperational` | an order that needs a machine that is down cannot be given |
+| `variants: [{ when: 'beta2Critical', … }]` | outcome-level conditions, same shape as turn variants |
+
+Conditions are derived in `GameState.conditions()` — `beta2Critical`,
+`beta1Lost`, `anyUnitDown`, `squadCritical`, `noDrones`, `noGrenades`, and so on
+— so `when` / `unless` work on the state of one robot as readily as on a mission
+flag. `unless: 'relayOnline'` still means exactly what it meant.
+
+**Consequences that are now real rather than cosmetic:**
+
+- **Ammunition binds.** Firing into the generator on turn 2 costs eleven of the
+  squad's twelve rounds — the number ALPHA already says out loud — so the
+  suppressive fire on turn 4 is greyed out with `NO ROUNDS`. Misuse now costs
+  capability, not just integrity.
+- **A machine can be lost.** Turn 6's CONFIRM below 30% integrity takes BETA-1
+  with it. No new dialogue: ALPHA says the same line, and it means something
+  worse.
+- **Disabled ≠ lost.** A machine at zero integrity is out of the fight, is not
+  ordered anywhere, takes its payload with it, and is still recovered at
+  extraction. A destroyed one is not, and fails BRING THE SQUAD HOME on its own
+  — so a run can restore the relay and still come out `partial`.
+- **Nothing is ever deleted.** A wreck stays in the roster, in the summary and
+  in the debrief.
+
 ### 12:43 — final pass: 3D is committed, everything else is not
 `23f7da0` and `03aec4c` landed the 3D work — 32 CC0 `.glb` models, the dressed
 compound, a lighting pass and the working drone, plus
@@ -222,9 +270,37 @@ not the demo.
 | `missionEnd` | `{ outcome, summary }` | always |
 | `missionSuccess` / `missionFailure` | `{ summary, outcome }` | exactly one of the two |
 | `debriefShown` | `{ summary }` | debrief on screen |
+| `unitDamaged` | `{ unit, delta, integrity, critical, turn, cause }` | a specific machine took a specific hit |
+| `unitDisabled` | `{ unit, integrity, turn, cause }` | integrity gone; out of the fight, still recoverable |
+| `unitLost` | `{ unit, turn, cause }` | destroyed; it is not coming home |
+| `resourceSpent` | `{ spent, remaining, turn }` | drones, rounds, grenades |
 
 `suspect: true` on `aiRecommendation` is the mission's whole thesis in one
 boolean — the source sensor is degraded while the stated confidence is not.
+
+### Reading the squad — for the HUD and the renderer
+
+`state.statuses` is unchanged and still carries the three sensor values the HUD
+knows: `healthy` / `glitch` / `damaged`. **It is not where unit lifecycle
+lives** — a machine that is down reads `damaged` there, and the real state is:
+
+```js
+state.roster()      // [{ id, role, integrity, maxIntegrity, state, sensor,
+                    //    critical, operational, ammo, damagedOn, downedOn }]
+state.resources()   // { drones: 1, rounds: 12, grenades: 1 }
+state.health        // derived: the average of the roster, for the existing bar
+summary.units / .losses / .disabled / .recovered / .extracted / .resources
+```
+
+- **UI:** everything a per-robot panel needs is in `roster()`; everything a
+  resource readout needs is in `resources()`. Both are safe to call every frame
+  and reset correctly on replay.
+- **Renderer:** `Director.loseVehicle()` already plays from `outcome.unitLost`,
+  which is the same field the state layer destroys the machine on, so the wreck
+  and the roster cannot disagree. If you would rather react to the bus,
+  `unitLost` / `unitDisabled` fire first. **Do not** watch `unitStatus` for
+  `'lost'` / `'disabled'` — those strings are deliberately never put into
+  `statuses`, because `StatusHUD` has no label for them.
 
 ### Names reserved for the presentation layer
 
@@ -291,9 +367,19 @@ Nothing about the trust/confidence mechanic or the two-score system moved.
 ## 3. TESTING
 
 ```bash
-npm run verify     # ~3s, no browser
+npm run verify     # ~4s, no browser — the whole mission, every path
+npm run state      # ~1s, no browser — the state layer, one mechanic at a time
 npm run e2e        # ~5 min, builds and drives real Chromium
 ```
+
+**`npm run state`** is the counterpart to `verify`: a small synthetic mission
+built to exercise one mechanic per test, so a failure names the mechanic rather
+than one of 1344 paths. It covers per-unit damage and the squad average that
+falls out of it, explicit `damages` maps, critical state, disabled versus lost,
+resource consumption and gating (including that a probe pays its own cost),
+conditional outcomes, reset on replay, and the final mission-state calculation —
+then re-checks the real mission's tuned curve, so a change that quietly moves
+the all-CONFIRM run off 20% fails here first.
 
 **`npm run verify`** also checks every spoken line still has a baked voice clip,
 then walks all 1344 committing-action paths through the mission
@@ -349,6 +435,13 @@ Resolved since I raised them, kept for the record:
 
 Still open:
 
+- **Mission 2's turn-6 wreck is only disabled, not lost.** `mission2.js` says
+  "BETA-2 … is lost on the slope" and declares `damages: { 'BETA-2': { integrity:
+  -100 } }`, which now takes it to zero and disables it — recovered at
+  extraction, which is not what the line says. One field fixes it:
+  `unitLost: 'BETA-2'` alongside the damages. Mission 2 is the undersea
+  direction and not mine to edit; flagging it rather than reaching in. Turn 4's
+  `-70` is correct as written.
 - **`Drone.reset()` does not kill its GSAP timeline**, only the tweens of its
   targets — so `sweep()`'s `onComplete` may never fire and its promise never
   settles. Harmless now that `main.js` stamps beats with `missionRun`

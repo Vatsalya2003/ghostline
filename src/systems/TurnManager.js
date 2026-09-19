@@ -32,11 +32,15 @@ export class TurnManager {
   // Mirrors altIfHealthAbove on outcomes: variants live in mission data, the
   // rule for picking one lives here, and the first match wins.
   //   variants: [{ unless: 'relayOnline', situation: '…', task: '…' }]
+  //
+  // Conditions are resolved through GameState, so a turn can branch on the
+  // state of a single machine — `when: 'beta2Down'` — as readily as on a
+  // mission flag.
   resolveTurn(turn) {
     if (!turn?.variants) return turn;
     for (const v of turn.variants) {
-      if (v.when && !this.state[v.when]) continue;
-      if (v.unless && this.state[v.unless]) continue;
+      if (v.when && !this.state.test(v.when)) continue;
+      if (v.unless && this.state.test(v.unless)) continue;
       const { when, unless, ...overrides } = v;
       return { ...turn, ...overrides };
     }
@@ -54,14 +58,12 @@ export class TurnManager {
 
   enterTurn() {
     const turn = this.turn;
-    if (!turn) return this.endMission('complete');
-    for (const [id, status] of Object.entries(turn.statuses || {})) {
-      const previous = this.state.statuses[id];
-      this.state.statuses[id] = status;
-      if (previous !== status) {
-        events.emit(GAME_EVENT.UNIT_STATUS, { unit: id, status, previous });
-      }
-    }
+    if (!turn) return this.endMission(this.completionOutcome());
+    // Scripted statuses are what the turn expects the squad to look like. A
+    // machine that has since been wrecked keeps reading DAMAGED — GameState
+    // arbitrates, so the script cannot quietly promote a wreck back to a
+    // merely glitchy sensor.
+    for (const [id, status] of Object.entries(turn.statuses || {})) this.state.setStatus(id, status);
     this.emit('turn', turn);
     events.emit(GAME_EVENT.TURN_START, {
       turn, index: this.state.turnIndex, total: this.mission.turns.length,
@@ -83,33 +85,73 @@ export class TurnManager {
   }
 
   // Which of this turn's actions the player can actually press right now.
+  //
+  // An order you cannot afford is not an order. Anything an outcome spends —
+  // a drone off the rack, rounds out of the squad's magazines, the one
+  // grenade — is checked against what is actually left, and so is the squad
+  // itself: a plan that needs a machine that is down cannot be given.
   availableActions() {
     const turn = this.turn;
     if (!turn) return [];
     return turn.actions.map((action) => {
-      const outcome = turn.outcomes[action] || {};
+      const outcome = this.resolveOutcome(turn.outcomes[action] || {});
+      const probe = outcome.consumesTurn === false;
       let disabled = false;
       let reason = '';
-      if (outcome.consumesDrone && this.state.drones <= 0) {
+
+      for (const [kind, amount] of Object.entries(costOf(outcome))) {
+        if (this.state.available(kind) >= amount) continue;
         disabled = true;
-        reason = 'NO DRONES';
+        reason = kind === 'drones' ? 'NO DRONES' : `NO ${kind.toUpperCase()}`;
+        break;
       }
-      if (outcome.consumesTurn === false && this.probesUsed.has(`${turn.id}:${action}`)) {
+      if (!disabled) {
+        const missing = toArray(outcome.requiresUnit).find((id) => this.state.isDown(id));
+        if (missing) { disabled = true; reason = `${missing} DOWN`; }
+      }
+      if (!disabled && outcome.requiresOperational
+          && this.state.operationalUnits().length < outcome.requiresOperational) {
+        disabled = true;
+        reason = 'SQUAD DOWN';
+      }
+      if (!disabled && probe && this.probesUsed.has(`${turn.id}:${action}`)) {
         disabled = true;
         reason = 'USED';
       }
-      return { action, disabled, reason, probe: outcome.consumesTurn === false };
+      return { action, disabled, reason, probe };
     });
   }
 
-  // Health-sensitive variants let one turn read differently depending on how
-  // the squad is doing, without branching logic living in code.
-  resolveVariant(outcome) {
-    const alt = outcome.altIfHealthAbove;
-    if (alt && this.state.health > alt.threshold) return { ...outcome, ...alt };
-    const below = outcome.altIfHealthBelow;
-    if (below && this.state.health < below.threshold) return { ...outcome, ...below };
-    return outcome;
+  // One outcome can read several ways depending on what has already happened.
+  // Most specific first: a named condition, then the health bands, then the
+  // outcome as written. Conditions come from GameState, so mission data can
+  // branch on a single machine's state without any logic living in the file.
+  //   variants: [{ when: 'beta2Down', log: '…', tag: '…' }]
+  resolveOutcome(outcome) {
+    if (!outcome) return outcome;
+    let resolved = outcome;
+    for (const v of outcome.variants || []) {
+      if (v.when && !this.state.test(v.when)) continue;
+      if (v.unless && this.state.test(v.unless)) continue;
+      const { when, unless, ...overrides } = v;
+      resolved = { ...outcome, ...overrides };
+      break;
+    }
+    const above = resolved.altIfHealthAbove;
+    if (above && this.state.health > above.threshold) resolved = { ...resolved, ...above };
+    const below = resolved.altIfHealthBelow;
+    if (below && this.state.health < below.threshold) resolved = { ...resolved, ...below };
+    return this.withSquadMoves(resolved);
+  }
+
+  // A machine that is down does not march. Filtering the move order here means
+  // the renderer, the log and the event bus all see the same squad without any
+  // of them having to work out who is still standing.
+  withSquadMoves(outcome) {
+    if (!outcome?.moves) return outcome;
+    const entries = Object.entries(outcome.moves).filter(([id]) => !this.state.isDown(id));
+    if (entries.length === Object.keys(outcome.moves).length) return outcome;
+    return { ...outcome, moves: Object.fromEntries(entries) };
   }
 
   choose(action) {
@@ -127,7 +169,13 @@ export class TurnManager {
       return null;
     }
 
-    const outcome = this.resolveVariant(raw);
+    const outcome = this.resolveOutcome(raw);
+
+    // Everything the order costs, taken out of the squad in one place: the
+    // drone off the rack, the rounds out of the magazines that fired them.
+    // Probes pay too — a look that costs a sensor sweep has to actually spend
+    // the sweep, or the limit is decoration.
+    this.state.spend(costOf(outcome), { turn: turn.id });
 
     // Probe: adds information, does not end the turn or get graded.
     if (outcome.consumesTurn === false) {
@@ -144,7 +192,6 @@ export class TurnManager {
       return probe;
     }
 
-    if (outcome.consumesDrone) this.state.drones -= 1;
     // `relayOnline` was mission 1's only completion flag. Missions now name
     // their own via `setsFlag`, and the mission's primary objective says
     // which flag decides a complete run.
@@ -156,7 +203,7 @@ export class TurnManager {
     }
 
     const previousHealth = this.state.health;
-    this.state.applyHealth(outcome.healthDelta);
+    this.applyConsequences(turn, outcome);
     this.state.record(turn.id, action, outcome.tag, outcome.note);
     this.state.pushLog(outcome.log);
 
@@ -176,7 +223,7 @@ export class TurnManager {
     // "Confirmed" here means took the machine's recommendation, not pressed a
     // button — that distinction is the thing the mission is measuring.
     events.emit(action === 'CONFIRM' ? GAME_EVENT.PLAYER_CONFIRMED : GAME_EVENT.PLAYER_REJECTED, detail);
-    if (outcome.fx === 'scan' || outcome.consumesDrone) {
+    if (outcome.fx === 'scan' || costOf(outcome).drones) {
       events.emit(GAME_EVENT.SENSOR_SCAN, {
         turn, action, source: outcome.fx || 'drone', dronesLeft: this.state.drones,
       });
@@ -193,12 +240,37 @@ export class TurnManager {
     return resolution;
   }
 
+  // What the outcome did to the squad, in the order the fiction happens: the
+  // machine the mission names as the casualty is hit first, then whatever the
+  // engagement cost the squad is spread across the ones still standing.
+  //
+  // The other way round would pour damage into a robot that is about to be
+  // destroyed anyway and quietly spare the survivors — the hit would show up
+  // on the bar and nowhere else, which is the thing this layer exists to stop.
+  applyConsequences(turn, outcome) {
+    if (outcome.damages) this.state.applyDamages(outcome.damages, { turn: turn.id });
+    // `unitLost` is the field the Director already plays the wreck sequence
+    // from, so state and presentation read the same word. `losesUnit` is
+    // accepted as well — one mechanic, not two spellings that drift apart.
+    for (const id of toArray(outcome.unitLost ?? outcome.losesUnit)) {
+      this.state.loseUnit(id, { turn: turn.id, cause: outcome.tag || 'outcome' });
+    }
+    for (const id of toArray(outcome.unitDisabled ?? outcome.disablesUnit)) {
+      this.state.disableUnit(id, { turn: turn.id, cause: outcome.tag || 'outcome' });
+    }
+    if (outcome.healthDelta) {
+      this.state.applyHealth(outcome.healthDelta, {
+        impactUnit: outcome.impactUnit, turn: turn.id, cause: outcome.tag || 'outcome',
+      });
+    }
+  }
+
   // Called by the presentation layer once the outcome has finished playing.
   advanceTurn() {
     if (this.state.missionOver) return null;
     this.state.turnIndex += 1;
     if (this.state.turnIndex >= this.mission.turns.length) {
-      return this.endMission(this.primaryObjectiveMet() ? 'complete' : 'partial');
+      return this.endMission(this.completionOutcome());
     }
     return this.enterTurn();
   }
@@ -214,18 +286,25 @@ export class TurnManager {
     }
   }
 
-  // The first objective carrying a `flag` is the one that decides whether a
-  // surviving run counts as complete or partial.
-  primaryObjectiveMet() {
-    const flagged = (this.mission.objectives || []).find((o) => o.flag);
-    if (!flagged) return true;
-    return !!this.state[flagged.flag];
+  // A run is COMPLETE only when every objective the mission declares came out
+  // met: the job it was sent to do, and the squad it was supposed to bring
+  // back. Finishing the task with a machine left on the ground is a partial
+  // success, and the debrief should say so.
+  completionOutcome() {
+    for (const objective of this.mission.objectives || []) {
+      if (objective.flag && !this.state[objective.flag]) return 'partial';
+      if (objective.survive && this.state.losses().length) return 'partial';
+    }
+    return 'complete';
   }
 
   endMission(outcome) {
     if (this.state.missionOver) return null;
     this.state.missionOver = true;
     this.state.outcome = outcome;
+    // Nothing came back. The roster has to say what the ending says, or the
+    // debrief will list recovered machines under SQUAD LOST.
+    if (outcome === 'lost') this.state.markSquadLost({ turn: this.turn?.id ?? null });
     this.announceObjectives();
     const summary = this.state.summary();
     this.emit('end', summary);
@@ -236,4 +315,18 @@ export class TurnManager {
     );
     return summary;
   }
+}
+
+// Everything an order takes out of the squad, as one ledger. `consumesDrone`
+// predates the ledger and still means what it always meant.
+//   spends: { rounds: 11, grenades: 1 }
+function costOf(outcome) {
+  const cost = { ...(outcome?.spends || {}) };
+  if (outcome?.consumesDrone) cost.drones = (cost.drones || 0) + 1;
+  return cost;
+}
+
+function toArray(value) {
+  if (!value) return [];
+  return Array.isArray(value) ? value : [value];
 }

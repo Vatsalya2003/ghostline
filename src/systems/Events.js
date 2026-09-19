@@ -38,6 +38,12 @@ export const GAME_EVENT = {
   HEALTH_CHANGED: 'healthChanged',     // { health, delta, previous }
   HOSTILES_REVEALED: 'hostilesRevealed', // { turn }
 
+  // ---- the squad, machine by machine
+  UNIT_DAMAGED: 'unitDamaged',         // { unit, delta, integrity, critical, turn, cause }
+  UNIT_DISABLED: 'unitDisabled',       // { unit, integrity, turn, cause }  out of the fight
+  UNIT_LOST: 'unitLost',               // { unit, turn, cause }             destroyed
+  RESOURCE_SPENT: 'resourceSpent',     // { spent, remaining, turn }        drones, payload
+
   // ---- objectives
   OBJECTIVE_COMPLETED: 'objectiveCompleted', // { id, label }
   OBJECTIVE_FAILED: 'objectiveFailed',       // { id, label }

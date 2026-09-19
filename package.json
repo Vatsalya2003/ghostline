@@ -10,6 +10,7 @@
     "test": "node scripts/input-test.mjs",
     "sim": "node scripts/sim.mjs",
     "verify": "node scripts/verify.mjs",
+    "state": "node scripts/state-test.mjs",
     "e2e": "node scripts/e2e.mjs",
     "audio": "node scripts/verify-audio.mjs"
   },
