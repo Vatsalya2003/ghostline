@@ -2,9 +2,15 @@ import * as THREE from 'three';
 import gsap from 'gsap';
 import { PALETTE } from './Scene.js';
 import { SensorCone } from './SensorCones.js';
+import { spawnModel } from './AssetLoader.js';
+import { meshesUsing } from './Materials.js';
 
-// Low-poly flat-shaded robots, built in code. No external model files, so the
-// build stays offline-safe and there is no GLTF scale/orientation fight.
+// Squad robots. A CC0 low-poly walker (see public/assets/SOURCES.md) carrying
+// a skeletal Idle/Walk rig, re-tinted into the GHOSTLINE palette on load.
+//
+// The model streams in. Until it lands — and permanently, if the file is
+// missing — the hand-built chassis below stands in, so the mission is never
+// blocked on a download. Same fallback contract the audio system uses.
 export const STATUS = {
   HEALTHY: 'healthy',
   GLITCH: 'glitch',
@@ -17,6 +23,16 @@ export const UNIT_BADGE = {
   ALPHA: '1',
   'BETA-1': '2',
   'BETA-2': '3',
+};
+
+// Cone outline style per unit — 0 solid, 1 dashed, 2 double. Colour on the
+// cone stays semantic (cyan / amber / red = status), so callsign identity goes
+// on the border instead. Three overlapping cones stay tellable apart without
+// the status read losing its colour channel. See suggestion-bug.md #5, opt C.
+export const UNIT_EDGE_STYLE = {
+  ALPHA: 0,
+  'BETA-1': 1,
+  'BETA-2': 2,
 };
 
 export const STATUS_COLOR = {
@@ -74,6 +90,38 @@ function mat(color, { emissive = 0.3 } = {}) {
   });
 }
 
+// Model height in the unit's own local space. The group is scaled 1.2 on top
+// of this, landing the walker at ~1.74 world units — the same on-screen mass
+// the hand-built chassis had, so camera framing and cone geometry are
+// unaffected by the swap.
+const MODEL_HEIGHT = 1.45;
+const UNIT_MODEL = 'squad-walker';
+
+// Kit material -> GHOSTLINE surface, for this model only. `Main` is the body
+// shell, `Main2` the feet and shoulder pads, `Edge` the frame around the eye;
+// the two Grey slots are the weapon housing. `Eye` is isolated instead of
+// mapped: it is the status light and each unit tints its own copy.
+const UNIT_SURFACES = {
+  Main: 'armour',
+  Main2: 'armourDark',
+  Edge: 'armourTrim',
+  Grey: 'steelDark',
+  LightGrey: 'steel',
+  Dark: 'rubber',
+};
+
+function disposeTree(root) {
+  root.traverse((o) => {
+    if (!o.isMesh) return;
+    o.geometry?.dispose();
+    const mats = Array.isArray(o.material) ? o.material : [o.material];
+    // Shared palette materials outlive any one mesh; only the stand-in's own
+    // throwaway materials are ours to free.
+    for (const m of mats) if (m && !m.name?.startsWith('surface:')) m.dispose();
+  });
+}
+
+// Stand-in until the model lands, and the permanent body if it never does.
 function buildChassis(color) {
   const g = new THREE.Group();
   const body = new THREE.Mesh(new THREE.BoxGeometry(0.72, 0.62, 0.6), mat(0x243330, { emissive: 0.05 }));
@@ -86,15 +134,31 @@ function buildChassis(color) {
   trackL.position.set(-0.42, 0.18, 0);
   const trackR = trackL.clone();
   trackR.position.x = 0.42;
-  const pod = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.18, 0.18), mat(color, { emissive: 0.9 }));
-  pod.position.set(0, 1.34, -0.05);
 
-  for (const m of [body, head, visor, trackL, trackR, pod]) {
+  for (const m of [body, head, visor, trackL, trackR]) {
     m.castShadow = true;
     m.receiveShadow = true;
     g.add(m);
   }
-  g.userData.tintParts = [visor, pod];
+  g.userData.tintParts = [visor];
+  return g;
+}
+
+// Mast-mounted sensor pod, built in code and kept whichever body is in use.
+//
+// The walker's eye is the loud status read, but it faces forward, and on a
+// 45-degree tactical camera a unit facing away shows you nothing. The pod sits
+// on top where the camera can always see it, so "BETA-1 is amber" survives the
+// unit turning its back on you.
+function buildStatusPod(color) {
+  const g = new THREE.Group();
+  const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.045, 0.3, 6), mat(0x1b2422, { emissive: 0.02 }));
+  mast.position.y = 1.30;
+  const pod = new THREE.Mesh(new THREE.OctahedronGeometry(0.115), mat(color, { emissive: 1.5 }));
+  pod.position.y = 1.50;
+  mast.castShadow = true;
+  g.add(mast, pod);
+  g.userData.pod = pod;
   return g;
 }
 
@@ -104,7 +168,15 @@ export class Unit {
     this.status = STATUS.HEALTHY;
     this.heading = heading;
 
-    this.group = buildChassis(STATUS_COLOR[STATUS.HEALTHY]);
+    this.group = new THREE.Group();
+    this.fallback = buildChassis(STATUS_COLOR[STATUS.HEALTHY]);
+    this.statusPod = buildStatusPod(STATUS_COLOR[STATUS.HEALTHY]);
+    this.group.add(this.fallback, this.statusPod);
+    this.group.userData.tintParts = [
+      ...this.fallback.userData.tintParts,
+      this.statusPod.userData.pod,
+    ];
+
     this.badge = buildBadge(UNIT_BADGE[id] || '?', STATUS_COLOR[STATUS.HEALTHY]);
     this.group.add(this.badge);
     this.group.position.set(x, 0, z);
@@ -112,6 +184,8 @@ export class Unit {
     this.group.rotation.y = heading;
     this.group.name = id;
     scene.add(this.group);
+
+    this.loadModel();
 
     this.cone = new SensorCone({
       color: STATUS_COLOR[STATUS.HEALTHY],
@@ -121,6 +195,7 @@ export class Unit {
       // Kept low: three cones overlap constantly and additive blending
       // blows out to white if each one is strong on its own.
       opacity: 0.24,
+      edgeStyle: UNIT_EDGE_STYLE[id] ?? 0,
     }).attachTo(this.group).addTo(scene);
     this.cone.setHeading(heading);
     this.baseRange = coneRange;
@@ -128,7 +203,84 @@ export class Unit {
     this.scene = scene;
   }
 
+  // Swap the stand-in for the real walker once its file lands.
+  loadModel() {
+    const { group, ready } = spawnModel(UNIT_MODEL, {
+      height: MODEL_HEIGHT,
+      skinned: true,                 // rebuild the skeleton per instance
+      isolate: ['Eye'],              // status light, tinted per unit
+      overrides: UNIT_SURFACES,
+    });
+    this.group.add(group);
+
+    this.modelReady = ready.then((res) => {
+      if (!res) return null;         // file missing — keep the stand-in
+      this.group.remove(this.fallback);
+      disposeTree(this.fallback);
+      this.fallback = null;
+      this.model = res.model;
+
+      // The eye is the unit's own material copy, so it joins the tint set.
+      // One representative mesh is enough: every mesh sharing the material
+      // changes with it, and FX.hitFlash would otherwise tween it five times.
+      const eye = res.tinted.Eye;
+      const eyeMesh = eye ? meshesUsing(res.model, eye)[0] : null;
+      this.group.userData.tintParts = [
+        this.statusPod.userData.pod,
+        ...(eyeMesh ? [eyeMesh] : []),
+      ];
+
+      this.mixer = new THREE.AnimationMixer(res.model);
+      this.clips = {};
+      for (const clip of res.animations) {
+        // Clips are exported as "CharacterArmature|Idle".
+        this.clips[clip.name.split('|').pop()] = clip;
+      }
+      this.play('Idle');
+
+      // Re-apply whatever status the mission already put us in: the swap can
+      // land after turn 1 has already broken somebody's sensor.
+      this.setStatus(this.status, { animate: false });
+      return res;
+    });
+  }
+
+  // Cross-fade to a clip. No-op if the rig has not arrived or lacks it.
+  play(name, { fade = 0.25, timeScale = 1 } = {}) {
+    const clip = this.clips?.[name];
+    if (!this.mixer || !clip) return null;
+    const next = this.mixer.clipAction(clip);
+    if (this.current === next) { next.timeScale = timeScale; return next; }
+    next.reset().setEffectiveWeight(1).fadeIn(fade).play();
+    next.timeScale = timeScale;
+    if (this.current) this.current.fadeOut(fade);
+    this.current = next;
+    this.currentName = name;
+    return next;
+  }
+
+  // A hurt robot idles slower; a glitching one twitches. Costs one number and
+  // it reads immediately at tactical zoom.
+  idleForStatus() {
+    const scale = this.status === STATUS.DAMAGED ? 0.45
+      : this.status === STATUS.GLITCH ? 1.55
+      : 1;
+    this.play('Idle', { timeScale: scale });
+  }
+
   get position() { return this.group.position; }
+
+  // Marks this unit as the one under discussion: brighter cone border, and
+  // the marker ring (if UnitMarkers is running) opens up around it.
+  setFocus(on) {
+    this.focused = !!on;
+    gsap.to(this.cone.material.uniforms.uFocus, {
+      value: on ? 1 : 0, duration: 0.35, ease: 'power2.out',
+    });
+  }
+
+  // One ripple out through this unit's own cone — a reading it just took.
+  ping(duration = 0.9, amplitude = 1) { this.cone.pulse(duration, amplitude); }
 
   setStatus(status, { animate = true } = {}) {
     this.status = status;
@@ -148,6 +300,8 @@ export class Unit {
     // A broken cone has to stay loud, not fade away: the static eats a lot of
     // alpha, so push opacity up as degradation rises.
     const opacity = status === STATUS.HEALTHY ? 0.24 : 0.52;
+
+    if (this.currentName !== 'Walk') this.idleForStatus();
 
     if (animate) {
       gsap.to(this.cone.material.uniforms.uDegraded, { value: degraded, duration: 0.9 });
@@ -187,12 +341,26 @@ export class Unit {
 
   moveTo(x, z, duration = 0.4) {
     this.faceTowards(x, z, Math.min(duration, 0.3));
+    // A damaged unit limps rather than marches. The clip is the same one; the
+    // playback rate carries the whole read.
+    this.play('Walk', { fade: 0.18, timeScale: this.status === STATUS.DAMAGED ? 0.6 : 1.15 });
     return gsap.to(this.group.position, {
       x, z, duration, ease: 'power2.inOut',
+      onComplete: () => this.idleForStatus(),
     });
   }
 
-  update(t) { this.cone.update(t); }
+  // Signature unchanged — main.js calls update(t) with elapsed seconds — so
+  // the frame delta the mixer needs is derived here rather than plumbed
+  // through the render loop.
+  update(t) {
+    this.cone.update(t);
+    if (this.mixer) {
+      const dt = this.lastT === undefined ? 0 : Math.min(t - this.lastT, 0.1);
+      this.mixer.update(dt);
+    }
+    this.lastT = t;
+  }
 }
 
 // Face the compound door at (2.6, 2) with a slight fan so the cones read as

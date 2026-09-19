@@ -1,6 +1,8 @@
 import * as THREE from 'three';
 import gsap from 'gsap';
 import { PALETTE } from './Scene.js';
+import { Drone } from './Drone.js';
+import { spawnModel, preload } from './AssetLoader.js';
 
 // Impacts, drone scans, hostile markers. Deterministic — every burst uses a
 // fixed pattern so the demo plays back the same way every time.
@@ -9,6 +11,24 @@ export class FX {
     this.scene = scene;
     this.active = [];
     this.hostiles = [];
+    this.drone = new Drone(scene);
+    // Hostiles are not revealed until the ambush, five turns in. Fetching a
+    // 695 KB rig at that exact moment would stall the beat the mission turns
+    // on, so it is warmed now while the title card is still up.
+    preload(['hostile-heavy']);
+    // FX.update takes only dt, so elapsed time for the drone's hover and
+    // rotor phase is accumulated here rather than threaded through main.js.
+    this.clock = 0;
+  }
+
+  // A recon sweep: the drone actually launches, flies out, scans and returns.
+  // The expanding ring still fires at the scan point, so every caller that
+  // used to rely on `ring` alone gets the same read plus an aircraft.
+  droneSweep(from, to, { color = PALETTE.cyan, radius = 9 } = {}) {
+    this.drone.setColor(color);
+    return this.drone.sweep(from, to, {
+      onScan: () => this.ring(to.x, to.z, { color, radius, duration: 1.1 }),
+    });
   }
 
   burst(x, z, { color = PALETTE.red, count = 22, spread = 2.2, life = 0.75 } = {}) {
@@ -60,11 +80,41 @@ export class FX {
     this.burst(unit.position.x, unit.position.z);
   }
 
+  // Hostile contacts. A heavier CC0 walker than the squad's, tinted red — the
+  // silhouette does the work at tactical zoom, the colour only confirms it.
+  // Each contact also keeps its rotating ground marker, which is what makes it
+  // legible once the fog closes back over it.
   revealHostiles(positions) {
     for (const [x, z] of positions) {
       const g = new THREE.Group();
+
+      const { group: model, ready } = spawnModel('hostile-heavy', {
+        height: 1.55,
+        skinned: true,
+        isolate: ['Eye'],
+        overrides: {
+          Main: 'paintRed', Main2: 'rustDark', Edge: 'steelDark',
+          Dark: 'rubber', Grey: 'steelDark', LightGrey: 'steel',
+          Orange: 'rust', LightGreen: 'paintGreen',
+        },
+      });
+      g.add(model);
+
+      // The isolated eye material defaults to the squad's cyan. Left alone it
+      // blows out white under ACES and a hostile reads like a friendly, so it
+      // is repainted the moment the model lands.
+      ready.then((res) => {
+        const eye = res?.tinted?.Eye;
+        if (!eye) return;
+        eye.color.set(PALETTE.red);
+        eye.emissive.set(PALETTE.red);
+        eye.emissiveIntensity = 1.7;
+      });
+
+      // Low emissive core under the model, so a contact still reads as a hot
+      // shape if its file never arrives.
       const body = new THREE.Mesh(
-        new THREE.BoxGeometry(0.7, 1.3, 0.7),
+        new THREE.BoxGeometry(0.34, 0.34, 0.34),
         new THREE.MeshStandardMaterial({
           color: PALETTE.red, emissive: PALETTE.red, emissiveIntensity: 0.8, flatShading: true,
         })
@@ -92,12 +142,28 @@ export class FX {
     }
   }
 
+  // Called on mission restart alongside clearHostiles.
+  resetDrone() { this.drone.reset(); }
+
   clearHostiles() {
-    for (const h of this.hostiles) this.scene.remove(h);
+    for (const h of this.hostiles) {
+      this.scene.remove(h);
+      // Replay re-reveals the same contacts; without this each run leaves a
+      // full walker's geometry behind on the GPU.
+      h.traverse((o) => {
+        if (!o.isMesh && !o.isSkinnedMesh) return;
+        o.geometry?.dispose();
+        const mats = Array.isArray(o.material) ? o.material : [o.material];
+        for (const m of mats) if (m && !m.name?.startsWith('surface:')) m.dispose();
+      });
+    }
     this.hostiles = [];
   }
 
   update(dt) {
+    this.clock += dt;
+    this.drone.update(dt, this.clock);
+
     for (let i = this.active.length - 1; i >= 0; i--) {
       const p = this.active[i];
       p.age += dt;
