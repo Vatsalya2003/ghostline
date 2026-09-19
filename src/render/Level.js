@@ -200,6 +200,45 @@ const APPROACH = [
   ['antenna-mast', -10.2, -3.0, { height: 2.8, rot: 0.4 }],
 ];
 
+// Outside the wire, along the access road. These are not scattered props —
+// each group is a small story the player reads without being told:
+//
+//   the checkpoint  a barrier, a sign and a light where traffic was stopped,
+//                   with the fence run collapsed beside it
+//   the lay-by      drums and a crate where something was unloaded off the
+//                   road and never collected
+//   the mast spur   a cable run heading off toward the far ridge line
+//
+// All of it sits well clear of the tactical area so it reads as background
+// rather than competing with the compound for attention.
+const OUTSKIRTS = [
+  // Checkpoint, where the road meets the turning circle.
+  ['fence', -13.8, 13.2, { height: 1.3, rot: 0.38 }],
+  ['fence', -13.0, 12.5, { height: 1.3, rot: 0.42 }],
+  ['fence', -12.1, 12.0, { height: 1.25, rot: 1.1 }],   // knocked out of line
+  ['sign-hazard', -11.4, 13.6, { size: 1.1, rot: 0.55 }],
+  ['floodlight', -15.2, 14.4, { height: 3.2, rot: 0.9 }],
+  ['barrel', -12.6, 14.3, { height: 1.0, rot: 0.2 }],
+  ['barrel', -12.1, 14.8, { height: 1.0, rot: 0.6 }],
+
+  // Lay-by: something was offloaded here and left.
+  ['container', -20.5, 20.0, { size: 2.6, rot: 0.72 }],
+  ['supply-crate', -18.6, 19.2, { height: 0.8, rot: 0.25 }],
+  ['supply-crate', -18.2, 20.1, { height: 0.8, rot: 0.61 }],
+  ['drum', -19.4, 21.3, { height: 1.1, rot: 0.14 }],
+  ['fuel-can', -17.6, 21.0, { height: 0.6, rot: 0.3 }],
+
+  // Cable spur heading for the ridge masts.
+  ['antenna-mast', 16.5, -14.0, { height: 3.0, rot: 0.25 }],
+  ['cable-long', 13.0, -12.4, { height: 1.8, rot: 0.4, anchor: 'top' }],
+  ['strut-long', 10.5, -11.0, { height: 2.4, rot: 0.6 }],
+
+  // A second, older fence line the desert is taking back.
+  ['fence', 12.0, 9.0, { height: 1.25, rot: 0.52 }],
+  ['fence', 12.9, 9.8, { height: 1.25, rot: 0.5 }],
+  ['fence', 13.9, 10.4, { height: 1.2, rot: 1.35 }],    // fallen
+];
+
 // Props flat enough that their shadow is a smear under their own footprint.
 // The key light is the only shadow caster in the scene and it re-renders every
 // caster each frame, so dropping the floor clutter out of that pass is free
@@ -389,6 +428,7 @@ export function createLevel(scene) {
   placeProps(group, PERIMETER);
   placeProps(group, INTERIOR);
   placeProps(group, APPROACH);
+  placeProps(group, OUTSKIRTS);
 
   // Practical lights. Four, unshadowed, matched to fixtures that are
   // actually in the scene — the two floodlights on the approach, the glow off

@@ -36,7 +36,7 @@ gsap.ticker.lagSmoothing(0);
 const canvas = document.getElementById('scene');
 const renderer = createRenderer(canvas);
 const camera = createCamera();
-const { scene } = createScene();
+const { scene, terrain } = createScene();
 const fog = createFogOfWar(scene);
 const level = createLevel(scene);
 const squad = createSquad(scene);
@@ -366,6 +366,7 @@ function tick() {
   markers.update(dt, t);
   objectiveMarkers.update(dt, t);
   soundscape.update(dt);
+  terrain?.dust.update(dt);
   input.poll(dt);
   updateCamera(camera, dt, t);
   renderer.render(scene, camera);

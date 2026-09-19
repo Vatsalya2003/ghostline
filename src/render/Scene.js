@@ -2,9 +2,10 @@ import * as THREE from 'three';
 import { createSky } from './Sky.js';
 import { createTerrain } from './Terrain.js';
 
-// 'day'  — dusty daylight base: soil terrain, gradient sky, warm sun.
-// 'night' — the original cold compound. Every light, the fog and the sky
-//           read this, so it is the only switch.
+// 'day'   — late evening at a semi-arid installation: low sun, long shadows,
+//            warm key against a cool sky, practical lights doing real work.
+// 'night'  — the original cold compound, untouched.
+// Every light, the fog, the sky and the fog-of-war read this constant.
 export const ENVIRONMENT = 'day';
 
 export const PALETTE = {
@@ -105,15 +106,16 @@ export function createRenderer(canvas) {
   // compound lives.
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.45;
-  renderer.setClearColor(ENVIRONMENT === 'day' ? 0x9fb6c4 : PALETTE.bg, 1);
-  // Daylight needs less exposure lift than a scene lit by emissives alone.
-  if (ENVIRONMENT === 'day') renderer.toneMappingExposure = 1.05;
+  renderer.setClearColor(ENVIRONMENT === 'day' ? 0x6f7d8c : PALETTE.bg, 1);
+  // Low sun, so less exposure lift than a scene lit by emissives alone — but
+  // enough to keep the shadow side off the floor.
+  if (ENVIRONMENT === 'day') renderer.toneMappingExposure = 1.0;
   return renderer;
 }
 
 export function createScene() {
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color(ENVIRONMENT === 'day' ? 0x9fb6c4 : PALETTE.bg);
+  scene.background = new THREE.Color(ENVIRONMENT === 'day' ? 0x6f7d8c : PALETTE.bg);
 
   // Distance haze, linear and deliberately narrow-banded.
   //
@@ -124,22 +126,30 @@ export function createScene() {
   // the camera distance leaves the near half untouched and only softens the
   // far corner, which is the depth cue that was actually wanted.
   // Haze colour has to match the horizon or the far corner reads as a hole.
+  // Matched to the horizon band of the sky. Set past the playable area so
+  // the compound stays crisp and only the ridges soften — the haze is depth,
+  // not a wash over the gameplay.
   scene.fog = ENVIRONMENT === 'day'
-    ? new THREE.Fog(0xc3b49a, 52, 145)
+    ? new THREE.Fog(0xb49878, 46, 230)
     : new THREE.Fog(0x0b1211, 40, 78);
 
+  // The concrete only covers what the compound actually stands on. It used
+  // to be a 30-unit slab — four times the footprint of the building — which
+  // read as a giant flat plate with a hard diamond edge, and was the single
+  // most artificial thing in the frame. Outside the wire is now soil.
+  const PAD = 15;
   const ground = new THREE.Mesh(
-    new THREE.PlaneGeometry(GROUND_SIZE, GROUND_SIZE),
+    new THREE.PlaneGeometry(PAD, PAD),
     new THREE.MeshStandardMaterial({
       map: makeGroundTexture(),
-      // The texture is dark already; this tints the slab cool at night and
-      // sun-bleached by day.
-      color: ENVIRONMENT === 'day' ? 0xcfc4ad : 0xa8b4ae,
-      roughness: 0.96,
+      // Worn concrete, not fresh screed. Bright pads read as unused.
+      color: ENVIRONMENT === 'day' ? 0x9c917f : 0xa8b4ae,
+      roughness: 0.97,
       metalness: 0.02,
     })
   );
   ground.rotation.x = -Math.PI / 2;
+  ground.position.set(3, 0, -3);   // centred on the compound, not the origin
   ground.receiveShadow = true;
   ground.name = 'ground';
   scene.add(ground);
@@ -153,13 +163,15 @@ export function createScene() {
   const day = ENVIRONMENT === 'day';
 
   // Key: cold moonlight at night, a low warm sun by day.
-  const key = new THREE.DirectionalLight(day ? 0xffe0b0 : 0xc2e4de, day ? 3.4 : 2.9);
-  key.position.set(day ? 16 : 8, day ? 18 : 14, day ? 11 : 6);
+  // Low and warm: the long raking shadows are what give flat ground its
+  // shape. A high sun flattens terrain into a texture swatch.
+  const key = new THREE.DirectionalLight(day ? 0xffc98a : 0xc2e4de, day ? 2.35 : 2.9);
+  key.position.set(day ? 26 : 8, day ? 9 : 14, day ? 15 : 6);
   key.castShadow = true;
-  key.shadow.mapSize.set(2048, 2048);
+  key.shadow.mapSize.set(day ? 3072 : 2048, day ? 3072 : 2048);
   key.shadow.camera.near = 1;
-  key.shadow.camera.far = day ? 90 : 50;
-  const s = GROUND_SIZE * (day ? 1.15 : 0.75);
+  key.shadow.camera.far = day ? 140 : 50;
+  const s = GROUND_SIZE * (day ? 1.5 : 0.75);
   key.shadow.camera.left = -s;
   key.shadow.camera.right = s;
   key.shadow.camera.top = s;
@@ -172,7 +184,9 @@ export function createScene() {
   // Rim from the opposite corner. No shadow, low intensity, and slightly warm
   // against the cold key — this is the light that separates a dark robot from
   // the dark ground it is standing on.
-  const rim = new THREE.DirectionalLight(day ? 0x86a8c8 : 0x9a7f5e, day ? 0.85 : 1.0);
+  // Cool fill from the opposite side — sky light in the shadows, which is
+  // what actually happens at dusk and what stops shadows reading as black.
+  const rim = new THREE.DirectionalLight(day ? 0x6d90bd : 0x9a7f5e, day ? 0.7 : 1.0);
   rim.position.set(-11, 7, -9);
   rim.name = 'rim-light';
   scene.add(rim);
@@ -182,17 +196,23 @@ export function createScene() {
   // most of what sells "outdoors at night" on flat-shaded geometry.
   // By day this is the big one: blue sky above, warm soil bounce below.
   const bounce = day
-    ? new THREE.HemisphereLight(0x9ec4e8, 0x8a6a45, 1.9)
+    ? new THREE.HemisphereLight(0x7d9cc4, 0x8a6a45, 1.25)
     : new THREE.HemisphereLight(0x44635f, 0x0d1311, 1.45);
   scene.add(bounce);
 
   // Floor of ambient so nothing ever goes fully to black.
-  scene.add(new THREE.AmbientLight(day ? 0x6d7b84 : 0x22302d, day ? 0.55 : 0.8));
+  // Deliberately low. Uniform ambient is what makes a scene read as a
+  // render; the contrast between lit and unlit ground is the depth cue.
+  scene.add(new THREE.AmbientLight(day ? 0x54606b : 0x22302d, day ? 0.3 : 0.8));
 
   let sky = null;
   let terrain = null;
   if (day) {
-    sky = createSky(scene);
+    sky = createSky(scene, {
+      top: 0x35506f,        // deep blue overhead
+      horizon: 0xd79a62,    // sun band, low and warm
+      ground: 0x7a6248,     // dust haze below the horizon line
+    });
     terrain = createTerrain(scene);
   }
 

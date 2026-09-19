@@ -65,6 +65,12 @@ const FRAG = /* glsl */ `
     float grain = noise(vec2(vUv * 36.0 + vec2(uTime * 0.05, uTime * -0.037)));
     alpha += (1.0 - known) * (grain - 0.5) * 0.085;
 
+    // The overlay is a square plane laid over open terrain. Ending it on a
+    // hard edge draws a diamond on the landscape and announces itself as a
+    // quad; fading the last of it out lets the haze dissolve into distance.
+    float border = max(abs(vUv.x - 0.5), abs(vUv.y - 0.5));
+    alpha *= 1.0 - smoothstep(0.36, 0.5, border);
+
     // A faint lit rim exactly on the frontier, so the edge of what you know
     // is a thing you can see rather than a thing you infer.
     float edge = smoothstep(0.0, 0.22, known) * smoothstep(0.62, 0.30, known);
@@ -101,8 +107,11 @@ export class FogOfWar {
         // Daylight cannot use a black curtain — unswept ground reads as a
         // hole punched in the landscape. It becomes a pale dust haze
         // instead: the same "you cannot see this" signal, lit correctly.
-        uUnknown: { value: ENVIRONMENT === 'day' ? 0.58 : 0.78 },
-        uExplored: { value: ENVIRONMENT === 'day' ? 0.26 : 0.46 },
+        // Light enough that terrain, ruts and vegetation still read through
+        // it. A heavy curtain in daylight flattens the ground back into the
+        // featureless plane this pass set out to fix.
+        uUnknown: { value: ENVIRONMENT === 'day' ? 0.34 : 0.78 },
+        uExplored: { value: ENVIRONMENT === 'day' ? 0.13 : 0.46 },
         uColor: {
           value: new THREE.Color(ENVIRONMENT === 'day' ? 0xcfc0a6 : 0x05070a),
         },
