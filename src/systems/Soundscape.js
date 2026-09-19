@@ -204,10 +204,15 @@ export class Soundscape {
 
       const total = (this.travel.get(unit.id) || 0) + moved;
       if (total < STEP_DISTANCE) { this.travel.set(unit.id, total); continue; }
-      this.travel.set(unit.id, total - STEP_DISTANCE);
 
+      // Hold the distance until the step is actually spent. Charging it here
+      // and then bailing on the gap below loses the sound *and* the distance,
+      // which is how three units moving inside one frame — every frame, once
+      // the renderer is slow enough that a whole tween lands between two of
+      // them — end up walking in silence.
       const now = audio.t;
-      if (now - this.lastStepAt < STEP_MIN_GAP) continue;
+      if (now - this.lastStepAt < STEP_MIN_GAP) { this.travel.set(unit.id, total); continue; }
+      this.travel.set(unit.id, total - STEP_DISTANCE);
       this.lastStepAt = now;
 
       audio.moveStep(p.x, p.z);
