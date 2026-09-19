@@ -1,8 +1,9 @@
 import * as THREE from 'three';
 
-// Flip to true for the light scheme. Everything downstream reads PALETTE and
-// the `light` class on <body>, so this constant is the only switch.
-export const LIGHT_MODE = false;
+// Flip to false for the original dark scheme. Everything downstream reads
+// PALETTE and the `light` class on <body>, so this constant is the only
+// switch.
+export const LIGHT_MODE = true;
 
 const DARK = {
   bg: 0x0a0d0a,
