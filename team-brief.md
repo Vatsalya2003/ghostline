@@ -78,9 +78,9 @@ whole design.
 ### Units
 | Object | Role |
 |---|---|
-| **LEAD** | Speaks to the player. Relays recommendations. Has a sensor cone. |
-| **UNIT-2** | Squad member. **Its sensor breaks in Turn 3** — the key beat. |
-| **UNIT-3** | Squad member. Stays healthy. Baseline for comparison. |
+| **ALPHA** (badge 1) | Speaks to the player. Relays recommendations. Has a sensor cone. |
+| **BETA-1** (badge 2) | Squad member. **Its sensor breaks in Turn 3** — the key beat. |
+| **BETA-2** (badge 3) | Squad member. Stays healthy. Baseline for comparison. |
 | **Drone** | Deployable scout. Reveals area without risking the squad. |
 | **Hostiles** | Hidden until revealed. Never visible through a broken cone. |
 

@@ -37,7 +37,7 @@ export class CommsPanel {
 
   // sourceStatus drives the glitch treatment on the speaker's name — the
   // visual tell that a confident number came out of a broken sensor.
-  async say(text, { source = 'LEAD', via = null, confidence = null, sourceStatus = 'healthy', voice = true } = {}) {
+  async say(text, { source = 'ALPHA', via = null, confidence = null, sourceStatus = 'healthy', voice = true } = {}) {
     this.el.classList.add('speaking');
     this.sourceEl.textContent = source;
     this.sourceEl.classList.toggle('glitch', sourceStatus !== 'healthy');

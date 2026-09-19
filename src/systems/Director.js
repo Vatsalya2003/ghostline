@@ -139,7 +139,7 @@ export class Director {
 
     switch (outcome.fx) {
       case 'impact': case 'ambush': {
-        const u = this.unit(outcome.impactUnit || 'LEAD');
+        const u = this.unit(outcome.impactUnit || 'ALPHA');
         if (u) this.fx.hitFlash(u);
         audio.impact();
         shakeCamera(this.camera, 0.7, 0.5);
@@ -147,7 +147,7 @@ export class Director {
         break;
       }
       case 'scan': {
-        const u = this.unit('LEAD');
+        const u = this.unit('ALPHA');
         audio.scan();
         this.fx.ring(u.position.x, u.position.z, { radius: 9, duration: 1.1 });
         break;
@@ -178,8 +178,8 @@ export class Director {
     if (outcome.response) {
       audio.radioOpen();
       await this.ui.comms.say(outcome.response, {
-        source: 'LEAD',
-        sourceStatus: this.state.statuses.LEAD,
+        source: 'ALPHA',
+        sourceStatus: this.state.statuses.ALPHA,
       });
       audio.radioClose();
     }

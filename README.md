@@ -21,7 +21,7 @@ npm run build    # static files in /dist — runs offline, no CDN, no backend
 
 **Demo the judges see:** `/?auto=CONFIRM,SEND_DRONE` lands on turn 3 with the
 breach played out and the contradiction on screen — HIGH confidence, amber
-`SOURCE DEGRADED`, and UNIT-2's cone in pieces.
+`SOURCE DEGRADED`, and BETA-1's cone in pieces.
 
 ## Controls
 

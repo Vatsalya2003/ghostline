@@ -11,11 +11,57 @@ export const STATUS = {
   DAMAGED: 'damaged',
 };
 
+// Each robot wears its number over its head so you can tell whose cone is
+// whose on the ground. Same number appears on its HUD chip.
+export const UNIT_BADGE = {
+  ALPHA: '1',
+  'BETA-1': '2',
+  'BETA-2': '3',
+};
+
 export const STATUS_COLOR = {
   [STATUS.HEALTHY]: PALETTE.cyan,
   [STATUS.GLITCH]: PALETTE.amber,
   [STATUS.DAMAGED]: PALETTE.red,
 };
+
+function badgeTexture(text) {
+  const size = 128;
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = size;
+  const ctx = canvas.getContext('2d');
+
+  // Drawn in white and tinted by the sprite material, so one texture can
+  // follow the unit through healthy / glitch / damaged.
+  ctx.strokeStyle = '#ffffff';
+  ctx.lineWidth = 7;
+  ctx.strokeRect(20, 20, size - 40, size - 40);
+
+  ctx.fillStyle = '#ffffff';
+  ctx.font = 'bold 62px ui-monospace, Menlo, monospace';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(text, size / 2, size / 2 + 3);
+
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+
+function buildBadge(text, color) {
+  const material = new THREE.SpriteMaterial({
+    map: badgeTexture(text),
+    color,
+    transparent: true,
+    depthTest: false,   // always legible, never buried in a wall
+    depthWrite: false,
+  });
+  const sprite = new THREE.Sprite(material);
+  sprite.scale.setScalar(0.72);
+  sprite.position.y = 2.05;
+  sprite.renderOrder = 20;
+  return sprite;
+}
 
 function mat(color, { emissive = 0.3 } = {}) {
   return new THREE.MeshStandardMaterial({
@@ -59,6 +105,8 @@ export class Unit {
     this.heading = heading;
 
     this.group = buildChassis(STATUS_COLOR[STATUS.HEALTHY]);
+    this.badge = buildBadge(UNIT_BADGE[id] || '?', STATUS_COLOR[STATUS.HEALTHY]);
+    this.group.add(this.badge);
     this.group.position.set(x, 0, z);
     this.group.scale.setScalar(1.2);
     this.group.rotation.y = heading;
@@ -90,6 +138,7 @@ export class Unit {
       part.material.emissive.copy(color);
     }
     this.cone.material.uniforms.uColor.value.copy(color);
+    this.badge.material.color.copy(color);
 
     const degraded = status === STATUS.HEALTHY ? 0 : status === STATUS.GLITCH ? 1 : 0.65;
     const range = status === STATUS.HEALTHY ? this.baseRange
@@ -154,9 +203,9 @@ function headingToward(x, z, tx = 2.6, tz = 2) {
 
 export function createSquad(scene) {
   const spec = [
-    { id: 'LEAD', x: -5.5, z: 7.5, range: 9.5, fan: 0 },
-    { id: 'UNIT-2', x: -8.0, z: 5.0, range: 8.5, fan: -0.30 },
-    { id: 'UNIT-3', x: -3.0, z: 8.5, range: 8.5, fan: 0.30 },
+    { id: 'ALPHA', x: -5.5, z: 7.5, range: 9.5, fan: 0 },
+    { id: 'BETA-1', x: -8.0, z: 5.0, range: 8.5, fan: -0.30 },
+    { id: 'BETA-2', x: -3.0, z: 8.5, range: 8.5, fan: 0.30 },
   ];
   const [lead, unit2, unit3] = spec.map(({ id, x, z, range, fan }) => new Unit({
     id, x, z, coneRange: range, coneFov: 58,

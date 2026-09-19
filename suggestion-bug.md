@@ -31,7 +31,7 @@ Newest at the top. Status: `OPEN` · `FIXING` · `DONE` · `WONTFIX`.
 | 2 | P1 | _Gamepad button indices unverified on macOS — PS4 pad, `PAD_MAP` in `src/systems/Input.js`_ | Input | handoff | OPEN |
 | 3 | P1 | _Two-metre test on turn 3: is the broken cone unmissable from across the room?_ | Sensor cones | handoff | OPEN |
 | 4 | P1 | _Does a fresh player hesitate before choosing on turn 3? If not, the game isn't working._ | Turn 3 | handoff | OPEN |
-| 5 | P1 | **Can't tell which cone belongs to which robot.** All three units are the same cyan, so on screen you cannot tell whose view is whose — which matters because the whole game is reading one specific unit's cone. Give each robot its own identity. | Units / cones | Vatsalya | OPEN |
+| 5 | P1 | **Can't tell which cone belongs to which robot.** All three units are the same cyan. Partly addressed: squad renamed ALPHA / BETA-1 / BETA-2 and each robot now wears its number (1/2/3) over its head, matching its HUD chip. Still open: cones themselves carry no identity once they overlap. | Units / cones | Vatsalya | FIXING |
 | 6 | P1 | **Debrief praised a run that failed turn 3.** Good calls outnumbered mistakes, so the verdict said "you read the sensor, not the number" to a player who walked into the ambush. | Debrief / scoring | Vatsalya | DONE |
 | 7 | P1 | **Hard to tell what the mission and the current task are while playing.** Objective was only on the briefing screen; nothing on screen said what you were deciding this turn. | HUD | Vatsalya | DONE |
 | 8 | | | | | |
@@ -58,11 +58,11 @@ Copy the block. Only for things a one-liner can't carry.
 ### [#5] Every robot is the same colour — can't tell whose cone is whose
 **Sev:** P1   **Area:** units / cones
 **Repro:** 1. `/?skip=1`  2. look at the three cones on the ground
-**Expected:** You can tell at a glance which cone belongs to LEAD, UNIT-2, UNIT-3.
+**Expected:** You can tell at a glance which cone belongs to ALPHA, BETA-1, BETA-2.
 **Actual:** All three are the same cyan. The cones overlap and read as one shape.
 
 **Why this matters more than it looks:** turn 3 asks the player to judge *one
-specific unit's* view. If they can't pick UNIT-2's cone out of the three, the
+specific unit's* view. If they can't pick BETA-1's cone out of the three, the
 whole beat is guesswork.
 
 **The tension to resolve first:** colour is currently doing a different job —
@@ -70,9 +70,9 @@ cyan = healthy, amber = sensor glitch, red = damaged. That status read is what
 makes the broken cone obvious. If each robot gets its own colour, status needs
 another channel. Options:
 
-- **A — Callsign tags.** Floating `LEAD` / `UNIT-2` / `UNIT-3` label over each
-  robot, and the same label at the wide end of its cone. Colour keeps meaning
-  status. Cheapest, no palette conflict.
+- **A — Callsign tags. DONE for the robots.** Each robot wears its number over
+  its head, tinted by status, and the HUD chip shows the same number. Not yet
+  done on the cones themselves — see C.
 - **B — Per-unit hue, status as pattern.** Each robot gets its own tint; glitch
   and damage are shown by flicker/static/edge treatment instead of colour.
   Strongest identity read, but it weakens the instant cyan-vs-amber tell that

@@ -105,8 +105,8 @@ function startMission() {
   level.door.rotation.set(0, 0, 0);
   level.door.position.set(2.6, 0.855, 2);
   level.door.material.emissiveIntensity = 0.18;
-  zoomCamera(camera, 16, 0.6);
-  panCamera(camera, -3, 4, 0.8);
+  zoomCamera(camera, 15, 0.6);
+  panCamera(camera, -5, 6.2, 0.8);
   turnManager.start();
   ui.hud.setHealth(state.health);
   ui.hud.setDrones(state.drones);

@@ -251,8 +251,8 @@ Rough is fine. This is your parachute.
 This single turn is what you show judges. It deserves dedicated time.
 
 **Prompt:**
-> Polish turn 3's sequence: camera snaps to UNIT-2, impact FX plays, screen
-> shakes, UNIT-2's status badge glitches cyan→amber with a chromatic
+> Polish turn 3's sequence: camera snaps to BETA-1, impact FX plays, screen
+> shakes, BETA-1's status badge glitches cyan→amber with a chromatic
 > flicker, its sensor cone visibly degrades in real time, and only *then*
 > does the high-confidence recommendation arrive. Beat timing should let
 > each moment land.

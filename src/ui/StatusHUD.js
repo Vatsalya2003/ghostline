@@ -1,3 +1,5 @@
+import { UNIT_BADGE } from '../render/Units.js';
+
 // Turn counter, squad integrity, per-unit status, drone stock.
 const STATE_LABEL = { healthy: 'NOMINAL', glitch: 'SENSOR GLITCH', damaged: 'DAMAGED' };
 
@@ -36,7 +38,8 @@ export class StatusHUD {
     for (const [id, status] of Object.entries(statuses)) {
       const chip = document.createElement('div');
       chip.className = `unit-chip ${status}`;
-      chip.innerHTML = `<span class="dot"></span>${id}<span class="state">${STATE_LABEL[status]}</span>`;
+      chip.innerHTML = `<span class="badge">${UNIT_BADGE[id] || '?'}</span>${id}` +
+        `<span class="state">${STATE_LABEL[status]}</span>`;
       this.squad.appendChild(chip);
     }
   }

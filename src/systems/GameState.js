@@ -12,7 +12,7 @@ export class GameState {
     this.health = this.mission.startHealth;
     this.drones = this.mission.drones;
     this.turnIndex = 0;
-    this.statuses = { LEAD: 'healthy', 'UNIT-2': 'healthy', 'UNIT-3': 'healthy' };
+    this.statuses = { ALPHA: 'healthy', 'BETA-1': 'healthy', 'BETA-2': 'healthy' };
     this.calibration = [];       // { turn, action, tag, note }
     this.log = [];
     this.relayOnline = false;

@@ -96,9 +96,9 @@ export function createScene() {
 // Step-1 stand-ins for the squad. Replaced by models in step 4 if assets allow.
 export function createPlaceholderUnits(scene) {
   const specs = [
-    { name: 'LEAD', color: PALETTE.cyan, pos: [-3, 0, 2] },
-    { name: 'UNIT-2', color: PALETTE.amber, pos: [1, 0, -1] },
-    { name: 'UNIT-3', color: PALETTE.cyan, pos: [4, 0, 3] },
+    { name: 'ALPHA', color: PALETTE.cyan, pos: [-3, 0, 2] },
+    { name: 'BETA-1', color: PALETTE.amber, pos: [1, 0, -1] },
+    { name: 'BETA-2', color: PALETTE.cyan, pos: [4, 0, 3] },
   ];
 
   return specs.map(({ name, color, pos }) => {
