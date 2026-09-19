@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { GROUND_SIZE } from './Scene.js';
+import { GROUND_SIZE, ENVIRONMENT } from './Scene.js';
 
 // Three tiers, not two.
 //
@@ -98,10 +98,17 @@ export class FogOfWar {
       uniforms: {
         uMemory: { value: this.texture },
         uTime: { value: 0 },
-        uUnknown: { value: 0.78 },
-        uExplored: { value: 0.46 },
-        uColor: { value: new THREE.Color(0x05070a) },
-        uEdgeColor: { value: new THREE.Color(0x0d2a2a) },
+        // Daylight cannot use a black curtain — unswept ground reads as a
+        // hole punched in the landscape. It becomes a pale dust haze
+        // instead: the same "you cannot see this" signal, lit correctly.
+        uUnknown: { value: ENVIRONMENT === 'day' ? 0.58 : 0.78 },
+        uExplored: { value: ENVIRONMENT === 'day' ? 0.26 : 0.46 },
+        uColor: {
+          value: new THREE.Color(ENVIRONMENT === 'day' ? 0xcfc0a6 : 0x05070a),
+        },
+        uEdgeColor: {
+          value: new THREE.Color(ENVIRONMENT === 'day' ? 0xffffff : 0x0d2a2a),
+        },
         uReveal: { value: 1 },
       },
       transparent: true,

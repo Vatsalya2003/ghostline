@@ -1,4 +1,11 @@
 import * as THREE from 'three';
+import { createSky } from './Sky.js';
+import { createTerrain } from './Terrain.js';
+
+// 'day'  — dusty daylight base: soil terrain, gradient sky, warm sun.
+// 'night' — the original cold compound. Every light, the fog and the sky
+//           read this, so it is the only switch.
+export const ENVIRONMENT = 'day';
 
 export const PALETTE = {
   bg: 0x0a0d0a,
@@ -98,13 +105,15 @@ export function createRenderer(canvas) {
   // compound lives.
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.45;
-  renderer.setClearColor(PALETTE.bg, 1);
+  renderer.setClearColor(ENVIRONMENT === 'day' ? 0x9fb6c4 : PALETTE.bg, 1);
+  // Daylight needs less exposure lift than a scene lit by emissives alone.
+  if (ENVIRONMENT === 'day') renderer.toneMappingExposure = 1.05;
   return renderer;
 }
 
 export function createScene() {
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color(PALETTE.bg);
+  scene.background = new THREE.Color(ENVIRONMENT === 'day' ? 0x9fb6c4 : PALETTE.bg);
 
   // Distance haze, linear and deliberately narrow-banded.
   //
@@ -114,13 +123,18 @@ export function createScene() {
   // the scene darker without making it deeper. Linear fog with near set past
   // the camera distance leaves the near half untouched and only softens the
   // far corner, which is the depth cue that was actually wanted.
-  scene.fog = new THREE.Fog(0x0b1211, 40, 78);
+  // Haze colour has to match the horizon or the far corner reads as a hole.
+  scene.fog = ENVIRONMENT === 'day'
+    ? new THREE.Fog(0xc3b49a, 52, 145)
+    : new THREE.Fog(0x0b1211, 40, 78);
 
   const ground = new THREE.Mesh(
     new THREE.PlaneGeometry(GROUND_SIZE, GROUND_SIZE),
     new THREE.MeshStandardMaterial({
       map: makeGroundTexture(),
-      color: 0xa8b4ae,      // the texture is dark already; this keeps it cool
+      // The texture is dark already; this tints the slab cool at night and
+      // sun-bleached by day.
+      color: ENVIRONMENT === 'day' ? 0xcfc4ad : 0xa8b4ae,
       roughness: 0.96,
       metalness: 0.02,
     })
@@ -136,13 +150,16 @@ export function createScene() {
   // light and cannot blow the fragment budget on a demo laptop.
 
   // Key: high, cold, off the north-east. Moonlight, not a studio light.
-  const key = new THREE.DirectionalLight(0xc2e4de, 2.9);
-  key.position.set(8, 14, 6);
+  const day = ENVIRONMENT === 'day';
+
+  // Key: cold moonlight at night, a low warm sun by day.
+  const key = new THREE.DirectionalLight(day ? 0xffe0b0 : 0xc2e4de, day ? 3.4 : 2.9);
+  key.position.set(day ? 16 : 8, day ? 18 : 14, day ? 11 : 6);
   key.castShadow = true;
   key.shadow.mapSize.set(2048, 2048);
   key.shadow.camera.near = 1;
-  key.shadow.camera.far = 50;
-  const s = GROUND_SIZE * 0.75;
+  key.shadow.camera.far = day ? 90 : 50;
+  const s = GROUND_SIZE * (day ? 1.15 : 0.75);
   key.shadow.camera.left = -s;
   key.shadow.camera.right = s;
   key.shadow.camera.top = s;
@@ -155,7 +172,7 @@ export function createScene() {
   // Rim from the opposite corner. No shadow, low intensity, and slightly warm
   // against the cold key — this is the light that separates a dark robot from
   // the dark ground it is standing on.
-  const rim = new THREE.DirectionalLight(0x9a7f5e, 1.0);
+  const rim = new THREE.DirectionalLight(day ? 0x86a8c8 : 0x9a7f5e, day ? 0.85 : 1.0);
   rim.position.set(-11, 7, -9);
   rim.name = 'rim-light';
   scene.add(rim);
@@ -163,13 +180,23 @@ export function createScene() {
   // Sky/ground bounce. A hemisphere costs the same as an ambient and gives
   // the tops of things a cold sky and their undersides a dead floor, which is
   // most of what sells "outdoors at night" on flat-shaded geometry.
-  const bounce = new THREE.HemisphereLight(0x44635f, 0x0d1311, 1.45);
+  // By day this is the big one: blue sky above, warm soil bounce below.
+  const bounce = day
+    ? new THREE.HemisphereLight(0x9ec4e8, 0x8a6a45, 1.9)
+    : new THREE.HemisphereLight(0x44635f, 0x0d1311, 1.45);
   scene.add(bounce);
 
   // Floor of ambient so nothing ever goes fully to black.
-  scene.add(new THREE.AmbientLight(0x22302d, 0.8));
+  scene.add(new THREE.AmbientLight(day ? 0x6d7b84 : 0x22302d, day ? 0.55 : 0.8));
 
-  return { scene, ground, keyLight: key, rimLight: rim, bounce };
+  let sky = null;
+  let terrain = null;
+  if (day) {
+    sky = createSky(scene);
+    terrain = createTerrain(scene);
+  }
+
+  return { scene, ground, keyLight: key, rimLight: rim, bounce, sky, terrain };
 }
 
 // Practical lights. Unshadowed points, added by the level for the handful of
