@@ -31,9 +31,9 @@ export const SURFACE = {
   // Squad and hostile chassis. Deliberately lighter than the compound around
   // them: a unit has to stay readable through fog and under a cone, and the
   // props are allowed to sink into the dark in a way the robots are not.
-  armour:      { color: 0x3d4844, roughness: 0.58, metalness: 0.40 },
-  armourDark:  { color: 0x2b3431, roughness: 0.66, metalness: 0.35 },
-  armourTrim:  { color: 0x56635d, roughness: 0.48, metalness: 0.55 },
+  armour:      { color: 0x4a5752, roughness: 0.55, metalness: 0.42 },
+  armourDark:  { color: 0x333e3a, roughness: 0.64, metalness: 0.36 },
+  armourTrim:  { color: 0x66756e, roughness: 0.46, metalness: 0.55 },
   // Powered surfaces. The only things in the compound that give off light, so
   // they carry the eye — keep them rare, and keep them *dim*. Under ACES at
   // this exposure anything much above 0.5 on a saturated colour clips to flat
