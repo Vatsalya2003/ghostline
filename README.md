@@ -2,13 +2,34 @@
 
 A six-turn tactical game about **when to trust an AI teammate.**
 
-You're a commander at a base. Your squad is three robots. You see the world only
+You're a commander. Your squad is three machines. You see the world only
 through their sensors. Each turn the squad AI tells you what it recommends and
 how confident it is — but sensors break, and a broken sensor still sounds
 confident.
 
+**There are two missions on one engine.**
+
+| | **DRY CREEK** | **BLACK CURRENT** |
+|---|---|---|
+| Where | A desert relay station, late evening | An undersea test range at 240 m |
+| Units | 3 walkers | 3 AUVs *(still using the walker models — see below)* |
+| The failure you learn | A sensor breaks and keeps reporting | Every reading is true **and** misleading |
+| Length | ~6 min | ~8 min |
+| Run it | `http://localhost:5173/` | `http://localhost:5173/?mission=black-current` |
+
+Dry Creek is the ninety-second demo: you *watch* a sensor break, then you're
+asked to believe it. Black Current is the harder one — a machine reading a
+working instrument correctly and still being wrong, which is the failure that
+actually happens in autonomous systems.
+
 **Design docs:** `team-brief.md` (what we're making) · `development-plan.md`
-(build order) · `suggestion-bug.md` (bugs and ideas — log yours here)
+(build order) · `mission-options.md` (both missions, side by side) ·
+`map-rebuild-notes.md` (the undersea map: what broke and how) ·
+`suggestion-bug.md` (bugs and ideas — log yours here)
+
+> **You are on branch `3d_V2`.** It carries the 3D character models, the
+> daylight desert, the split-screen layout and the whole Black Current mission.
+> `main` is the older, simpler build.
 
 ---
 
@@ -39,6 +60,17 @@ Then open **http://localhost:5173** in Chrome.
 
 `npm install` only needs to happen once. After that it's just `npm run dev`.
 Leave that terminal open — it's the server. `Ctrl+C` stops it.
+
+## About the 3D models
+
+The Mixamo character files live in `public/models/` and are **2.8 GB, so they
+are deliberately not in git.** You will clone this repo without them, and that
+is fine: `AssetLoader` falls back to the procedural geometry the game shipped
+with, so everything runs and plays identically — the robots are just boxes
+rather than rigged characters.
+
+If you want the models, ask for the folder directly and drop it in
+`public/models/`. Don't commit it.
 
 ## Getting the latest changes later
 
@@ -196,6 +228,45 @@ Then hit **RUN IT AGAIN** and play it badly on purpose — CONFIRM everything.
 You'll survive and the debrief will tell you your judgement was poor. Seeing
 both endings is how you understand what we're building.
 
+## Mission 2 — BLACK CURRENT
+
+`http://localhost:5173/?mission=black-current`
+
+Three AUVs return to a decommissioned undersea test range to explain an anomaly
+the last autonomous survey logged at grid K-14 and classified as seabed
+structure, at 91% confidence. The range was signed off clear. It wasn't.
+
+**The truth you're uncovering** *(the game never tells you this outright)*: a
+moored sensor package slipped its anchor in a storm eighteen months ago and has
+been dragging across the seabed on the tide ever since, browning out whenever
+the current slackens. That one fact explains everything — it *is* structure, it
+*does* move, it transmits *sometimes*, and it has ploughed a furrow across the
+bottom for anyone who goes and looks.
+
+**The previous AI was not wrong. It was right about the object and wrong about
+the world.** Every recommendation in this mission is technically defensible and
+none of them are complete.
+
+| # | Turn | Where the AI falls short | Calibrated play |
+|---|---|---|---|
+| 1 | **BASELINE** | Nothing. It is right. | `CONFIRM` — trusting a verified system is correct |
+| 2 | **FIRST CONTACT** | Matched an 18-month-old chart to a thing that moved | `COMPARE LOGS` |
+| 3 | **SENSOR CONFLICT** | One confidence number averaged over two sensors that disagree | `INSPECT` the drag scar |
+| 4 | **BLACK CURRENT** | Models the current at the wrong depth | `REROUTE` |
+| 5 | **THE SOURCE** | Reads transmission as intent; it's a battery on a tide | `HOLD & OBSERVE` one cycle |
+| 6 | **RECOVERY** | Averages battery across three vehicles; one can't make it | Depends on your own fleet state |
+
+Turn 1 *rewards* trust, so the mission can't be beaten by reflexive suspicion.
+Question everything and you run out of inspections by turn 4 and arrive blind.
+
+### Read the seabed, not just the panel
+
+The map is the mission. Every feature exists because a turn needs it, and the
+**drag scar physically joins the turn-2 charted position to the turn-5 resting
+place.** A player who looks at the ground can read the answer before the AI
+concedes the point. Follow the trunk cable and the chain — they'll take you
+there.
+
 ---
 
 # 3. TESTING
@@ -207,6 +278,10 @@ both endings is how you understand what we're building.
 | `http://localhost:5173/?skip=1` | Straight into turn 1, no title or briefing |
 | `http://localhost:5173/?auto=CONFIRM,SEND_DRONE` | Plays those two turns automatically, hands control back at **turn 3** |
 | `http://localhost:5173/?auto=CONFIRM,CONFIRM,CONFIRM,CONFIRM,CONFIRM,CONFIRM` | Plays a full bad run to the debrief |
+| `?mission=black-current&skip=1` | Straight into Black Current turn 1 |
+| `?mission=black-current&auto=CONFIRM,COMPARE_LOGS,INSPECT_SEABED,REROUTE` | Plays the calibrated path up to turn 5 |
+
+`?mission=` accepts `dry-creek` / `black-current`, or just `1` / `2`.
 
 **This is also the judge demo:** `?auto=CONFIRM,SEND_DRONE` puts turn 3 on
 screen with the breach already played out.
@@ -229,9 +304,16 @@ npm run e2e      # ~2m  — plays full missions in a real browser
 
 `verify` asserts the things the demo rests on: every outcome reachable, all four
 endings reachable, drones never negative, debrief counts matching the decisions
-you made, praise only ever for a clean run, turn 3 named when you fail it, and
-the objective board agreeing with the ending. **Run it after any edit to
-`mission1.js`** — it catches a broken grade in two seconds.
+you made, praise only ever for a clean run, the key turn named when you fail it,
+and the objective board agreeing with the ending. **Run it after any edit to a
+mission file** — it catches a broken grade in two seconds. It currently walks
+133,441 assertions across both missions.
+
+> **Taking headless screenshots?** Software WebGL runs this at ~2 fps, so the
+> 1.6 s mission-start curtain takes ~16 s of wall clock and the fog of war is
+> still 90% down several seconds in. Force it up before capturing:
+> `OP.scene.getObjectByName('fog').material.uniforms.uReveal.value = 1`.
+> Two rounds of "the map is too dark" were this and nothing else.
 
 `e2e` builds the game, serves it, and plays it in headless Chromium: a careful
 run, an all-CONFIRM run and an abort, checking the HUD against game state every
@@ -270,8 +352,9 @@ git push
 
 ## Writing and tuning — no code needed
 
-**Everything the player reads or is graded on lives in one file:**
-`src/data/mission1.js`
+**Everything the player reads or is graded on lives in `src/data/`:**
+`mission1.js` (Dry Creek), `mission2.js` (Black Current), and `missions.js`,
+which is just the registry and the `?mission=` switch.
 
 Dialogue, confidence values, what each action does, how much damage it costs,
 the grade it earns, the debrief copy. Open it, change a string, save — the page
@@ -293,16 +376,24 @@ CONFIRM: {
 If you're on writing or design, this file is your whole surface area. You can
 work in it while someone else works in `/src` without colliding.
 
-**A second mission is a copy of this file**, not an engineering task.
+**A second mission is a copy of this file**, not an engineering task — that's
+exactly how Black Current was built. A mission declares its own
+`environment: 'undersea'`, and the renderer picks the seabed instead of the
+desert. Nothing in `/systems` changed to add it.
 
 ## Where the code lives
 
 ```
-src/data/mission1.js   ALL content — dialogue, confidence, outcomes, grades
+src/data/mission1.js   Dry Creek  — dialogue, confidence, outcomes, grades
+src/data/mission2.js   Black Current
+src/data/missions.js   registry + the ?mission= switch
 src/systems/           TurnManager, GameState, Director, Dialogue, Audio, Input
-src/render/            Scene, Camera, Units, SensorCones, FogOfWar, Level, FX
+src/render/            Scene, Camera, Units, SensorCones, FogOfWar, FX
+  Terrain.js + Level.js         the desert
+  Seabed.js  + SeabedLevel.js   the undersea range
+  AssetLoader.js                FBX loading, with procedural fallback
 src/ui/                CommsPanel, CommandBar, StatusHUD, MissionLog, Debrief
-src/style/main.css     HUD, palette, scanlines
+src/style/main.css     HUD, palette, scanlines, the 70/30 split layout
 scripts/sim.mjs        headless mission runner
 ```
 
@@ -332,9 +423,14 @@ Worth knowing before you "fix" one of these:
 - **No randomness anywhere.** Particle spread, camera shake and sensor static
   are all seeded or index-derived, so the demo plays identically every time.
   Don't add `Math.random()`.
-- **Robots and props are procedural geometry**, not downloaded models — nothing
-  to license, no scale fights. Swap in models later via `buildChassis()` in
-  `src/render/Units.js`.
+- **Every prop, terrain and effect is procedural geometry** — no downloaded
+  meshes, nothing to license, no scale fights. The only exception is the
+  rigged characters on this branch, which are Mixamo FBX and kept out of git
+  (see above). If they're absent the procedural chassis takes over.
+- **The seabed is authored warm and the water takes the colour away**, not the
+  other way round. A grey floor under a green tint reads as a desert with a
+  filter on it. Colour arrives with the survey lights parented to the fleet,
+  which is also why **lit == known** — the same idea as the sensor cones.
 - **SFX are synthesised with Web Audio**, not sample files. Howler is installed;
   if CC0 samples land in `/public/audio`, replace the method bodies in
   `src/systems/Audio.js`.

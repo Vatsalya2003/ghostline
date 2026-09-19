@@ -1,3 +1,8 @@
 node_modules
 dist
 .DS_Store
+
+# Mixamo character FBX — 2.8 GB, and `git add -A` would happily stage all of
+# it. AssetLoader falls back to the procedural chassis when they are absent,
+# so a clone without them runs and plays identically.
+public/models/

@@ -211,3 +211,31 @@ Move things here once settled, with one line of why.
 | Synthesised SFX, not sample packs | same — and it keeps the build fully offline | build |
 | `OVERRIDE` added as a command verb (turn 5) | commander needs a way to do the job the AI declined | build |
 | No randomness anywhere | the demo has to be rehearsable | brief |
+
+---
+
+# FIXED — undersea map rebuild (branch `3d_V2`)
+
+Five defects behind "the map looks wrong and objects are missing". Four were
+invisible in the source and only showed up by measuring the running game.
+Full write-up in `map-rebuild-notes.md`.
+
+| # | Severity | What | Cause |
+|---|---|---|---|
+| 1 | **P0** | **No sensor cones anywhere, in either mission** | `SensorCones.js` declared `float outline` twice in one GLSL scope. GLSL has no shadowing, so the whole cone shader failed to compile and the game's core visual silently vanished — console warning only |
+| 2 | **P0** | Range Instrument 7 — the answer to mission 2 — was 2.7 m underground | The seabed was mirrored in z against its own height function: a flat-laid `PlaneGeometry` maps local +y to world −z, and the displacement sampled the raw local y |
+| 3 | **P1** | Two enormous hard-edged black wedges across the map, reading as missing geometry | The fog of war was a flat 30-unit quad at y=0.01 over hilly terrain, so it stood proud of every hollow. It now drapes the terrain |
+| 4 | **P1** | No colour anywhere; everything a flat teal | Water fog ran 14–72 with the camera a fixed 40 units back → ~45% haze on the *subject*. Mission 1 looks vivid because it fogs at 46–230, past the board |
+| 5 | **P2** | Props standing at 30–36°; the instrument's chain thrown 9 m into the water column | Slope sampled over ±0.9 m, which straddles a single sand ripple. Chain was parented to the tilted hull |
+
+**Still open on this branch**
+
+| Severity | What |
+|---|---|
+| P2 | Residual soft diagonal banding on open sediment. Bisected to the terrain material — survives hiding fog mesh, growth, snow, dome and water fog. Three suspects listed in `map-rebuild-notes.md`; test by zeroing each term |
+| P2 | The AUVs are still walker models |
+| P1 | `mission.fleet` (per-vehicle battery/integrity) written but not read by the engine |
+
+**Note for mission 1:** `Terrain.js` has the same z-mirror as bug 2, but nothing
+in Dry Creek is placed from its height field, so it is invisible there. Left
+alone deliberately rather than silently reshaping a rehearsed map.

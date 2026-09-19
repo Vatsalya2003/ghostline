@@ -10,7 +10,7 @@ systems: same turn manager, same trust grading, same debrief, same input.
 | Failure you learn | A sensor breaks and keeps reporting | Every reading is true *and* misleading |
 | Resources | 2 drones, one shared integrity pool | Per-vehicle battery + integrity, 3 inspections, 2 comms windows |
 | Length | ~6 min | ~8 min |
-| Status | Built, playable, tagged `demo-v1` | Content written, being built now |
+| Status | Built, playable, tagged `demo-v1` | Built and playable on `3d_V2` |
 
 ---
 
@@ -32,7 +32,7 @@ and the other five turns are scaffolding around it.
 
 ---
 
-# OPTION 2 — BLACK CURRENT *(new — the one being built)*
+# OPTION 2 — BLACK CURRENT *(built — play it with `?mission=black-current`)*
 
 ## Premise
 
@@ -134,3 +134,28 @@ Ship both. `demo-v1` stays the parachute; Dry Creek stays the ninety-second
 demo. Black Current is the one to put in front of anyone who asks "but what
 about a *realistic* failure?" — and the one that shows the engine takes a
 second mission as a content file rather than an engineering project.
+
+---
+
+# BUILD STATUS — Black Current
+
+**Done.** Six turns of content, the mission registry and `?mission=` switch,
+generalised objective flags in `TurnManager`, and the undersea map: Test Range
+9, with the survey pillars, the charted fix, the drag scar, the meandering
+channel and Range Instrument 7 all where the turns say they are. The scar
+physically joins turn 2's position to turn 5's. See `map-rebuild-notes.md`.
+
+**Not done yet.**
+
+1. **The vehicles are still the desert walkers.** They should be AUVs.
+2. **Per-vehicle battery and integrity** — the `fleet` block is written in
+   `mission2.js`; `GameState` and `StatusHUD` don't read it. Outcome `damages`
+   maps are in the data and unconsumed by the engine.
+3. Damage-and-scuttle cinematics — losing BETA-2 in the channel should be
+   visible and the wreck should persist.
+4. Mission-aware drone routing — the drone should physically travel to the
+   objective being inspected.
+5. Expanded debrief: AI recommendation vs actual result vs your response.
+6. Voice lines are captions/TTS only; mission 2 is not baked.
+7. Mission select on the title screen — currently URL only.
+8. `npm run e2e` has not been run against mission 2.
