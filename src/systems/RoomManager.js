@@ -159,8 +159,12 @@ export class RoomManager {
     this.state.record(room.name, `MOVE ${dir}`, outcome.tag, outcome.note);
     this.state.pushLog(outcome.log);
 
-    if (raisesAlarm && !this.state.alarm) this.raiseAlarm();
-    this.spendMove();
+    // The move that gets you seen raises the alarm; it does not also burn one
+    // of the moves it just granted you. Otherwise the clock starts at n-1 and
+    // a player can arrive at the objective with nothing left to press.
+    const justRaised = raisesAlarm && !this.state.alarm;
+    if (justRaised) this.raiseAlarm();
+    else this.spendMove();
 
     const resolution = {
       room, action: `MOVE_${dir}`, dir, outcome, move: true, to: raw.to,
@@ -176,6 +180,13 @@ export class RoomManager {
     if (above && this.state.health > above.threshold) return { ...outcome, ...above };
     const below = outcome.altIfHealthBelow;
     if (below && this.state.health < below.threshold) return { ...outcome, ...below };
+    // Taking the objective with a room still unopened is a different act from
+    // taking it with everyone clear, and the debrief has to be able to say so.
+    const unless = outcome.altUnless;
+    if (unless && !this.state[unless.flag]) {
+      const { flag, ...overrides } = unless;
+      return { ...outcome, ...overrides };
+    }
     return outcome;
   }
 

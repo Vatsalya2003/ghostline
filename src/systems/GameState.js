@@ -88,6 +88,19 @@ export class GameState {
     return bad || null;
   }
 
+  // Failing the key room by getting it wrong and never opening its door at
+  // all are different mistakes, and telling a player they "fired on it" when
+  // they never went in reads as a bug.
+  keyTurnLine() {
+    const failure = this.keyTurnFailure();
+    if (!failure) return null;
+    const room = this.mission.keyRoom;
+    const never = room && !this.explored?.has(room);
+    return (never && this.mission.keyRoomUnopenedVerdict)
+      || this.mission.keyTurnVerdict
+      || this.mission.keyRoomVerdict;
+  }
+
   summary() {
     return {
       outcome: this.outcome,
@@ -96,7 +109,7 @@ export class GameState {
       dominant: this.dominantTag(),
       verdict: this.mission.verdicts[this.dominantTag()],
       keyTurnFailed: !!this.keyTurnFailure(),
-      keyTurnLine: this.keyTurnFailure() ? (this.mission.keyTurnVerdict || this.mission.keyRoomVerdict) : null,
+      keyTurnLine: this.keyTurnLine(),
       decisions: [...this.calibration],
       relayOnline: this.relayOnline,
       hostageKilled: this.hostageKilled,

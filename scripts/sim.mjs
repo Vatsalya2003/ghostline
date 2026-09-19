@@ -22,7 +22,7 @@ rm.on('resolve', (r) => {
 rm.on('probe', (r) => console.log(`│  ${r.action.padEnd(12)} ${'(free)'.padEnd(12)} ${r.outcome.log || ''}`));
 rm.on('alarm', (n) => console.log(`│  *** ALARM RAISED — ${n} MOVES REMAINING ***`));
 rm.on('end', (s) => {
-  console.log(`\n═══ OUTCOME ${String(s.outcome).toUpperCase()}  hp ${s.health}  drones left ${s.dronesLeft}  rooms ${s.roomsExplored}/9`);
+  console.log(`\n═══ OUTCOME ${String(s.outcome).toUpperCase()}  hp ${s.health}  drones left ${s.dronesLeft}  rooms ${s.roomsExplored}/${Object.keys(depot.rooms).length}`);
   console.log('    hostage killed:', s.hostageKilled, '· hostages out:', s.hostagesExtracted);
   console.log('    COUNTS', Object.entries(s.counts).filter(([, n]) => n).map(([k, n]) => `${k}:${n}`).join(' ') || 'none');
   if (s.keyTurnLine) console.log('    KEY ROOM FAILED —', s.keyTurnLine);
