@@ -22,6 +22,15 @@ export const ACTION_LABELS = {
   OVERRIDE: 'OVERRIDE',
   FALL_BACK: 'FALL BACK',
   ABORT: 'ABORT',
+  // Black Current's verbs. Verification actions rather than weapons — the
+  // undersea mission is about resolving data, not shooting at it.
+  COMPARE_LOGS: 'COMPARE LOGS',
+  INSPECT_SEABED: 'INSPECT',
+  HOLD_OBSERVE: 'HOLD & OBSERVE',
+  HOLD_TIDE: 'HOLD FOR SLACK',
+  REROUTE: 'REROUTE',
+  TOW_RECOVERY: 'TOW RECOVERY',
+  STAGED_ASCENT: 'STAGED ASCENT',
 };
 
 export const CONFIDENCE = {

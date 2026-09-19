@@ -145,7 +145,11 @@ export class TurnManager {
     }
 
     if (outcome.consumesDrone) this.state.drones -= 1;
+    // `relayOnline` was mission 1's only completion flag. Missions now name
+    // their own via `setsFlag`, and the mission's primary objective says
+    // which flag decides a complete run.
     if (outcome.relayOnline) this.state.relayOnline = true;
+    if (outcome.setsFlag) this.state[outcome.setsFlag] = true;
     if (outcome.revealHostiles) {
       this.state.hostilesRevealed = true;
       events.emit(GAME_EVENT.HOSTILES_REVEALED, { turn });
@@ -194,7 +198,7 @@ export class TurnManager {
     if (this.state.missionOver) return null;
     this.state.turnIndex += 1;
     if (this.state.turnIndex >= this.mission.turns.length) {
-      return this.endMission(this.state.relayOnline ? 'complete' : 'partial');
+      return this.endMission(this.primaryObjectiveMet() ? 'complete' : 'partial');
     }
     return this.enterTurn();
   }
@@ -208,6 +212,14 @@ export class TurnManager {
         { id: change.id, label: change.label },
       );
     }
+  }
+
+  // The first objective carrying a `flag` is the one that decides whether a
+  // surviving run counts as complete or partial.
+  primaryObjectiveMet() {
+    const flagged = (this.mission.objectives || []).find((o) => o.flag);
+    if (!flagged) return true;
+    return !!this.state[flagged.flag];
   }
 
   endMission(outcome) {

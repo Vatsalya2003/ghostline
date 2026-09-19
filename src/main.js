@@ -8,7 +8,12 @@ import { createSquad } from './render/Units.js';
 import { FX } from './render/FX.js';
 import { UnitMarkers } from './render/UnitMarkers.js';
 import { ObjectiveMarkers } from './render/ObjectiveMarkers.js';
-import { mission1 } from './data/mission1.js';
+import { selectedMission } from './data/missions.js';
+
+// Which mission this session is running. Everything downstream takes the
+// mission as a parameter already, so selection is a single binding.
+const chosen = selectedMission();
+const mission1 = chosen.mission;
 import { GameState } from './systems/GameState.js';
 import { TurnManager } from './systems/TurnManager.js';
 import { Director } from './systems/Director.js';

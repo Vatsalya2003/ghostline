@@ -1,7 +1,11 @@
 // Headless walk-through of the turn spine. `node scripts/sim.mjs [plan]`
 // where plan is a comma-separated action list, e.g.
 //   node scripts/sim.mjs CONFIRM,CONFIRM,CONFIRM,CONFIRM,CONFIRM,CONFIRM
-import { mission1 } from '../src/data/mission1.js';
+import { MISSIONS } from '../src/data/missions.js';
+
+// node scripts/sim.mjs <actions> [mission-id]
+const entry = MISSIONS.find((m) => m.id === process.argv[3]) || MISSIONS[0];
+const mission1 = entry.mission;
 import { GameState } from '../src/systems/GameState.js';
 import { TurnManager } from '../src/systems/TurnManager.js';
 
