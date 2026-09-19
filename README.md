@@ -29,8 +29,8 @@ terminal.
 ## Clone, install, run
 
 ```bash
-git clone https://github.com/Vatsalya2003/Override_Dec.git
-cd Override_Dec
+git clone https://github.com/Vatsalya2003/ghostline.git
+cd ghostline
 npm install
 npm run dev
 ```
