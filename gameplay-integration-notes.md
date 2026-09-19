@@ -1,6 +1,6 @@
 # GHOSTLINE — gameplay & integration notes
 
-**Owner:** gameplay + integration (Nikhil) · **Last updated:** Sat 19 Sep 2026, 12:09 PDT
+**Owner:** gameplay + integration (Nikhil) · **Last updated:** Sat 19 Sep 2026, 12:44 PDT
 
 The single running log for this workstream: what I observed, what I changed,
 what the hooks are, what everyone else built, and what is still open.
@@ -12,6 +12,19 @@ four things only a human can close. §0 is the chronological log, newest first.
 ---
 
 ## 0. RUNNING LOG
+
+### 12:43 — final pass: 3D is committed, everything else is not
+`23f7da0` and `03aec4c` landed the 3D work — 32 CC0 `.glb` models, the dressed
+compound, a lighting pass and the working drone, plus
+`3d-environment-notes.md`. That is the first commit since this morning.
+
+**Everything else is still working-tree only:** gameplay, audio, voice,
+controller, and the in-flight visual work. 66 changed or untracked entries.
+Re-verified all of my integration points survive on the current tree —
+`missionRun`, `safely()`, the event bus, turn variants, objectives, turn rules,
+`CommsPanel.reset()`, `outcome.reveal` — all present and all suites green.
+
+Bundle is now 854 KB JS (was 659 KB this morning); `dist/` holds at 4.3 MB.
 
 ### 12:05 — 3D landed; it does not change the gameplay contract
 32 CC0 `.glb` models (Quaternius, licence in `public/assets/SOURCES.md`) now
@@ -360,7 +373,7 @@ for correctness — this is "what exists", not "what is verified".
 
 | Area | Landed | Notes |
 |---|---|---|
-| **3D** | 32 `.glb`, 2.1 MB | Quaternius, **all CC0**, licence reproduced in `public/assets/SOURCES.md`. Squad, hostiles and level props all real models now; the step-1 boxes are dead code. `AssetLoader` is non-blocking with procedural fallback. |
+| **3D** | 32 `.glb`, 2.1 MB · **committed** `23f7da0` | Quaternius, **all CC0**, licence reproduced in `public/assets/SOURCES.md`. Squad, hostiles and level props all real models now; the step-1 boxes are dead code. `AssetLoader` is non-blocking with procedural fallback. Notes in `3d-environment-notes.md`. |
 | **Voice** | 36 clips, 640 KB | Piper baked offline (`build-voice.mjs`). ALPHA and BETA-1 have different voices. Web Speech kept as fallback. **Closes `suggestion-bug.md` #1** — the thing nobody could test here. |
 | **Audio** | `Soundscape.js`, +13 files | Ambient beds, stereo placement, deny tone. Found and used the event bus on its own. |
 | **Controller** | `Gamepad.js`, `Prompts.js`, `Focus.js`, `PauseMenu.js` | Semantic controls over W3C standard mapping, in-game remap, 69 headless tests. Rewrote `Input.js`. |
@@ -369,7 +382,10 @@ for correctness — this is "what exists", not "what is verified".
 **Compatibility notes from my side:**
 
 - The audio agent found and used the event bus independently — `Soundscape`
-  listens to 8 event types. That is the seam working as intended.
+  subscribes to 7 event types (`missionStart`, `turnStart`, `unitStatus`,
+  `sensorScan`, `healthChanged`, `hostilesRevealed`, `commandRejected`) with no
+  coordination from me. My own HUD wiring uses 4. That is the seam working as
+  intended.
 - The input agent independently fixed the `CommandBar` `dataset.disabled` bug I
   had also found (disabled buttons were being re-enabled on unlock). Theirs
   landed first; I left it alone and added an e2e guard instead.
@@ -388,7 +404,7 @@ for correctness — this is "what exists", not "what is verified".
 | `npm run verify` | ✅ 133,441 assertions · 1344 paths · 36/36 voice lines baked |
 | `npm test` (input) | ✅ 69/69 |
 | `npm run e2e` | ✅ 304 assertions · four missions in real Chromium |
-| `dist/` | 4.3 MB — 3.0 MB models, 680 KB audio, 640 KB voice, 821 KB JS |
+| `dist/` | 4.3 MB — 3.0 MB models, 680 KB audio, 640 KB voice, 854 KB JS (239 KB gzip) |
 
 Core loop confirmed end to end in a real browser:
 **OBSERVE → INTERPRET → ISSUE COMMAND → TRUST/QUESTION → EXECUTE → CONSEQUENCES
@@ -403,6 +419,6 @@ Unchanged from this morning's audit, and not closable by any test I can write:
    this and it has still never been watched.
 3. **Time a full run against the pitch slot.** Voice made turns materially
    longer (§0, 11:40).
-4. **Commit.** `git log` shows nothing since `dd4f4e0` this morning — every
-   agent's work today is uncommitted working-tree state. That is the single
-   biggest risk left, and it is a two-minute job.
+4. **Commit the rest.** 3D went in at `23f7da0` / `03aec4c`. Gameplay, audio,
+   voice and controller are still working-tree only — 66 changed or untracked
+   entries. Still the single biggest risk left, and still a two-minute job.
