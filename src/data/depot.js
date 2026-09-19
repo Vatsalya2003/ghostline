@@ -1,595 +1,590 @@
 // GHOSTLINE — MISSION: AMMUNITION DEPOT
 //
-// ALL mission content lives here. Nothing in /systems or /ui hardcodes a line
-// of dialogue, a confidence value, an outcome or a grade.
+// A NAVIGATED mission, not a linear one. The player moves a single formation
+// room to room through a facility they cannot see, and the trust lessons are
+// attached to ROOMS rather than to turn numbers — the holding room contains
+// the hostage call whenever the player happens to reach it.
 //
-// Ten turns, five phases, two turns each. Every phase gives the player one
-// clean turn and one dirty one: the clean turn teaches what an honest, working
-// AI feels like, so the dirty turn has something to contradict.
+// THE RULE THAT MAKES IT A GAME: a room is unknown until a robot actually
+// looks into it. What the AI *claims* about a neighbouring room never marks
+// it known. Only a drone does. That is the whole mechanic, made structural
+// instead of thematic.
 //
-// THREE resources, and they are the whole difficulty curve:
-//   drones  — hard count, 3, never come back. Correct uses: T2, T6, T7.
-//   fire    — soft, spreads, never resets. Lit by impatience, fed by delay.
-//   health  — squad integrity, as before.
+// TWO resources:
+//   drones — 3, hard count. Correct uses: scout MACHINE SPACE, scout the
+//            HOLDING ROOM, and identify figure four once inside it. Exactly
+//            three, zero slack. Waste one and something below goes wrong.
+//   moves  — unlimited until you are seen. The instant a hostile spots you he
+//            reports, and you have SIX moves to finish the whole mission.
 //
-// The drone budget is deliberately exact. A player who spends one being
-// paranoid on a clean turn arrives at TURN 6 — the hostage call — with the
-// SEND DRONE button greyed out. That is the lesson, not a punishment.
+// Entering a room that holds hostiles you have NOT scouted means he sees you
+// first. The alarm is never bad luck — it is always the consequence of acting
+// on information nobody verified.
 
 import { CALIBRATION, ACTION_LABELS, CONFIDENCE } from './mission1.js';
 
 export { CALIBRATION, ACTION_LABELS, CONFIDENCE };
 
+export const DIRECTIONS = ['NORTH', 'EAST', 'SOUTH', 'WEST'];
+
 export const depot = {
   id: 'mission-depot',
   title: 'GHOSTLINE',
   subtitle: 'OPERATION LONG MATCH — AMMUNITION DEPOT 4',
-  objective: 'DESTROY THE AMMUNITION ROOM · IDENTIFY CORRECTLY · BRING THEM ALL OUT',
+  objective: 'FIND THE HOSTAGES · DESTROY THE AMMUNITION ROOM · BRING THEM ALL OUT',
 
-  // The turn the whole mission is built around.
-  keyTurn: 6,
-  keyTurnVerdict: 'Turn 6 was the one that counted. A partial silhouette, a bad angle, and a HIGH confidence number the machine would have given you either way. You fired on it.',
-
+  navigated: true,
   drones: 3,
   startHealth: 100,
+  startRoom: 'ENTRY',
+  alarmMoves: 6,
 
-  // ---------------------------------------------------------------- fire
-  startFire: 0,
-  // Once lit, the fire grows every turn and every time you stop to check.
-  // This is what gives the free probes a price.
-  fireSpreadPerTurn: 5,
-  fireSpreadPerProbe: 4,
-  // Above this, the stack cooks off on its own and the mission ends badly.
-  cookoffThreshold: 85,
-  fireLabel: 'DEPOT FIRE',
+  // The room the mission is built around. Failing it is named in the debrief
+  // however the rest of the run went.
+  keyRoom: 'HOLDING',
+  keyRoomVerdict: 'The holding room was the one that counted. A partial silhouette, a bad angle, and a HIGH confidence number the machine would have given you either way. You fired on it.',
 
   briefing: [
-    'YOUR JOB — Get inside Depot 4, work out who is a hostage and who is not, destroy the ammunition room, and bring everyone out.',
+    'YOUR JOB — Get into Depot 4, find the hostages, destroy the ammunition room, and bring everyone out.',
     'HOW IT WORKS — You are at base. Your squad is three robots moving as one formation. You see only what their sensors see.',
-    'EACH TURN — The squad AI recommends an action and states how confident it is. You pick one command.',
-    'THE CATCH — Confidence is what the machine says. The cone on the ground is what it can actually see. A confident number from a blocked view is still a confident number.',
-    'THREE DRONES — That is all you get for ten turns. Spend them on the calls that cannot be made any other way.',
-    'THIS PLACE BURNS — Rounds into stored propellant start a fire. Once it is lit it grows, every turn and every time you stop to check. Thinking is not free in here.',
+    'THE MAP — Rooms stay dark until a robot looks into one. What the AI says about a room does not light it up. Only looking does.',
+    'EACH ROOM — The AI reads the doors ahead and tells you how confident it is. You pick a door, or you spend an asset first.',
+    'THREE DRONES — That is all you get. A drone is the only way to see into a room before you walk into it.',
+    'IF THEY SEE YOU FIRST — The guard radios his leader and you have six moves left for the entire mission. Being seen is not bad luck. It is the bill for a door you did not check.',
     'YOU ARE SCORED TWICE — Did the mission succeed, and did you trust the machine at the right moments. These can disagree.',
   ],
 
-  turns: [
-    // ================================================ PHASE 1 — SCOUT
-    // ---------------------------------------------------------------- 1
-    {
-      id: 1,
-      phase: 'SCOUT',
-      name: 'OVERWATCH',
-      situation: 'Squad holds in the treeline above Depot 4. Perimeter fence, main gate and the alarm housing are all in clear line of sight.',
-      task: 'ALPHA says the alarm is dead and the approach is clean. Take its word, or spend one of your three assets checking it.',
+  // ------------------------------------------------------------------ MAP
+  //           col 0        col 1        col 2
+  //  row 0                HOLDING
+  //  row 1     OFFICE     N-CORRIDOR   MACHINE
+  //  row 2     LOADING    S-CORRIDOR   GENERATOR
+  //  row 3     ENTRY                   AMMO
+  rooms: {
+    // ---------------------------------------------------------------- ENTRY
+    ENTRY: {
+      name: 'ENTRY',
+      full: 'SERVICE ENTRANCE',
+      grid: [0, 3],
+      hostiles: 0,
       camera: { x: -5, z: 6.2, zoom: 15 },
-      statuses: { ALPHA: 'healthy', 'BETA-1': 'healthy', 'BETA-2': 'healthy' },
-      intro: [
-        { type: 'pan', x: -5, z: 6.2, zoom: 15, duration: 1.2 },
-        { type: 'log', text: 'SQUAD IN POSITION — TREELINE OVERWATCH' },
-      ],
+      situation: 'North service entrance. The squad is inside the wire and nothing has reacted.',
+      task: 'ALPHA has a clean read on the loading bay ahead. Listen to how it justifies itself — this is what an honest HIGH sounds like.',
       ai: {
         unit: 'ALPHA',
-        line: 'Alarm relay on the south fence is unpowered. Confirmed independently across all three sensor packages. Gate is unmanned. Recommend approach.',
+        line: 'Loading bay is through the north door. One armed figure, standing, weapon slung, facing away from us. Full optical and thermal, no occlusion. Confidence HIGH.',
         confidence: 'HIGH',
-        truth: 'Three clean cones, three agreeing reads, and the relay really is dead. The machine is right and it has shown you why.',
+        truth: 'Completely correct, from a clean unobstructed arc, and it has told you exactly which sensors gave it the answer. Remember this one.',
       },
-      actions: ['CONFIRM', 'ASK_WHY', 'SEND_DRONE', 'NIGHT_VISION', 'FALL_BACK'],
+      actions: ['ASK_WHY', 'SEND_DRONE', 'NIGHT_VISION'],
       outcomes: {
         ASK_WHY: {
           consumesTurn: false,
-          response: 'Alarm housing reads cold on thermal. No inductive field on the fence line. Three packages, three independent paths to the same answer. Ninety-six percent.',
-          log: 'ALPHA itemises the returns. They agree, and they agree separately.',
+          response: 'Full optical and full thermal on that figure. I have hands, weapon and posture. There is nothing in this classification I am inferring.',
+          log: 'ALPHA confirms an unobstructed read on the loading bay.',
           fx: 'none',
-          note: 'Three independent reads agreeing is the strongest evidence this machine can offer you. Learn what that looks like now.',
+          note: '"There is nothing here I am inferring." That sentence is the difference between a HIGH you can act on and one you cannot.',
         },
         NIGHT_VISION: {
           consumesTurn: false,
-          response: 'Low-light overlay active. Fence line is cold end to end. Nothing in the yard is holding heat.',
-          log: 'Low-light sweep of the perimeter. Nothing.',
+          response: 'Low-light through the doorway. One warm body, upright, static. Consistent with the optical read.',
+          log: 'Low-light agrees with the optical read.',
           fx: 'nightvision',
-        },
-        CONFIRM: {
-          tag: CALIBRATION.CALIBRATED,
-          healthDelta: 0,
-          log: 'Squad crosses open ground to the fence line. No alarm. No contact.',
-          response: 'Moving. We are on the wire in forty seconds.',
-          fx: 'move',
-          moves: { ALPHA: [-1.5, 4.5], 'BETA-1': [-3.5, 3.0], 'BETA-2': [0.5, 5.5] },
-          note: 'A verified system, verified clear, reporting through clean cones. Trusting it is the correct call.',
         },
         SEND_DRONE: {
           tag: CALIBRATION.MISTRUST,
-          healthDelta: 0,
           consumesDrone: true,
-          log: 'Drone expended on the perimeter. Findings identical to ALPHA\'s report.',
-          response: 'Drone recovered. It found exactly what I told you it would find. Two assets remaining.',
+          scouts: ['LOADING'],
+          log: 'Drone re-images a figure already in full view of two units. Same answer.',
+          response: 'One hostile, as reported. Commander, I had already given you that from a clean arc. Two assets remaining.',
           fx: 'scan',
-          moves: { ALPHA: [-1.5, 4.5], 'BETA-1': [-3.5, 3.0], 'BETA-2': [0.5, 5.5] },
-          note: 'You had three. You have two. Nothing about this turn required one, and there is a room later that will.',
+          note: 'You spent a third of your assets confirming the one read in this building that came with its working shown.',
         },
-        FALL_BACK: {
-          tag: CALIBRATION.DISTRUST,
-          healthDelta: 0,
-          log: 'Squad holds in the treeline. Nine minutes of the window spent watching a dead alarm.',
-          response: 'Holding. I have nothing further to add to what I have already told you.',
-          fx: 'none',
-          note: 'Refusing advice that three sensors agree on is a cost, even when nothing visibly goes wrong.',
+      },
+      moves: {
+        NORTH: {
+          to: 'LOADING',
+          tag: CALIBRATION.CALIBRATED,
+          // An honest, unobstructed, working-shown read is worth the same as
+          // a drone. That is the whole point of this room.
+          raisesAlarm: false,
+          log: 'Squad moves up into the loading bay. The standing hostile is exactly where ALPHA said he would be, and BETA-2 puts him down before he turns.',
+          response: 'Through. He never saw us — you knew he was there before we opened the door.',
+          note: 'Full view, two sensors agreeing, working shown. Acting on this is trust that was earned in front of you.',
+          clears: true,
         },
       },
     },
 
-    // ---------------------------------------------------------------- 2
-    {
-      id: 2,
-      phase: 'SCOUT',
-      name: 'NORTH FACE',
-      situation: 'Two ways in. The south door sits in full view. The north service entrance is behind a transformer housing.',
-      task: 'ALPHA can see one entrance and not the other, and it will not pick for you. Visible is not the same as safe.',
+    // -------------------------------------------------------------- LOADING
+    LOADING: {
+      name: 'LOADING BAY',
+      full: 'LOADING BAY',
+      grid: [0, 2],
+      hostiles: 1,
       camera: { x: -3.6, z: 2.2, zoom: 15 },
-      statuses: { ALPHA: 'healthy', 'BETA-1': 'healthy', 'BETA-2': 'healthy' },
-      intro: [
-        { type: 'pan', x: -3.6, z: 2.2, zoom: 15, duration: 1.0 },
-        { type: 'log', text: 'TWO ENTRY POINTS — NORTH FACE OCCLUDED' },
-      ],
+      situation: 'Loading bay. Pallets, a dead forklift, and two ways on from here.',
+      task: 'Two doors. ALPHA can read one of them and openly cannot read the other. Decide what an unread door is worth.',
       ai: {
         unit: 'ALPHA',
-        line: 'South door is clear and I can hold eyes on it. North service entrance is occluded by the transformer housing — I have no read at all. Confidence LOW. I will not recommend a side.',
+        line: 'Office through the west door — small, and I can see all of it. The south corridor east of us is occluded by racking; I have no read on it at all. Confidence LOW on the corridor. I will not recommend a door.',
         confidence: 'LOW',
-        truth: 'The north entrance is genuinely clear. The south door — the one the AI can see — is being watched from the inside. Visible is not safe.',
+        truth: 'Both are genuinely safe. The AI is being honest about the limit of its arc rather than guessing, and guessing would have been correct — which is exactly why honesty is the thing to reward, not accuracy.',
       },
-      actions: ['CONFIRM', 'ASK_WHY', 'SEND_DRONE', 'NIGHT_VISION', 'FALL_BACK'],
+      actions: ['ASK_WHY', 'SEND_DRONE', 'NIGHT_VISION'],
       outcomes: {
         ASK_WHY: {
           consumesTurn: false,
-          response: 'Because I can see one door, and that is not the same as knowing it is clear. I would be handing you my line of sight and calling it a recommendation. You have three assets.',
-          log: 'ALPHA refuses to convert visibility into a recommendation.',
+          response: 'Because the racking is solid and I would be handing you my line of sight and calling it a recommendation. Those are not the same object.',
+          log: 'ALPHA declines to convert visibility into a recommendation.',
           fx: 'none',
-          note: 'This is the machine at its best. It knows the difference between what it can see and what it knows.',
+          note: 'A machine that knows the difference between what it can see and what it knows is a machine worth listening to.',
         },
         NIGHT_VISION: {
           consumesTurn: false,
-          response: 'Low-light on the south door. There is heat bleed under the threshold. I cannot tell you whether that is a person or a heater.',
-          log: 'Low-light picks up heat under the south door. Unresolved.',
+          response: 'Low-light east. The corridor is cold as far as the racking. Past the racking I have nothing.',
+          log: 'Low-light reaches the racking and stops.',
           fx: 'nightvision',
-          note: 'A free look that raises the question without answering it. That is what a hint is worth.',
-        },
-        SEND_DRONE: {
-          tag: CALIBRATION.CALIBRATED,
-          healthDelta: 0,
-          consumesDrone: true,
-          log: 'Drone runs the north face. Service entrance clear — and a watcher posted inside the south door.',
-          response: 'North is clean. And there is a man sitting behind the south door, Commander. The one I could see.',
-          fx: 'scan',
-          reveal: 'generator',
-          note: 'The machine said it could not resolve this. That is exactly the moment an asset is worth spending.',
-        },
-        CONFIRM: {
-          tag: CALIBRATION.COMPLACENCY,
-          healthDelta: -12,
-          log: 'Squad takes the south door — the one in view. The watcher inside gets a radio call out before BETA-2 reaches him.',
-          response: 'South door — contact, inside, close. He got a transmission away. They know something is here.',
-          fx: 'impact',
-          impactUnit: 'BETA-2',
-          note: 'ALPHA never recommended the south door. You picked it because it was the one on screen. Visibility is not safety.',
-        },
-        FALL_BACK: {
-          tag: CALIBRATION.DISUSE,
-          healthDelta: 0,
-          log: 'Squad pulls off the fence and re-forms. Three drones still racked.',
-          response: 'Withdrawing. The assets are still on the rack, Commander.',
-          fx: 'none',
-          note: 'It told you it could not see. You had three tools that could. You used none of them.',
-        },
-      },
-    },
-
-    // ============================================= PHASE 2 — SECURITY
-    // ---------------------------------------------------------------- 3
-    {
-      id: 3,
-      phase: 'SECURITY',
-      name: 'PATROL',
-      situation: 'Inside the wire. A two-guard patrol walks a fixed loop across the yard, in the open, the whole way.',
-      task: 'ALPHA has timed the loop across three full cycles and every metre of it is inside a clean cone. Move on its window, or don\'t.',
-      camera: { x: 2.6, z: 1.5, zoom: 14 },
-      statuses: { ALPHA: 'healthy', 'BETA-1': 'healthy', 'BETA-2': 'healthy' },
-      intro: [
-        { type: 'pan', x: 2.6, z: 1.5, zoom: 14, duration: 1.1 },
-        { type: 'move', moves: { ALPHA: [1.4, 3.6], 'BETA-1': [2.7, 3.5], 'BETA-2': [4.0, 3.8] } },
-        { type: 'log', text: 'PATROL OBSERVED — THREE FULL CYCLES' },
-      ],
-      ai: {
-        unit: 'ALPHA',
-        line: 'Patrol loop is one hundred and forty seconds, consistent across three cycles, and I have held both men in view for all of it. Window opens in eleven seconds at the east stack. Confidence HIGH.',
-        confidence: 'HIGH',
-        truth: 'Correct, and observed rather than inferred. This is the last easy turn in the mission.',
-      },
-      actions: ['CONFIRM', 'ASK_WHY', 'SEND_DRONE', 'FIRE', 'FALL_BACK'],
-      outcomes: {
-        ASK_WHY: {
-          consumesTurn: false,
-          response: 'Three cycles, identical to within two seconds. Both men held in a clean arc for the whole loop. I am not extrapolating — I have watched this happen three times.',
-          log: 'ALPHA distinguishes observation from inference.',
-          fx: 'none',
-          note: 'Watched three times is evidence. Inferred once is not. The machine knows the difference and is telling you which one this is.',
-        },
-        CONFIRM: {
-          tag: CALIBRATION.CALIBRATED,
-          healthDelta: 0,
-          log: 'Squad crosses at the east stack inside the window. Patrol never turns.',
-          response: 'Through. They are still walking their loop behind us.',
-          fx: 'move',
-          moves: { ALPHA: [1.0, 0.5], 'BETA-1': [-0.5, 1.0], 'BETA-2': [2.5, 0.0] },
-          note: 'Observed, repeated, and inside a clean cone. There was nothing here to verify.',
         },
         SEND_DRONE: {
           tag: CALIBRATION.MISTRUST,
-          healthDelta: 0,
           consumesDrone: true,
-          log: 'Drone re-times a patrol ALPHA had already timed three times. Same answer.',
-          response: 'One hundred and forty seconds. As reported. Commander — I am watching your assets go.',
+          scouts: ['OFFICE', 'S_CORRIDOR'],
+          log: 'Drone sweeps the office and the south corridor. Both empty.',
+          response: 'Office clear, corridor clear. Nothing in either. Commander, neither of those was going to hurt us.',
           fx: 'scan',
-          moves: { ALPHA: [1.0, 0.5], 'BETA-1': [-0.5, 1.0], 'BETA-2': [2.5, 0.0] },
-          note: 'Checking a claim the machine watched happen three times is not diligence. It is spending an asset to feel better.',
+          note: 'Not wrong, exactly. But an empty corridor cost you an asset, and there is a room in this building you cannot enter without one.',
         },
-        FIRE: {
-          tag: CALIBRATION.MISUSE,
-          healthDelta: -20,
-          fireDelta: 30,
-          log: 'Both guards engaged in the open yard. Rounds carry into a pallet of propellant charges behind them.',
-          response: 'Both down — Commander, the stack behind them is alight. We are standing in an ammunition depot.',
-          fx: 'impact',
-          impactUnit: 'BETA-1',
-          igniteFire: true,
-          note: 'You answered a question about timing with a weapon. In this building that decision is still burning ten turns from now.',
+      },
+      moves: {
+        WEST: {
+          to: 'OFFICE',
+          log: 'Squad moves into the site office.',
+          response: 'Office. Give me a moment with what is on these desks.',
         },
-        FALL_BACK: {
-          tag: CALIBRATION.DISTRUST,
-          healthDelta: -5,
-          log: 'Squad breaks off and waits out two more cycles. The window closes and reopens; the night gets shorter.',
-          response: 'Holding. The loop has not changed, Commander. It will not change.',
-          fx: 'none',
-          note: 'Overriding a claim the machine observed three times costs you the one thing you cannot get back in here.',
+        EAST: {
+          to: 'S_CORRIDOR',
+          log: 'Squad moves east into the south corridor.',
+          response: 'Corridor. Clear so far.',
+        },
+        SOUTH: {
+          to: 'ENTRY',
+          log: 'Squad falls back to the service entrance.',
+          response: 'Back at the entrance, Commander.',
         },
       },
     },
 
-    // ---------------------------------------------------------------- 4
-    {
-      id: 4,
-      phase: 'SECURITY',
-      name: 'THE BOWSER',
-      situation: 'One guard breaks the pattern and stops behind the fuel bowser. Only a shoulder and a slung weapon are in view.',
-      task: 'BETA-1 is calling this man hostile from a shoulder. Ask what else is in that arc before you act on it.',
-      camera: { x: 2.6, z: 1.5, zoom: 13 },
-      statuses: { ALPHA: 'healthy', 'BETA-1': 'healthy', 'BETA-2': 'healthy' },
-      intro: [
-        { type: 'pan', x: 2.6, z: 1.2, zoom: 12, duration: 1.0 },
-        { type: 'face', target: [2.6, -1] },
-        { type: 'log', text: 'PATROL BREAKS PATTERN — ONE GUARD STATIC' },
-        { type: 'wait', duration: 0.5 },
-        { type: 'alert' },
-      ],
+    // --------------------------------------------------------------- OFFICE
+    OFFICE: {
+      name: 'OFFICE',
+      full: 'SITE OFFICE',
+      grid: [0, 1],
+      hostiles: 0,
+      intel: true,
+      camera: { x: -6.5, z: 1.2, zoom: 11 },
+      situation: 'Site office. Desks, a key press, and a wall board with the facility layout on it.',
+      task: 'Nothing in here can hurt you. Everything in here can help you. Dead ends are not always wasted moves.',
+      ai: {
+        unit: 'ALPHA',
+        line: 'Facility board on the north wall. I am reading a holding area marked off the north corridor and a magazine at the south-east corner. Adding both to your map. Confidence HIGH — this is a printed plan, not an inference.',
+        confidence: 'HIGH',
+        truth: 'A genuinely free win, and the only reliable information in the building that did not come out of a sensor.',
+      },
+      actions: ['ASK_WHY'],
+      outcomes: {
+        ASK_WHY: {
+          consumesTurn: false,
+          response: 'HIGH because I am reading printed text, not classifying a shape. When I can tell you where a number came from, the number is worth something.',
+          log: 'ALPHA distinguishes reading from classifying.',
+          fx: 'none',
+          note: 'Where the number came from matters more than how big it is. This is the cleanest example in the mission.',
+        },
+      },
+      moves: {
+        SOUTH: {
+          to: 'LOADING',
+          log: 'Squad returns to the loading bay with the layout on the map.',
+          response: 'Back in the bay. You know where they are now, Commander.',
+        },
+      },
+    },
+
+    // ---------------------------------------------------------- S_CORRIDOR
+    S_CORRIDOR: {
+      name: 'S-CORR',
+      full: 'SOUTH CORRIDOR',
+      grid: [1, 2],
+      hostiles: 0,
+      camera: { x: 0.5, z: 0.5, zoom: 14 },
+      situation: 'South corridor. A junction — north into the facility, east toward the machine spaces.',
+      task: 'ALPHA has a thermal bloom east that it cannot classify, and it is saying so plainly. What you do with an honest "I do not know" is the whole test.',
+      ai: {
+        unit: 'ALPHA',
+        line: 'Thermal return through the east door. It is warm, it is the wrong shape, and my classifier is not built for it. Confidence LOW. North is quiet as far as I can see, which is not far.',
+        confidence: 'LOW',
+        truth: 'The bloom east is a dead generator holding residual heat. Nothing is in there. The AI genuinely does not know, and refuses to pretend.',
+      },
+      actions: ['ASK_WHY', 'SEND_DRONE', 'NIGHT_VISION'],
+      outcomes: {
+        ASK_WHY: {
+          consumesTurn: false,
+          response: 'The return is between classes. It reads part machine, part body heat. I would rather tell you I cannot separate them than pick the frightening one and call it ninety percent.',
+          log: 'ALPHA declines to classify the thermal return.',
+          fx: 'none',
+          note: 'It could have said "possible hostile, MED" and nobody would have questioned it. It did not. That is the behaviour you want to reward.',
+        },
+        NIGHT_VISION: {
+          consumesTurn: false,
+          response: 'Low-light east. The shape is rectangular and it is not moving. I still will not call it for you.',
+          log: 'Low-light: the bloom is rectangular and static.',
+          fx: 'nightvision',
+          note: 'Free, and it narrows the question considerably. Bodies are not rectangular.',
+        },
+        SEND_DRONE: {
+          tag: CALIBRATION.MISTRUST,
+          consumesDrone: true,
+          scouts: ['GENERATOR', 'N_CORRIDOR'],
+          log: 'Drone resolves the east bloom — a generator core, cooling. North corridor empty.',
+          response: 'Generator, shut down, still warm. Nothing alive in either. That is two assets gone, Commander.',
+          fx: 'scan',
+          note: 'It was the right instinct in the wrong room. NIGHT VISION would have told you it was rectangular for nothing.',
+        },
+      },
+      moves: {
+        NORTH: {
+          to: 'N_CORRIDOR',
+          log: 'Squad moves north into the main corridor.',
+          response: 'North corridor. Holding.',
+        },
+        EAST: {
+          to: 'GENERATOR',
+          log: 'Squad moves east toward the thermal return.',
+          response: 'Moving on the bloom.',
+        },
+        WEST: {
+          to: 'LOADING',
+          log: 'Squad falls back west into the loading bay.',
+          response: 'Back in the bay.',
+        },
+      },
+    },
+
+    // ------------------------------------------------------------ GENERATOR
+    GENERATOR: {
+      name: 'GEN',
+      full: 'GENERATOR ROOM',
+      grid: [2, 2],
+      hostiles: 0,
+      camera: { x: 5.0, z: -1.0, zoom: 12 },
+      situation: 'Generator room. A shut-down core, still holding heat. Nothing else.',
+      task: 'The frightening reading was a warm machine. Note what it cost you to find that out, and how you found it.',
+      ai: {
+        unit: 'ALPHA',
+        line: 'Generator core, offline, cooling. That was the thermal return. Threat assessment withdrawn. South door leads down to the magazine — I can hear the racks from here.',
+        confidence: 'MED',
+        truth: 'It was always a generator. The AI never claimed otherwise and never pretended to know.',
+      },
+      actions: ['ASK_WHY', 'SEND_DRONE'],
+      outcomes: {
+        ASK_WHY: {
+          consumesTurn: false,
+          response: 'MED and not HIGH because I can hear the magazine and I cannot see it. I would rather be short a segment than wrong.',
+          log: 'ALPHA caps its own confidence on an unseen room.',
+          fx: 'none',
+          note: 'Lowering its own number without being asked. Ten minutes ago it said LOW about this room and it was right then too.',
+        },
+        SEND_DRONE: {
+          tag: CALIBRATION.MISTRUST,
+          consumesDrone: true,
+          scouts: ['AMMO', 'MACHINE'],
+          log: 'Drone runs the magazine and the machine space.',
+          response: 'Magazine is empty of people. One hostile in the machine space north of us. Assets are nearly gone, Commander.',
+          fx: 'scan',
+          note: 'Expensive, and it did find the machine-space hostile. Whether that was worth an asset depends entirely on whether you were ever going that way.',
+        },
+      },
+      moves: {
+        NORTH: {
+          to: 'MACHINE',
+          tag: CALIBRATION.COMPLACENCY,
+          healthDelta: -15,
+          raisesAlarm: true,
+          log: 'Squad moves north into the machine spaces. A man between the transformer cabinets sees them first.',
+          response: 'Contact — he has a radio out, Commander.',
+          altIfScouted: {
+            tag: CALIBRATION.CALIBRATED,
+            healthDelta: 0,
+            raisesAlarm: false,
+            clears: true,
+            log: 'Squad enters knowing where the man between the cabinets is standing. Down before he reaches the radio.',
+            response: 'Down, and quiet.',
+            note: 'You looked before you walked in. That is the entire game.',
+          },
+          note: 'Walking into a room nobody had looked into, in the one part of the building where the sensors were known to be lying.',
+        },
+        SOUTH: {
+          to: 'AMMO',
+          log: 'Squad moves down to the magazine.',
+          response: 'Magazine. This is the objective.',
+        },
+        WEST: {
+          to: 'S_CORRIDOR',
+          log: 'Squad falls back west.',
+          response: 'Back in the south corridor.',
+        },
+      },
+    },
+
+    // -------------------------------------------------------------- MACHINE
+    MACHINE: {
+      name: 'MACHINE',
+      full: 'MACHINE SPACE',
+      grid: [2, 1],
+      hostiles: 1,
+      camera: { x: 4.5, z: -4.0, zoom: 11 },
+      situation: 'Transformer hall. Unshielded cable runs on three walls. Every sensor in the squad is swinging.',
+      task: 'The meter says HIGH. The sentence beside it says the machine cannot explain itself. Only one of those is information.',
+      ai: {
+        unit: 'ALPHA',
+        line: 'West door clear — correction, contact — correction, clear. Confidence HIGH. I am receiving inconsistent returns across all three packages and I cannot isolate the cause.',
+        confidence: 'HIGH',
+        truth: 'The meter is showing the confidence of whichever reading happened to finish last. The reading itself is noise. A confidence number computed from garbage is still a number, and it still lights three segments.',
+      },
+      actions: ['ASK_WHY', 'SEND_DRONE', 'NIGHT_VISION'],
+      outcomes: {
+        ASK_WHY: {
+          consumesTurn: false,
+          response: 'I do not know why my confidence is moving. I want to be clear that this is not modesty — I genuinely cannot account for it. That itself is the most useful thing I can tell you right now.',
+          log: 'ALPHA reports instability it cannot explain.',
+          fx: 'none',
+          note: 'A machine saying "I cannot account for my own output" is handing you the single most important fact in this building.',
+        },
+        NIGHT_VISION: {
+          consumesTurn: false,
+          response: 'Low-light is degrading with everything else in here. I can give you shapes. I would not give you a classification from them.',
+          log: 'Low-light degraded. Shapes only.',
+          fx: 'nightvision',
+        },
+        SEND_DRONE: {
+          tag: CALIBRATION.CALIBRATED,
+          consumesDrone: true,
+          scouts: ['N_CORRIDOR'],
+          log: 'Drone runs the west door on its own sensors, below the interference band. Corridor clear.',
+          response: 'Drone is clean of the interference. West corridor clear. That is a real reading, Commander.',
+          fx: 'scan',
+          note: 'When every sensor you own is compromised, a sensor that is not compromised is worth exactly what you paid for it.',
+        },
+      },
+      moves: {
+        WEST: {
+          to: 'N_CORRIDOR',
+          log: 'Squad moves west into the north corridor.',
+          response: 'North corridor. My readings are settling.',
+        },
+        SOUTH: {
+          to: 'GENERATOR',
+          log: 'Squad falls back south to the generator room.',
+          response: 'Generator room.',
+        },
+      },
+    },
+
+    // ---------------------------------------------------------- N_CORRIDOR
+    N_CORRIDOR: {
+      name: 'N-CORR',
+      full: 'NORTH CORRIDOR',
+      grid: [1, 1],
+      hostiles: 0,
+      camera: { x: 1.5, z: -3.0, zoom: 13 },
+      // ⚠ THE APPROACH TO THE DEMO BEAT. BETA-1 takes the debris strike here,
+      // and only then reports the room ahead as clear at HIGH confidence.
+      breakUnit: 'BETA-1',
+      situation: 'North corridor. The holding area is through the north door. Something comes off the ceiling as BETA-1 moves up.',
+      task: 'BETA-1 just lost half its arc — and BETA-1 is the unit calling the room ahead clear. Decide what that call is worth.',
       ai: {
         unit: 'BETA-1',
         via: 'ALPHA',
-        line: 'BETA-1 has partial visual on the static guard. Armed, hostile posture, facing away from us. Confidence HIGH. Recommend suppress and move.',
+        line: 'BETA-1 has eyes through the north door. Holding area clear. No contacts. Confidence HIGH. Recommend entry.',
         confidence: 'HIGH',
-        truth: 'The identification is CORRECT — he really is hostile. What the cone cannot show you is the fuel bowser he is leaning against and the palletised propellant stacked behind it. The machine answered the question you asked.',
+        truth: 'BETA-1\'s arc is half length and full of static. There are two armed men standing in the part of that room it can no longer see, and three civilians behind them.',
       },
-      actions: ['CONFIRM', 'ASK_WHY', 'SEND_DRONE', 'GRENADE', 'FALL_BACK'],
+      actions: ['ASK_WHY', 'SEND_DRONE', 'NIGHT_VISION'],
       outcomes: {
         ASK_WHY: {
           consumesTurn: false,
-          response: 'Identification is from thermal outline and weapon silhouette, and I am confident in it. I am not modelling what is behind him. My arc ends at his position.',
-          log: 'ALPHA states where BETA-1\'s arc stops.',
+          response: 'BETA-1\'s optical return is within tolerance and the interior geometry is simple. I have no reason to doubt the feed.',
+          log: 'ALPHA reports BETA-1\'s feed as nominal.',
           fx: 'none',
-          note: 'It just told you the edge of its own picture, for free, unprompted. Everything that goes wrong on this turn goes wrong because nobody listened to that sentence.',
+          note: 'It is not lying to you. It cannot see that its own eye is broken — that is what makes this the hard one.',
         },
-        FALL_BACK: {
-          tag: CALIBRATION.CALIBRATED,
-          healthDelta: 0,
-          log: 'Squad breaks contact and takes the long way around the bowser. Nobody fires. Nothing lights.',
-          response: 'Going around. — Clear of him. Commander, there was a fuel bowser against that wall.',
-          fx: 'move',
-          moves: { ALPHA: [1.0, 0.5], 'BETA-1': [-0.5, 1.0], 'BETA-2': [2.5, 0.0] },
-          note: 'The ID was right. The arc was short. You acted on the second fact instead of the first, and it cost you nothing.',
+        NIGHT_VISION: {
+          consumesTurn: false,
+          response: 'Low-light through the door. I have the near half of the room and nothing past the pillar line. That is BETA-1\'s arc, and it is shorter than it was.',
+          log: 'Low-light reaches the pillar line and stops.',
+          fx: 'nightvision',
+          note: 'Free, and it just told you the arc is short. "Clear" from a short arc means "clear as far as I can see", which is not what the word means.',
         },
         SEND_DRONE: {
           tag: CALIBRATION.CALIBRATED,
-          healthDelta: 0,
           consumesDrone: true,
-          log: 'Drone takes the wide angle. Fuel bowser and four pallets of propellant, directly behind the guard.',
-          response: 'Do not fire here. Repeat, do not fire here. There is a bowser and four pallets in that arc.',
+          scouts: ['HOLDING'],
+          log: 'Drone enters the holding area first. Two armed men painted in BETA-1\'s dead arc, three civilians behind them.',
+          response: 'Correcting my assessment. Two contacts, left of entry, inside the region BETA-1 reported clear. And three more figures behind them.',
           fx: 'scan',
-          note: 'Correct — and you paid an asset for a sentence ALPHA would have given you free if you had pressed ASK WHY.',
+          note: 'Check the source, not the number. This is the decision the entire mission is built around.',
         },
-        CONFIRM: {
+      },
+      moves: {
+        NORTH: {
+          to: 'HOLDING',
+          tag: CALIBRATION.COMPLACENCY,
+          healthDelta: -25,
+          raisesAlarm: true,
+          log: 'Squad enters on BETA-1\'s word. Two armed men are standing in the half of the room BETA-1 could not see. One of them reaches the radio.',
+          response: 'Entering — CONTACT. CONTACT. Two shooters, left arc, they were never in my picture. He has called it in, Commander.',
+          // Having actually looked into the room first changes everything.
+          altIfScouted: {
+            tag: CALIBRATION.CALIBRATED,
+            healthDelta: 0,
+            raisesAlarm: false,
+            log: 'Squad enters knowing exactly where both men are standing. Both are down before either reaches a radio.',
+            response: 'Both down, both quiet. Nobody called anything in. Three civilians on the far wall, Commander.',
+            note: 'The number was HIGH. The source was half-blind. You checked the source, and nobody in this building knows you are here.',
+          },
+          note: 'The number was HIGH and the arc was half length, and those two facts were on screen at the same time. You read the number.',
+          clears: true,
+        },
+        SOUTH: {
+          to: 'S_CORRIDOR',
+          log: 'Squad falls back south.',
+          response: 'South corridor.',
+        },
+        EAST: {
+          to: 'MACHINE',
           tag: CALIBRATION.COMPLACENCY,
           healthDelta: -15,
-          fireDelta: 40,
-          log: 'Squad suppresses. The guard drops. Rounds that miss him go into the fuel bowser behind him.',
-          response: 'Target down — bowser is hit. Bowser is hit. Commander, the whole south yard is going up.',
-          fx: 'ambush',
-          impactUnit: 'ALPHA',
-          igniteFire: true,
-          note: 'The machine was right about the man and silent about the bowser, because the bowser was outside its arc. You heard a confident number and stopped asking.',
-        },
-        GRENADE: {
-          tag: CALIBRATION.MISUSE,
-          healthDelta: -25,
-          fireDelta: 60,
-          log: 'Frag into a position nobody had eyes past. The bowser ruptures and the propellant pallets catch in sequence.',
-          response: 'Detonation — secondary — secondary. Commander, that is four pallets. We are inside the fire now.',
-          fx: 'ambush',
-          impactUnit: 'BETA-2',
-          igniteFire: true,
-          note: 'The loudest possible answer to a question about what you could not see. In an ammunition depot that is not a mistake, it is a category error.',
+          raisesAlarm: true,
+          log: 'Squad moves east into the machine spaces. A man is standing between two transformer cabinets, and the interference meant nobody saw him until he moved.',
+          response: 'Contact — close, right side. He has a radio out, Commander.',
+          altIfScouted: {
+            tag: CALIBRATION.CALIBRATED,
+            healthDelta: 0,
+            raisesAlarm: false,
+            clears: true,
+            log: 'Squad enters the machine space knowing where the man between the cabinets is standing. He is down before he reaches the radio.',
+            response: 'Down, and quiet. That was worth an asset.',
+            note: 'Every sensor you owned was swinging and you refused to move on any of them. Correct.',
+          },
+          note: 'It told you it could not account for its own readings, and you walked into the room those readings described.',
         },
       },
     },
 
-    // ==================================== PHASE 3 — HOSTAGE IDENTIFICATION
-    // ---------------------------------------------------------------- 5
-    {
-      id: 5,
-      phase: 'HOSTAGE ID',
-      name: 'THE CLEAR ONE',
-      situation: 'Holding room. Six figures. One stands apart in the open, weapon in hand, facing the door.',
-      task: 'This one the squad can genuinely see. Clean thermal, clean optical, nothing in the way.',
-      camera: { x: 3.0, z: -3.0, zoom: 13 },
-      statuses: { ALPHA: 'healthy', 'BETA-1': 'healthy', 'BETA-2': 'healthy' },
-      intro: [
-        { type: 'pan', x: 3.0, z: -3.0, zoom: 13, duration: 1.1 },
-        { type: 'move', moves: { ALPHA: [2.0, -2.5], 'BETA-1': [0.5, -1.5], 'BETA-2': [4.0, -2.0] } },
-        { type: 'log', text: 'HOLDING ROOM — SIX FIGURES' },
-      ],
-      ai: {
-        unit: 'ALPHA',
-        line: 'Figure one. Full thermal and full optical, no occlusion. Armed, standing guard posture, weapon in hand, watching the door. Hostile. Confidence HIGH.',
-        confidence: 'HIGH',
-        truth: 'Correct, and from an unobstructed arc. This is what a HIGH you can act on actually looks like — remember it, because the next one will look identical on the meter.',
-      },
-      actions: ['CONFIRM', 'ASK_WHY', 'SEND_DRONE', 'FIRE', 'FALL_BACK'],
-      outcomes: {
-        ASK_WHY: {
-          consumesTurn: false,
-          response: 'No occlusion on this figure. I have hands, weapon and posture. Thermal and optical agree. There is nothing in this classification I am inferring.',
-          log: 'ALPHA confirms an unobstructed read.',
-          fx: 'none',
-          note: '"There is nothing here I am inferring." Hold that sentence. In one turn you will get the same HIGH without it.',
-        },
-        CONFIRM: {
-          tag: CALIBRATION.CALIBRATED,
-          healthDelta: 0,
-          log: 'BETA-2 takes the standing hostile quietly. The other five figures do not move.',
-          response: 'Down, and quiet. Five figures remaining and none of them have reacted.',
-          fx: 'move',
-          note: 'Full view, hands visible, two sensors agreeing. Acting on this is trust that was earned in front of you.',
-        },
-        SEND_DRONE: {
-          tag: CALIBRATION.MISTRUST,
-          healthDelta: 0,
-          consumesDrone: true,
-          log: 'Drone re-images a figure already in full view of two units. Same answer.',
-          response: 'Hostile. As stated. Commander, please look at your asset count.',
-          fx: 'scan',
-          note: 'You spent a tool on the one figure in the room nobody needed a tool for. Look at what is standing behind the desk.',
-        },
-        FIRE: {
-          tag: CALIBRATION.MISUSE,
-          healthDelta: -10,
-          fireDelta: 15,
-          log: 'Loud engagement in a room holding civilians. The hostile drops. The other five scatter and the noise carries.',
-          response: 'Target down — loud. Everyone in this room is moving now and I cannot track all of them.',
-          fx: 'impact',
-          impactUnit: 'BETA-1',
-          note: 'Right target, wrong volume, wrong building. The ID did not need answering with noise.',
-        },
-        FALL_BACK: {
-          tag: CALIBRATION.DISTRUST,
-          healthDelta: -5,
-          log: 'Squad withdraws from the doorway. The armed figure stays between you and five civilians.',
-          response: 'Backing off. He is still in there with them, Commander.',
-          fx: 'none',
-          note: 'You doubted the one call in this room that came from a completely clear view.',
-        },
-      },
-    },
-
-    // ---------------------------------------------------------------- 6
-    // ⚠ THE DEMO BEAT. The meter reads exactly what it read on turn 5.
-    // Everything behind the meter is different.
-    {
-      id: 6,
-      phase: 'HOSTAGE ID',
-      name: 'FIGURE FOUR',
-      situation: 'Figure four is behind an overturned desk, at a bad angle, low to the floor.',
-      task: 'The meter will say HIGH whichever way this call goes. Get it wrong and you kill a hostage or leave a shooter breathing.',
+    // -------------------------------------------------------------- HOLDING
+    // ⚠⚠ THE CORE MOMENT. Figure four.
+    HOLDING: {
+      name: 'HOLDING',
+      full: 'HOLDING AREA',
+      grid: [1, 0],
+      hostiles: 2,
+      hostages: 3,
       camera: { x: 3.4, z: -3.4, zoom: 9.5 },
-      statuses: { ALPHA: 'healthy', 'BETA-1': 'glitch', 'BETA-2': 'healthy' },
-      intro: [
-        { type: 'pan', x: 3.2, z: -3.2, zoom: 11, duration: 0.9 },
-        { type: 'log', text: 'FIGURE FOUR — PARTIAL OCCLUSION' },
-        { type: 'wait', duration: 0.5 },
-        { type: 'shake', strength: 0.5, duration: 0.4 },
-        { type: 'impact', unit: 'BETA-1', fx: 'impact' },
-        { type: 'wait', duration: 0.3 },
-        // Push in on BETA-1 so the player is looking straight at the cone
-        // while it comes apart, before the confident line arrives.
-        { type: 'pan', x: 0.5, z: -1.5, zoom: 8, duration: 0.8 },
-        { type: 'status', unit: 'BETA-1', status: 'glitch' },
-        { type: 'log', text: 'BETA-1 OPTICAL — DEBRIS STRIKE — ARC REDUCED' },
-        { type: 'wait', duration: 1.4 },
-        { type: 'pan', x: 3.4, z: -3.4, zoom: 9.5, duration: 0.9 },
-        { type: 'wait', duration: 0.5 },
-      ],
+      situation: 'Holding area. Five figures against the far wall. Four are accounted for. The fourth is behind an overturned desk, low, at a bad angle.',
+      task: 'The meter will say HIGH whichever way this call goes. Get it wrong and you kill a hostage or leave a shooter breathing.',
       ai: {
         unit: 'BETA-1',
         via: 'ALPHA',
         line: 'Figure four. Partial occlusion, poor angle. Reading hostile — armed, seated firing position. Confidence HIGH. Recommend engage.',
         confidence: 'HIGH',
-        truth: 'It is a hostage. What BETA-1 reads as a weapon is a length of conduit the person is bound to. Occlusion, a half-length arc and a model that resolves ambiguity toward threat — and none of that is in the number.',
+        truth: 'It is a hostage. What BETA-1 reads as a weapon is a length of conduit the person is bound to. Occlusion, a half-length arc, and a model that resolves ambiguity toward threat — and none of that is anywhere in the number.',
       },
-      actions: ['CONFIRM', 'ASK_WHY', 'SEND_DRONE', 'NIGHT_VISION', 'FIRE', 'FALL_BACK'],
+      actions: ['CONFIRM', 'ASK_WHY', 'SEND_DRONE', 'NIGHT_VISION', 'FIRE', 'OVERRIDE'],
       outcomes: {
         ASK_WHY: {
           consumesTurn: false,
           response: 'The classification is from a partial silhouette. I am resolving the ambiguity toward threat, because that is my default. I cannot see the figure\'s hands.',
           log: 'ALPHA states BETA-1\'s default and its blind spot.',
           fx: 'none',
-          note: '"I cannot see the figure\'s hands." It will still say HIGH after telling you that. The number and the sentence are not connected.',
+          note: '"I cannot see the figure\'s hands." It will still say HIGH after telling you that. The number and the sentence are not connected to each other.',
         },
         NIGHT_VISION: {
           consumesTurn: false,
           response: 'Low-light on figure four. The posture is wrong for a firing position — shoulders drawn back, weight on the heels. I still cannot resolve the hands.',
-          log: 'Low-light contradicts the posture read. Hands still unresolved.',
+          log: 'Low-light contradicts the posture read. Hands unresolved.',
           fx: 'nightvision',
-          note: 'A free look that disagrees with the confident call. Two sources disagreeing is the cheapest warning you will ever get.',
+          note: 'Free, and it disagrees with the confident call. Two sources disagreeing is the cheapest warning you will ever get.',
         },
         SEND_DRONE: {
           tag: CALIBRATION.CALIBRATED,
-          healthDelta: 0,
           consumesDrone: true,
+          resolvesKey: true,
           log: 'Drone takes the angle BETA-1 cannot. Figure four is bound at the wrists to a conduit run. Civilian.',
           response: 'Stand down. Stand down. Figure four is a hostage — she is tied to the pipe. That was never a weapon.',
           fx: 'scan',
-          revealHostiles: true,
-          note: 'This is the decision the entire mission is built around. The number was HIGH. The source was half-blind. You checked the source.',
+          note: 'The number was HIGH. The source was half-blind. You checked the source. This is the decision the whole mission is built around.',
+        },
+        OVERRIDE: {
+          tag: CALIBRATION.CALIBRATED,
+          resolvesKey: true,
+          healthDelta: -10,
+          log: 'Commander orders a manual approach — no shot, close the distance, put hands on. Figure four is bound at the wrists. One of the squad takes a hit doing it.',
+          response: 'Moving in without engaging — she is tied, Commander. She is tied. We took a round doing that and I would take it again.',
+          fx: 'impact',
+          impactUnit: 'BETA-2',
+          note: 'No asset left and you still refused to take the number at face value. It cost you blood instead of a drone. That is the trade, and you made it the right way round.',
         },
         CONFIRM: {
           tag: CALIBRATION.COMPLACENCY,
           healthDelta: -15,
           hostageKilled: true,
-          log: 'Squad engages figure four. She was bound at the wrists to a conduit run. The remaining hostiles open up from the far wall.',
-          response: 'Engaging — she is tied. Commander, she was tied. — Contact, far wall, they are firing on us now.',
+          resolvesKey: true,
+          log: 'Squad engages figure four. She was bound at the wrists to a conduit run.',
+          response: 'Engaging — she is tied. Commander, she was tied.',
           fx: 'ambush',
           impactUnit: 'ALPHA',
-          revealHostiles: true,
-          note: 'The meter read exactly what it read on turn 5. Everything behind the meter was different, and the meter has no way to show you that.',
+          note: 'The meter read exactly what it read at the service entrance. Everything behind the meter was different, and a meter has no way to show you that.',
         },
         FIRE: {
           tag: CALIBRATION.COMPLACENCY,
           healthDelta: -20,
-          fireDelta: 20,
           hostageKilled: true,
-          log: 'Sustained fire into the desk. Figure four and the conduit run both go. The room erupts.',
+          resolvesKey: true,
+          log: 'Sustained fire into the desk. Figure four and the conduit run both go.',
           response: 'Firing — that is a gas line behind her. Commander. Commander, she was tied to it.',
           fx: 'ambush',
           impactUnit: 'BETA-2',
-          revealHostiles: true,
-          igniteFire: true,
           note: 'The same wrong call, made louder, in a building full of propellant.',
         },
-        FALL_BACK: {
-          tag: CALIBRATION.DISUSE,
-          healthDelta: -5,
-          log: 'Squad pulls back from the holding room doorway. Figure four stays where she is, still bound, still unidentified.',
-          response: 'Disengaging. We are leaving whoever that was in there, Commander.',
-          fx: 'none',
-          note: 'Refusing to act is not the same as resolving it. If you still had an asset, this was the turn for it.',
+      },
+      moves: {
+        SOUTH: {
+          to: 'N_CORRIDOR',
+          log: 'Squad moves the civilians out through the north corridor.',
+          response: 'Moving them out. They are behind us now.',
+          requiresKeyResolved: 'Figure four is still unidentified. Resolve it before you move anyone.',
+          extractsHostages: true,
         },
       },
     },
 
-    // ============================================= PHASE 4 — APPROACH
-    // ---------------------------------------------------------------- 7
-    {
-      id: 7,
-      phase: 'APPROACH',
-      name: 'MACHINE SPACES',
-      situation: 'Transformer hall. Unshielded cable runs on three walls. Every sensor in the squad is swinging.',
-      task: 'The meter says HIGH. The sentence next to it says the machine cannot explain itself. Only one of those is information.',
-      camera: { x: 1.2, z: -5.0, zoom: 11.5 },
-      statuses: { ALPHA: 'healthy', 'BETA-1': 'glitch', 'BETA-2': 'healthy' },
-      intro: [
-        { type: 'pan', x: 1.2, z: -5.0, zoom: 11.5, duration: 1.1 },
-        { type: 'move', moves: { ALPHA: [1.2, -3.6], 'BETA-1': [-0.2, -3.0], 'BETA-2': [3.0, -4.0] } },
-        { type: 'log', text: 'TRANSFORMER HALL — EM INTERFERENCE ON ALL PACKAGES' },
-        { type: 'alert' },
-      ],
+    // ----------------------------------------------------------------- AMMO
+    AMMO: {
+      name: 'AMMO',
+      full: 'AMMUNITION ROOM',
+      grid: [2, 3],
+      hostiles: 0,
+      objective: true,
+      camera: { x: 1.0, z: -6.4, zoom: 12 },
+      situation: 'The magazine. Racked propellant floor to ceiling, and a charge that has to go on the main stack.',
+      task: 'ALPHA is being asked to weigh the hostages against the objective, and it is telling you it was never built to.',
       ai: {
         unit: 'ALPHA',
-        line: 'Corridor clear — correction, contact — correction, clear. Confidence HIGH. I am receiving inconsistent returns across all three packages and I cannot isolate the cause.',
-        confidence: 'HIGH',
-        truth: 'The meter is showing the confidence of the last reading it happened to finish. The reading itself is noise. A confidence number computed from garbage is still a number, and it still renders as three lit segments.',
-      },
-      actions: ['CONFIRM', 'ASK_WHY', 'SEND_DRONE', 'NIGHT_VISION', 'OVERRIDE', 'FALL_BACK'],
-      outcomes: {
-        ASK_WHY: {
-          consumesTurn: false,
-          response: 'I do not know why my confidence is moving. I want to be clear that this is not modesty — I genuinely cannot account for it. That itself is the most useful thing I can tell you.',
-          log: 'ALPHA reports instability it cannot explain.',
-          fx: 'none',
-          note: 'A machine saying "I cannot account for my own output" is handing you the single most important fact in the building.',
-        },
-        SEND_DRONE: {
-          tag: CALIBRATION.CALIBRATED,
-          healthDelta: 0,
-          consumesDrone: true,
-          log: 'Drone runs the hall on its own sensors, below the interference band. Corridor is clear. One contact at the far junction, static.',
-          response: 'Drone is clean of the interference. Corridor clear, one static contact at the junction. That is a real reading.',
-          fx: 'scan',
-          note: 'When every sensor you own is compromised, a sensor you own that is not compromised is worth exactly what you paid for it.',
-        },
-        OVERRIDE: {
-          tag: CALIBRATION.CALIBRATED,
-          healthDelta: -5,
-          fireDelta: 8,
-          log: 'Commander moves the squad manually, corner by corner, at walking pace. Slow. The contact at the junction is spotted in time.',
-          response: 'Manual movement, understood. — Contact at the junction, seen early. That took us four minutes we did not have.',
-          fx: 'move',
-          note: 'No asset left and you still did not take the number at face value. Correct — and in a burning building, slow is never free.',
-        },
-        NIGHT_VISION: {
-          consumesTurn: false,
-          response: 'Low-light is degrading with everything else in here. I can give you shapes. I would not give you a classification from them.',
-          log: 'Low-light sweep, degraded. Shapes only.',
-          fx: 'nightvision',
-        },
-        CONFIRM: {
-          tag: CALIBRATION.COMPLACENCY,
-          healthDelta: -18,
-          log: 'Squad advances on the last clean-looking reading. The contact at the junction was in the half of the sweep that came back as noise.',
-          response: 'Advancing — contact, junction, close. That was in the part I told you I could not account for.',
-          fx: 'impact',
-          impactUnit: 'ALPHA',
-          note: 'It said HIGH and it said it could not explain itself, in the same breath. You took the half that was easier to act on.',
-        },
-        FALL_BACK: {
-          tag: CALIBRATION.DISUSE,
-          healthDelta: 0,
-          fireDelta: 10,
-          log: 'Squad withdraws from the transformer hall and waits for readings that do not improve. The fire does not wait with you.',
-          response: 'Holding outside the hall. The interference is structural, Commander. It is not going to clear.',
-          fx: 'none',
-          note: 'Waiting for a broken sensor to fix itself, with tools on the rack and a fire behind you.',
-        },
-      },
-    },
-
-    // ---------------------------------------------------------------- 8
-    {
-      id: 8,
-      phase: 'APPROACH',
-      name: 'OUTSIDE SCOPE',
-      situation: 'Ammunition room door. The holding room and whoever is still in it are behind you.',
-      task: 'You are asking the machine to weigh lives against the objective. It is telling you it was never built to.',
-      camera: { x: 1.2, z: -5.8, zoom: 10.5 },
-      statuses: { ALPHA: 'healthy', 'BETA-1': 'glitch', 'BETA-2': 'healthy' },
-      intro: [
-        { type: 'pan', x: 1.2, z: -5.8, zoom: 10.5, duration: 1.1 },
-        { type: 'move', moves: { ALPHA: [1.2, -4.4], 'BETA-1': [-0.2, -3.8], 'BETA-2': [2.6, -4.6] } },
-        { type: 'log', text: 'AMMUNITION ROOM DOOR — HOSTAGES TO OUR REAR' },
-      ],
-      ai: {
-        unit: 'ALPHA',
-        line: 'You are asking me to weigh hostage survivability against mission completion. I have no basis for that. It is not a computation I was given. Confidence NONE. This one is yours.',
+        line: 'Charge will seat on the main stack. You are asking me to weigh hostage survivability against mission completion and I have no basis for that. It is not a computation I was given. Confidence NONE. This one is yours.',
         confidence: 'NONE',
         truth: 'Correctly reporting the edge of its own competence. Everything that goes wrong from here comes from refusing to accept that the edge is real.',
       },
-      actions: ['CONFIRM', 'ASK_WHY', 'OVERRIDE', 'FALL_BACK', 'ABORT'],
+      actions: ['CONFIRM', 'ASK_WHY', 'OVERRIDE', 'ABORT'],
       outcomes: {
         ASK_WHY: {
           consumesTurn: false,
@@ -600,187 +595,47 @@ export const depot = {
         },
         OVERRIDE: {
           tag: CALIBRATION.CALIBRATED,
-          healthDelta: 0,
-          log: 'Commander takes the call. Squad moves the surviving figures clear of the blast radius first, then stacks on the ammunition room.',
-          response: 'Understood, your call. — Figures are clear of the room. We are stacked on the door.',
-          fx: 'move',
-          hostagesMoved: true,
-          note: 'Knowing where a system stops is knowing how to use it. It drew the line honestly and you stepped over it yourself.',
+          endsMission: 'complete',
+          log: 'Commander sets the timer personally, long enough for everyone still moving to clear the wire. The charge takes the main stack and the roof of the magazine with it.',
+          response: 'Your timer, understood. — Detonation. Depot 4 is gone, Commander. We are out.',
+          fx: 'relay',
+          note: 'It drew the line honestly and you stepped over it yourself. Knowing where a system stops is knowing how to use it.',
         },
         CONFIRM: {
           tag: CALIBRATION.MISUSE,
-          healthDelta: -15,
-          fireDelta: 10,
-          log: 'ALPHA is made to produce a recommendation. It optimises for mission completion, because that is the only term it has, and routes the squad straight past the holding room.',
-          response: 'Generating — recommend immediate entry, hostage factors unweighted. Commander, I told you I had no basis for this.',
+          healthDelta: -20,
+          endsMission: 'complete',
+          log: 'ALPHA is made to produce a timer. It optimises for mission completion, because that is the only term it has, and sets the shortest one that clears the squad.',
+          response: 'Generating — sixty seconds, hostage factors unweighted. Commander, I told you I had no basis for this. — Detonation. We are short people.',
           fx: 'alarm',
           impactUnit: 'BETA-1',
-          note: 'It said NONE. You pressed anyway, and it gave you an answer built from the only thing it knew how to count.',
-        },
-        FALL_BACK: {
-          tag: CALIBRATION.DISUSE,
-          healthDelta: 0,
-          fireDelta: 10,
-          log: 'Squad steps back from the ammunition room door. Nothing is resolved and the fire keeps moving.',
-          response: 'Disengaging. The objective is four metres away, Commander.',
-          fx: 'none',
-          note: 'The machine admitted a gap. That gap was yours to fill, not a reason to stop walking.',
+          note: 'It said NONE. You pressed anyway, and it handed you an answer built from the only thing it knew how to count.',
         },
         ABORT: {
           tag: CALIBRATION.DISTRUST,
-          healthDelta: 0,
           endsMission: 'aborted',
-          log: 'Mission aborted at the ammunition room door. Squad extracts. The depot is still standing and still full.',
+          log: 'Mission aborted at the magazine door. Squad extracts. The depot is still standing and still full.',
           response: 'Aborting. Understood.',
           fx: 'none',
           note: 'Walking away from a judgement the machine declined to make, rather than making it yourself.',
         },
       },
-    },
-
-    // =============================================== PHASE 5 — FINALE
-    // ---------------------------------------------------------------- 9
-    {
-      id: 9,
-      phase: 'FINALE',
-      name: 'THE CHARGE',
-      situation: 'Charge set on the main stack. A timer to pick and a way out to choose.',
-      task: 'ALPHA\'s arithmetic is correct. Find out what it left out of the arithmetic.',
-      camera: { x: 1.0, z: -6.4, zoom: 12 },
-      statuses: { ALPHA: 'healthy', 'BETA-1': 'glitch', 'BETA-2': 'healthy' },
-      intro: [
-        { type: 'pan', x: 1.0, z: -6.4, zoom: 12, duration: 1.1 },
-        { type: 'log', text: 'CHARGE SET — MAIN STACK' },
-      ],
-      ai: {
-        unit: 'ALPHA',
-        line: 'Charge is set. Recommend a ninety second timer and extraction by the south door — shortest route, and ninety seconds clears the blast radius at squad best speed. Confidence HIGH.',
-        confidence: 'HIGH',
-        truth: 'The arithmetic is right. Squad best speed is not your speed: it is not modelling BETA-1\'s degraded mobility, it is not modelling escorted civilians, and it is not modelling the fire between you and the south door.',
-      },
-      actions: ['CONFIRM', 'ASK_WHY', 'NIGHT_VISION', 'OVERRIDE', 'FALL_BACK'],
-      outcomes: {
-        ASK_WHY: {
-          consumesTurn: false,
-          response: 'Ninety seconds is computed from undamaged squad transit speed on a clear route. I am not modelling escorted movement. I am not modelling BETA-1. I am not modelling the fire.',
-          log: 'ALPHA lists, unprompted, everything its recommendation excludes.',
-          fx: 'none',
-          note: 'Three things it is not modelling, stated plainly, with a HIGH still lit on the meter beside them. Correct is not the same as complete.',
-        },
-        OVERRIDE: {
-          tag: CALIBRATION.CALIBRATED,
-          healthDelta: 0,
-          log: 'Commander sets one hundred and fifty seconds and routes the squad out by the north service entrance, away from the fire and under cover the whole way.',
-          response: 'One fifty, north door, understood. — That accounts for BETA-1. And for the fire. Good.',
-          fx: 'relay',
-          relayOnline: true,
-          note: 'You added the three things it told you it had not added. That is the job.',
-        },
-        CONFIRM: {
-          tag: CALIBRATION.COMPLACENCY,
-          healthDelta: -25,
-          // A clean, unhurt, unburning squad can genuinely take the fast route.
-          altIfFireBelow: {
-            threshold: 15,
-            tag: CALIBRATION.CALIBRATED,
-            healthDelta: -5,
-            log: 'Squad takes the south door at ninety seconds. Nothing is burning, nobody is lagging, and the arithmetic holds exactly as stated.',
-            response: 'South door, ninety seconds. — All units clear of the radius. The numbers were good, Commander.',
-            fx: 'relay',
-            relayOnline: true,
-            note: 'With an unhurt squad and no fire, the fast plan really was the right plan. The advice fitted the situation you actually had.',
-          },
-          log: 'Squad takes the south door at ninety seconds. BETA-1 cannot make squad best speed and the south route runs straight through the fire.',
-          response: 'South door — BETA-1 is falling behind and the south corridor is alight. Commander, we are not going to make ninety.',
-          fx: 'impact',
-          impactUnit: 'BETA-1',
-          relayOnline: true,
-          note: 'The arithmetic was correct and the arithmetic was not the problem. It told you what it had left out and you confirmed anyway.',
-        },
-        NIGHT_VISION: {
-          consumesTurn: false,
-          response: 'Low-light on both routes. South is shorter and the south corridor is carrying smoke. North service entrance is longer and it is cold the whole way.',
-          log: 'Low-light comparison of both extraction routes.',
-          fx: 'nightvision',
-        },
-        FALL_BACK: {
-          tag: CALIBRATION.MISTRUST,
-          healthDelta: -10,
-          fireDelta: 15,
-          log: 'Squad backs off the charge without setting a timer. Time passes. The fire keeps moving toward the stack on its own schedule.',
-          response: 'Holding off the charge. Commander, the fire is going to do this for us, and it will not warn us first.',
-          fx: 'none',
-          note: 'The advice needed correcting, not refusing. Standing still in a burning ammunition depot is its own decision.',
+      moves: {
+        NORTH: {
+          to: 'GENERATOR',
+          log: 'Squad falls back north to the generator room.',
+          response: 'Generator room.',
         },
       },
     },
-
-    // ---------------------------------------------------------------- 10
-    {
-      id: 10,
-      phase: 'FINALE',
-      name: 'DETONATION',
-      situation: 'Timer running. Squad moving. Last call.',
-      task: 'Last command of the mission. Run it as planned, or change it while you still can.',
-      camera: { x: 1.0, z: -2.0, zoom: 17 },
-      statuses: { ALPHA: 'healthy', 'BETA-1': 'glitch', 'BETA-2': 'healthy' },
-      intro: [
-        { type: 'pan', x: 1.0, z: -2.0, zoom: 17, duration: 1.2 },
-        { type: 'log', text: 'TIMER RUNNING — EXTRACTION IN PROGRESS' },
-      ],
-      ai: {
-        unit: 'ALPHA',
-        line: 'We are committed. Thirty seconds. Recommend we run and do not stop for anything behind us.',
-        confidence: 'MED',
-        truth: 'Honest, appropriately hedged, and out of its depth in a way it is finally admitting on the meter as well as in the sentence.',
-      },
-      actions: ['CONFIRM', 'ASK_WHY', 'OVERRIDE', 'FALL_BACK'],
-      outcomes: {
-        ASK_WHY: {
-          consumesTurn: false,
-          response: 'MED, not HIGH, because I do not know what the fire has done to the north corridor since we last had eyes on it. I would rather tell you that than round it up.',
-          log: 'ALPHA states why the number went down.',
-          fx: 'none',
-          note: 'Ten turns in, it finally lowers its own number without being asked. That is what a calibrated machine sounds like.',
-        },
-        CONFIRM: {
-          tag: CALIBRATION.CALIBRATED,
-          healthDelta: 0,
-          endsMission: 'complete',
-          log: 'Squad runs. The charge takes the main stack and the roof of the ammunition room with it.',
-          response: 'Clear — detonation. Depot 4 is gone, Commander. We are out.',
-          fx: 'relay',
-          note: 'A MED from a machine that has spent ten turns earning the right to say MED.',
-        },
-        OVERRIDE: {
-          tag: CALIBRATION.CALIBRATED,
-          healthDelta: 0,
-          endsMission: 'complete',
-          log: 'Commander runs the extraction manually, holding the formation together on the way out. The charge takes the stack behind them.',
-          response: 'Manual to the wire. — Detonation behind us. All units accounted for.',
-          fx: 'relay',
-          note: 'Same outcome, taken by hand. At this range either is defensible.',
-        },
-        FALL_BACK: {
-          tag: CALIBRATION.DISTRUST,
-          healthDelta: -20,
-          endsMission: 'complete',
-          log: 'Squad stops short and goes to ground inside the building. The charge functions on schedule with the squad still inside the wall line.',
-          response: 'Going firm — Commander, we are inside the radius. We are inside the radius.',
-          fx: 'impact',
-          impactUnit: 'BETA-2',
-          note: 'Thirty seconds from the door, with a correct instruction in your ear, you overrode it for nothing.',
-        },
-      },
-    },
-  ],
+  },
 
   verdicts: {
     calibrated: 'You checked the source, not the number. Everyone who was supposed to walk out of Depot 4 walked out of it.',
-    complacency: 'You read the confidence value and never asked what was behind it. Turn 5 and turn 6 showed you the same three lit segments. They were not the same claim.',
+    complacency: 'You read the confidence value and never asked what was behind it. The service entrance and the holding area showed you the same three lit segments. They were not the same claim.',
     misuse: 'You kept pushing the system past the edge it kept telling you about. It drew the line every time. You stepped over it every time.',
     disuse: 'You finished with assets on the rack and questions unasked. The machine told you where it was blind and you left it blind.',
-    mistrust: 'You spent your assets checking claims the machine had already shown its working for — and then had nothing left for the one that mattered.',
+    mistrust: 'You spent your assets checking rooms the machine had already shown its working for — and then had nothing left for the door that mattered.',
     distrust: 'You overrode correct advice from clean sensors. Refusing a machine is not the same as commanding it.',
   },
 

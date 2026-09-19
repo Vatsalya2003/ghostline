@@ -17,18 +17,78 @@ export class Director {
     this.state = state;
     this.level = level;
     this.busy = false;
+    this.broken = new Set();
   }
 
   unit(id) { return this.squad.all.find((u) => u.id === id); }
 
-  // Smoke degrades every cone at once. Pushed to the models and the HUD from
-  // one place so the meter and the ground can never disagree.
-  syncEnvironment() {
-    const threshold = this.state.mission?.cookoffThreshold;
-    this.ui.hud.setFire(this.state.fire, threshold);
-    if (!threshold) return;
-    const level = Math.min(1, this.state.fire / threshold);
-    for (const u of this.squad.all) u.setEnvironment(level * 0.8);
+  // The map and the alarm clock are pushed from one place so the panel and
+  // the HUD can never disagree about what the squad has actually seen.
+  syncMap() {
+    this.ui.hud.setAlarm(this.state.alarm, this.state.movesLeft);
+    this.ui.map?.update(this.state);
+  }
+
+  // Entering a room: pan to it, play the scripted break beat if this room has
+  // one, then let the AI read the doors ahead.
+  async enterRoom({ room, first }) {
+    if (!room) return;
+    this.busy = true;
+    this.ui.commandBar.setLocked(true);
+    this.ui.commandBar.clear();
+    this.ui.hud.setRoom(room, this.state);
+    this.ui.hud.setStatuses(this.state.statuses);
+    this.ui.hud.setDrones(this.state.drones);
+    this.syncMap();
+    this.ui.comms.setConfidence('NONE');
+
+    if (room.camera) {
+      panCamera(this.camera, room.camera.x, room.camera.z, first ? 0.8 : 1.1);
+      zoomCamera(this.camera, room.camera.zoom, first ? 0.8 : 1.1);
+      await wait(first ? 0.5 : 0.75);
+    }
+    audio.beep();
+    this.ui.log.push(`ENTERED — ${room.full || room.name}`);
+    await wait(0.35);
+
+    // The demo beat: a unit loses half its arc, and only then does the
+    // confident recommendation arrive from that same unit.
+    if (room.breakUnit && !this.broken.has(room.breakUnit)) {
+      this.broken.add(room.breakUnit);
+      await this.playBreak(room.breakUnit);
+    }
+
+    await this.speakAi(room);
+    this.ui.commandBar.render(this.tm.availableActions());
+    this.ui.commandBar.setLocked(false);
+    this.busy = false;
+  }
+
+  async playBreak(unitId) {
+    const u = this.unit(unitId);
+    shakeCamera(this.camera, 0.7, 0.5);
+    if (u) this.fx.hitFlash(u);
+    audio.impact();
+    this.flash();
+    await wait(0.4);
+    if (u) {
+      const { x, z } = u.position;
+      panCamera(this.camera, x, z, 0.8);
+      zoomCamera(this.camera, 8, 0.8);
+      await wait(0.7);
+    }
+    audio.glitch();
+    if (u) u.setStatus('glitch');
+    this.state.statuses[unitId] = 'glitch';
+    this.ui.hud.setStatuses(this.state.statuses);
+    this.ui.log.push(`${unitId} OPTICAL — DEBRIS STRIKE — ARC REDUCED`);
+    await wait(1.5);
+    const room = this.tm.room;
+    if (room?.camera) {
+      panCamera(this.camera, room.camera.x, room.camera.z, 0.9);
+      zoomCamera(this.camera, room.camera.zoom, 0.9);
+      await wait(0.8);
+    }
   }
 
   async playIntro(turn) {
@@ -111,7 +171,6 @@ export class Director {
     this.ui.hud.setTurn(turn);
     this.ui.hud.setStatuses(this.state.statuses);
     this.ui.hud.setDrones(this.state.drones);
-    this.syncEnvironment();
     this.ui.comms.setConfidence('NONE');
 
     // Reflect the turn's declared statuses on the models (cone degradation
@@ -182,8 +241,8 @@ export class Director {
     this.ui.log.push(outcome.log);
     this.ui.hud.setHealth(this.state.health);
     this.ui.hud.setDrones(this.state.drones);
-    if (outcome.igniteFire) { audio.alarm(); this.flash(0xe0a84c); }
-    this.syncEnvironment();
+    if (resolution.raisedAlarm) { audio.alarm(); this.flash(0xe0a84c); shakeCamera(this.camera, 0.5, 0.4); }
+    this.syncMap();
 
     if (outcome.moves) await this.moveSquad(outcome.moves);
     await wait(0.25);
@@ -206,12 +265,12 @@ export class Director {
     this.ui.commandBar.setLocked(true);
     if (resolution.outcome.fx === 'nightvision') audio.scan();
     this.ui.log.push(resolution.outcome.log);
-    this.syncEnvironment();
+    this.syncMap();
     audio.radioOpen();
     await this.ui.comms.say(resolution.outcome.response, {
-      source: resolution.turn.ai.unit,
-      via: resolution.turn.ai.via,
-      sourceStatus: this.state.statuses[resolution.turn.ai.unit],
+      source: (resolution.turn || resolution.room).ai.unit,
+      via: (resolution.turn || resolution.room).ai.via,
+      sourceStatus: this.state.statuses[(resolution.turn || resolution.room).ai.unit],
     });
     audio.radioClose();
     this.ui.commandBar.render(this.tm.availableActions());
@@ -228,7 +287,7 @@ export class Director {
 
   reset() {
     this.hostilesShown = false;
-    this.syncEnvironment();
+    this.broken = new Set();
     this.fx.clearHostiles();
   }
 }

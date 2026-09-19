@@ -118,27 +118,47 @@ html, body {
   52% { transform: translateX(1px); opacity: 1; text-shadow: 1px 0 var(--red), -1px 0 var(--cyan); }
 }
 
-/* Fire: a second meter that only ever climbs. Amber at a smoulder, red once
-   it is close to the stack. Mirrors the health bar so the two read as a pair. */
-#fire-box { min-width: 190px; }
-#fire-bar {
-  height: 10px; border: 1px solid rgba(224, 168, 76, 0.35); position: relative; background: #140f08;
-}
-#fire-fill {
-  position: absolute; inset: 1px auto 1px 1px; width: 0%;
-  background: var(--amber); box-shadow: 0 0 10px rgba(224, 168, 76, 0.5);
-  transition: width 600ms ease, background 300ms linear;
-}
-#fire-fill.hot { background: var(--red); box-shadow: 0 0 12px rgba(224, 82, 76, 0.65); }
-#fire-fill.critical { animation: fire-pulse 0.7s steps(2, end) infinite; }
-#fire-value { font-size: 12px; letter-spacing: 0.1em; color: var(--dim); }
-#fire-value.lit { color: var(--amber); }
-#fire-value.critical { color: var(--red); }
+/* Facility status: calm until somebody sees you, then a six-move countdown.
+   The alarm is never bad luck — it is the bill for a door nobody checked. */
+#alarm-box { min-width: 200px; }
+#alarm-state { font-size: 15px; letter-spacing: 0.14em; color: var(--cyan); }
+#alarm-box.alerted { border-color: rgba(224, 82, 76, 0.65); }
+#alarm-box.alerted #alarm-state { color: var(--red); animation: chip-glitch 0.8s steps(2, end) infinite; }
+#alarm-moves { font-size: 11px; letter-spacing: 0.16em; color: var(--dim); }
+#alarm-box.alerted #alarm-moves { color: var(--amber); }
+#alarm-box.critical #alarm-moves { color: var(--red); }
 
-@keyframes fire-pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.45; }
+/* ---------- facility map ---------- */
+#map-box { padding: 8px 12px; display: flex; flex-direction: column; gap: 8px; }
+#facility-map { position: relative; margin: 2px auto 0; }
+.map-link { position: absolute; background: rgba(74, 90, 82, 0.55); }
+.map-room {
+  position: absolute; width: 58px; height: 34px;
+  border: 1px solid rgba(74, 90, 82, 0.5); background: rgba(8, 14, 13, 0.9);
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  font-size: 8px; letter-spacing: 0.08em; color: var(--dim); overflow: hidden;
+  transition: border-color 200ms linear, color 200ms linear, background 200ms linear;
 }
+.map-room .map-marks { font-size: 9px; line-height: 1.1; letter-spacing: 0.05em; }
+.map-room.unknown { border-style: dashed; }
+.map-room.mapped { color: #7b8f87; border-color: rgba(74, 90, 82, 0.8); }
+.map-room.mapped .map-marks { color: var(--amber); }
+.map-room.seen { color: #9fc4bd; border-color: rgba(76, 224, 216, 0.45); background: rgba(12, 26, 24, 0.92); }
+.map-room.cleared { border-color: rgba(76, 224, 216, 0.3); color: var(--dim); }
+.map-room.contact { border-color: rgba(224, 82, 76, 0.75); }
+.map-room.contact .map-marks { color: var(--red); }
+.map-room.here {
+  color: #04100e; background: var(--cyan); border-color: var(--cyan);
+  box-shadow: 0 0 14px rgba(76, 224, 216, 0.45);
+}
+.map-room.here .map-marks { color: #04100e; }
+
+#map-legend { display: flex; flex-wrap: wrap; gap: 4px 9px; font-size: 8px; color: var(--dim); letter-spacing: 0.08em; text-transform: uppercase; }
+#map-legend span { display: flex; align-items: center; gap: 3px; }
+#map-legend i { width: 8px; height: 8px; border: 1px solid var(--dim); display: block; }
+#map-legend .k-here { background: var(--cyan); border-color: var(--cyan); }
+#map-legend .k-seen { border-color: rgba(76, 224, 216, 0.45); background: rgba(12, 26, 24, 1); }
+#map-legend .k-unknown { border-style: dashed; }
 
 #drone-box { min-width: 120px; }
 #drone-pips { display: flex; gap: 5px; }
@@ -205,6 +225,9 @@ html, body {
 .cmd .hint { font-size: 9px; color: var(--dim); margin-left: 8px; letter-spacing: 0.1em; }
 .cmd:hover .hint { color: #04100e; }
 .cmd.probe { border-style: dashed; }
+.cmd.move { border-color: rgba(224, 168, 76, 0.45); }
+.cmd.move .hint { color: var(--amber); }
+.cmd.move:hover .hint, .cmd.move.focused .hint { color: #04100e; }
 .cmd.pad { border-color: rgba(224, 168, 76, 0.5); }
 
 /* ---------- screens: title, briefing, debrief ---------- */

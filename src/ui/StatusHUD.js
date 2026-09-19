@@ -12,12 +12,14 @@ export class StatusHUD {
     this.value = document.getElementById('health-value');
     this.squad = document.getElementById('squad-list');
     this.pips = document.getElementById('drone-pips');
-    this.fireFill = document.getElementById('fire-fill');
-    this.fireValue = document.getElementById('fire-value');
-    this.fireBox = document.getElementById('fire-box');
-    document.getElementById('fire-label').textContent = mission.fireLabel || 'Fire';
-    // Missions that cannot burn do not show a fire meter at all.
-    this.fireBox.style.display = mission.cookoffThreshold ? '' : 'none';
+    this.alarmBox = document.getElementById('alarm-box');
+    this.alarmState = document.getElementById('alarm-state');
+    this.alarmMoves = document.getElementById('alarm-moves');
+    this.mapBox = document.getElementById('map-box');
+    // Only navigated missions have a facility to be detected in.
+    const nav = !!mission.navigated;
+    this.alarmBox.style.display = nav ? '' : 'none';
+    this.mapBox.style.display = nav ? '' : 'none';
     this.situation = document.getElementById('situation-text');
     this.task = document.getElementById('task-text');
     document.getElementById('objective').textContent = mission.objective;
@@ -30,6 +32,15 @@ export class StatusHUD {
       : `TURN — / ${this.mission.turns.length}`;
     this.situation.textContent = turn ? turn.situation : '—';
     this.task.textContent = turn ? turn.task : '—';
+  }
+
+  setRoom(room, state) {
+    this.turnName.textContent = room ? room.full || room.name : 'STANDBY';
+    this.turnCount.textContent = room
+      ? `${state.explored.size} / ${Object.keys(this.mission.rooms).length} ROOMS ENTERED`
+      : '—';
+    this.situation.textContent = room ? room.situation : '—';
+    this.task.textContent = room ? room.task : '—';
   }
 
   setHealth(health) {
@@ -50,22 +61,16 @@ export class StatusHUD {
     }
   }
 
-  // Fire reads as a state, not a percentage — the player needs "is this
-  // getting dangerous", not two significant figures.
-  setFire(fire, threshold = 85) {
-    if (!this.fireBox || this.fireBox.style.display === 'none') return;
-    const pct = Math.min(100, fire);
-    const hot = fire >= threshold * 0.55;
-    const critical = fire >= threshold * 0.8;
-    this.fireFill.style.width = `${pct}%`;
-    this.fireFill.classList.toggle('hot', hot);
-    this.fireFill.classList.toggle('critical', critical);
-    this.fireValue.textContent = fire <= 0 ? 'CONTAINED'
-      : critical ? 'AT THE STACK'
-      : hot ? 'SPREADING'
-      : 'BURNING';
-    this.fireValue.classList.toggle('lit', fire > 0 && !critical);
-    this.fireValue.classList.toggle('critical', critical);
+  // Two states only: nobody knows you are here, or everybody does and you
+  // have six moves. There is no middle setting and there is no going back.
+  setAlarm(alarm, movesLeft) {
+    if (!this.alarmBox || this.alarmBox.style.display === 'none') return;
+    this.alarmBox.classList.toggle('alerted', !!alarm);
+    this.alarmBox.classList.toggle('critical', !!alarm && movesLeft <= 2);
+    this.alarmState.textContent = alarm ? 'ALERTED' : 'UNDETECTED';
+    this.alarmMoves.textContent = alarm
+      ? `${movesLeft} MOVE${movesLeft === 1 ? '' : 'S'} REMAINING`
+      : 'NO CONTACT REPORTED';
   }
 
   setDrones(n) {

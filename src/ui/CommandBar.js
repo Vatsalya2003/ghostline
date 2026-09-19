@@ -12,12 +12,14 @@ export class CommandBar {
 
   render(entries, { padHints = false } = {}) {
     this.el.innerHTML = '';
-    this.buttons = entries.map(({ action, disabled, reason, probe, hint }) => {
+    this.buttons = entries.map(({ action, disabled, reason, probe, hint, move, dir }) => {
       const btn = document.createElement('button');
-      btn.className = 'cmd' + (probe ? ' probe' : '') + (padHints && hint ? ' pad' : '');
+      btn.className = 'cmd' + (probe ? ' probe' : '') + (move ? ' move' : '') + (padHints && hint ? ' pad' : '');
       btn.disabled = !!disabled || this.locked;
       btn.dataset.action = action;
-      btn.innerHTML = `${ACTION_LABELS[action] || action}` +
+      btn.dataset.disabled = String(!!disabled);
+      const label = move ? dir : (ACTION_LABELS[action] || action);
+      btn.innerHTML = label +
         (reason ? `<span class="hint">${reason}</span>` : hint ? `<span class="hint">${hint}</span>` : '');
       btn.addEventListener('click', () => this.choose(action));
       this.el.appendChild(btn);

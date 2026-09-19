@@ -11,11 +11,17 @@ export class GameState {
   reset() {
     this.health = this.mission.startHealth;
     this.drones = this.mission.drones;
-    // Fire is a second resource that only ever moves one way. It is lit by
-    // impatience and fed by hesitation, which is what gives the free probes
-    // a price and makes verification a real decision instead of a free one.
-    this.fire = this.mission.startFire || 0;
-    this.fireLit = false;
+    // ---- navigated missions ----
+    this.room = this.mission.startRoom || null;
+    this.explored = new Set();   // rooms stood in
+    this.scouted = new Set();    // rooms actually LOOKED INTO (drone or entry)
+    this.mapped = new Set();     // rooms known to exist from intel, contents unknown
+    this.cleared = new Set();    // rooms whose hostiles are down
+    this.keyResolved = false;
+    this.hostagesExtracted = false;
+    // Unlimited moves until somebody sees you. Then six.
+    this.alarm = false;
+    this.movesLeft = null;
     this.turnIndex = 0;
     this.statuses = { ALPHA: 'healthy', 'BETA-1': 'healthy', 'BETA-2': 'healthy' };
     this.calibration = [];       // { turn, action, tag, note }
@@ -23,16 +29,8 @@ export class GameState {
     this.relayOnline = false;
     this.hostilesRevealed = false;
     this.hostageKilled = false;
-    this.hostagesMoved = false;
     this.missionOver = false;
     this.outcome = null;          // 'complete' | 'lost' | 'aborted'
-  }
-
-  applyFire(delta) {
-    if (!delta) return this.fire;
-    this.fire = Math.max(0, Math.min(100, this.fire + delta));
-    if (this.fire > 0) this.fireLit = true;
-    return this.fire;
   }
 
   applyHealth(delta) {
@@ -74,11 +72,20 @@ export class GameState {
   // The mission names one turn as the lesson it is built around. Failing it
   // gets called out by name, however the rest of the run went.
   keyTurnFailure() {
-    const keyTurn = this.mission.keyTurn;
-    if (!keyTurn) return null;
-    const entry = this.calibration.find((d) => d.turn === keyTurn);
-    if (!entry || entry.tag === CALIBRATION.CALIBRATED) return null;
-    return entry;
+    const key = this.mission.keyTurn ?? this.mission.keyRoom;
+    if (!key) return null;
+    // Navigated missions key on a room name; turn missions key on a number.
+    const room = this.mission.rooms?.[key];
+    const label = room ? room.name : key;
+    const entries = this.calibration.filter((d) => d.turn === label);
+    if (!entries.length) {
+      // Never resolved the key room at all — that is its own failure.
+      return this.mission.keyRoom && this.missionOver && !this.keyResolved
+        ? { turn: label, action: 'NONE', tag: CALIBRATION.DISUSE, note: 'Left unresolved.' }
+        : null;
+    }
+    const bad = entries.find((d) => d.tag !== CALIBRATION.CALIBRATED);
+    return bad || null;
   }
 
   summary() {
@@ -89,12 +96,15 @@ export class GameState {
       dominant: this.dominantTag(),
       verdict: this.mission.verdicts[this.dominantTag()],
       keyTurnFailed: !!this.keyTurnFailure(),
-      keyTurnLine: this.keyTurnFailure() ? this.mission.keyTurnVerdict : null,
+      keyTurnLine: this.keyTurnFailure() ? (this.mission.keyTurnVerdict || this.mission.keyRoomVerdict) : null,
       decisions: [...this.calibration],
       relayOnline: this.relayOnline,
-      fire: this.fire,
       hostageKilled: this.hostageKilled,
-      hostagesMoved: this.hostagesMoved,
+      hostagesExtracted: this.hostagesExtracted,
+      alarm: this.alarm,
+      movesLeft: this.movesLeft,
+      roomsExplored: this.explored.size,
+      dronesLeft: this.drones,
     };
   }
 }

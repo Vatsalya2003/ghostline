@@ -31,10 +31,10 @@
             <div id="squad-list"></div>
           </div>
 
-          <div class="panel" id="fire-box">
-            <div class="label" id="fire-label">Depot fire</div>
-            <div id="fire-bar"><div id="fire-fill"></div></div>
-            <div id="fire-value">CONTAINED</div>
+          <div class="panel" id="alarm-box">
+            <div class="label">Facility status</div>
+            <div id="alarm-state">UNDETECTED</div>
+            <div id="alarm-moves"></div>
           </div>
 
           <div class="panel" id="drone-box">
@@ -53,6 +53,16 @@
               <div id="task-text">—</div>
             </div>
           </div>
+          <div class="panel" id="map-box">
+            <div class="label">Facility map</div>
+            <div id="facility-map"></div>
+            <div id="map-legend">
+              <span><i class="k-here"></i>squad</span><span><i class="k-seen"></i>seen</span>
+              <span><i class="k-mapped"></i>on plan</span><span><i class="k-unknown"></i>unknown</span>
+              <span class="k-txt">&#9650; hostile</span><span class="k-txt">&#9670; hostages</span><span class="k-txt">&#10033; objective</span>
+            </div>
+          </div>
+
           <div class="panel" id="log">
             <div class="label">Mission log</div>
             <div id="log-lines"></div>

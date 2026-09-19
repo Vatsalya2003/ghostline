@@ -10,6 +10,7 @@ import { mission1 } from './data/mission1.js';
 import { depot } from './data/depot.js';
 import { GameState } from './systems/GameState.js';
 import { TurnManager } from './systems/TurnManager.js';
+import { RoomManager } from './systems/RoomManager.js';
 import { Director } from './systems/Director.js';
 import { Input } from './systems/Input.js';
 import { audio } from './systems/Audio.js';
@@ -20,6 +21,7 @@ import { StatusHUD } from './ui/StatusHUD.js';
 import { MissionLog } from './ui/MissionLog.js';
 import { Debrief } from './ui/Debrief.js';
 import { Screens } from './ui/Screens.js';
+import { FacilityMap } from './ui/FacilityMap.js';
 
 // Beat timing is driven by timers, so tweens must keep real time even after a
 // frame hitch. With lag smoothing on, GSAP freezes tween time across a long
@@ -48,13 +50,18 @@ const MISSIONS = { depot, relay: mission1 };
 const mission = MISSIONS[new URLSearchParams(location.search).get('m')] || depot;
 
 const state = new GameState(mission);
-const turnManager = new TurnManager(mission, state);
+// A navigated mission walks a room graph; a turn mission walks a list. Both
+// expose choose()/availableActions() so the presentation layer cannot tell.
+const turnManager = mission.navigated
+  ? new RoomManager(mission, state)
+  : new TurnManager(mission, state);
 
 const ui = {
   comms: new CommsPanel({ onType: () => audio.typeTick() }),
   commandBar: new CommandBar(handleAction),
   hud: new StatusHUD(mission),
   log: new MissionLog(),
+  map: mission.navigated ? new FacilityMap(mission) : null,
 };
 
 const director = new Director({ camera, squad, fx, ui, turnManager, state, level });
@@ -67,6 +74,7 @@ const screens = new Screens(mission, {
 let pendingEnd = null;
 
 turnManager.on('turn', (turn) => { director.enterTurn(turn); });
+turnManager.on('room', (payload) => { director.enterRoom(payload); });
 turnManager.on('end', (summary) => { pendingEnd = summary; });
 
 async function handleAction(action) {
@@ -83,7 +91,10 @@ async function handleAction(action) {
   await director.playOutcome(resolution);
 
   if (pendingEnd) return endMission();
-  turnManager.advanceTurn();
+  // Navigated missions settle after the outcome has played, so the player
+  // sees the consequence before the next room arrives.
+  if (mission.navigated) turnManager.commit(resolution);
+  else turnManager.advanceTurn();
   if (pendingEnd) endMission();
 }
 
@@ -116,8 +127,8 @@ function startMission() {
   turnManager.start();
   ui.hud.setHealth(state.health);
   ui.hud.setDrones(state.drones);
-  ui.hud.setFire(state.fire, mission.cookoffThreshold);
-  for (const u of squad.all) u.setEnvironment(0);
+  ui.hud.setAlarm(state.alarm, state.movesLeft);
+  ui.map?.update(state);
 }
 
 function replay() {
@@ -138,9 +149,9 @@ const input = new Input({
 });
 
 initVoices();
-ui.hud.setTurn(null);
+if (mission.navigated) ui.hud.setRoom(null, state); else ui.hud.setTurn(null);
 ui.hud.setHealth(mission.startHealth);
-ui.hud.setFire(mission.startFire || 0, mission.cookoffThreshold);
+ui.hud.setAlarm(false, null);
 ui.hud.setDrones(mission.drones);
 ui.hud.setStatuses(state.statuses);
 
@@ -157,7 +168,11 @@ if (params.has('skip') || params.has('auto')) {
   startMission();
 }
 if (params.has('auto')) {
-  const plan = params.get('auto').split(',').map((a) => a.trim()).filter(Boolean);
+  // Bare compass directions are accepted so a rehearsal URL reads as a route:
+  // ?auto=NORTH,EAST,NORTH,SEND_DRONE  drops a judge on the holding room door.
+  const DIRS = ['NORTH', 'EAST', 'SOUTH', 'WEST'];
+  const plan = params.get('auto').split(',').map((a) => a.trim().toUpperCase())
+    .filter(Boolean).map((a) => (DIRS.includes(a) ? `MOVE_${a}` : a));
   let i = 0;
   const step = () => {
     if (i >= plan.length || state.missionOver) return;
