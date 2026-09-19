@@ -4,7 +4,7 @@ import { createRenderer, createScene } from './render/Scene.js';
 import { createCamera, resizeCamera, applyCameraTransform, panCamera, zoomCamera } from './render/Camera.js';
 import { createFogOfWar } from './render/FogOfWar.js';
 import { createLevel } from './render/Level.js';
-import { createSquad } from './render/Units.js';
+import { createSquad, attachModels } from './render/Units.js';
 import { FX } from './render/FX.js';
 import { mission1 } from './data/mission1.js';
 import { GameState } from './systems/GameState.js';
@@ -33,6 +33,10 @@ const { scene } = createScene();
 createFogOfWar(scene);
 const level = createLevel(scene);
 const squad = createSquad(scene);
+
+// Skinned models stream in behind the title screen; the squad plays as box
+// stand-ins until they land, so a slow load never blocks the boot.
+attachModels(squad);
 const fx = new FX(scene);
 applyCameraTransform(camera);
 
@@ -163,7 +167,7 @@ const clock = new THREE.Clock();
 function tick() {
   const dt = Math.min(clock.getDelta(), 0.05);
   const t = clock.getElapsedTime();
-  squad.all.forEach((u) => u.update(t));
+  squad.all.forEach((u) => u.update(t, dt));
   fx.update(dt);
   input.poll();
   renderer.render(scene, camera);

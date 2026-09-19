@@ -1,3 +1,9 @@
 node_modules
 dist
 .DS_Store
+
+# 2.8GB of Mixamo FBX exports — every file is a ~98MB full character export
+# with embedded textures, including the "animation only" ones. Committing
+# these would balloon the repo past what GitHub is happy with, and the push
+# would take the whole jam. Delete this line once they are converted to GLB.
+public/models/*.fbx
