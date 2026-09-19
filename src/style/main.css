@@ -22,19 +22,57 @@ html, body {
   -webkit-font-smoothing: antialiased;
 }
 
-#app { position: relative; width: 100vw; height: 100vh; }
+/* Split layout: the map gets the left column to itself, every readout lives
+   in the right one. Panels used to float over the board and eat the ground
+   the player is trying to read. */
+#app {
+  position: relative;
+  width: 100vw; height: 100vh;
+  display: grid;
+  grid-template-columns: minmax(0, 70fr) minmax(330px, 30fr);
+}
+
+#stage { position: relative; min-width: 0; overflow: hidden; }
 #scene { display: block; width: 100%; height: 100%; }
 
 /* ---------- overlay scaffolding ---------- */
 #ui {
-  position: absolute; inset: 0;
-  pointer-events: none;
-  display: grid;
-  grid-template-rows: auto 1fr auto;
-  padding: 18px;
-  gap: 10px;
+  position: relative;
+  pointer-events: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 12px 56px 4px;   /* 56px clears the key-hint strip */
+  overflow: hidden;              /* the middle section scrolls, not the column */
+  border-left: 1px solid var(--hairline);
+  background: linear-gradient(180deg, rgba(6,11,10,0.55), rgba(6,11,10,0.75));
 }
 #ui > * { pointer-events: auto; }
+
+/* The column is narrow and tall, so everything stacks and the pieces that
+   can grow without bound — the log and the comms caption — are the ones
+   that get capped. The command list must never be the thing that scrolls
+   off; it is what the player is being asked to act on. */
+/* Status header and command footer are fixed; only the narrative middle
+   scrolls. The commands are what the player has to act on, so they can
+   never be the thing that slides off the bottom. */
+#hud { flex: 0 0 auto; flex-direction: column; gap: 8px; }
+#middle { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
+#bottom { flex: 0 0 auto; }
+#hud .panel { min-width: 0; }
+#middle { flex-direction: column; align-items: stretch; gap: 8px; }
+#middle .panel { max-width: none; width: 100%; }
+#log { width: 100%; max-height: 15vh; }
+#log-lines { max-height: 11vh; overflow-y: auto; }
+#bottom { gap: 8px; }
+#comms { grid-template-columns: 1fr; gap: 8px; padding: 10px 12px; }
+#comms-text { font-size: 13px; min-height: 0; max-height: 15vh; overflow-y: auto; }
+#confidence { flex-direction: row; align-items: center; gap: 10px; }
+#conf-bar { flex: 1; }
+#commands { flex-direction: column; align-items: stretch; gap: 6px; }
+#commands .cmd { width: 100%; text-align: left; padding: 9px 12px; font-size: 12px; }
+#turn-name { font-size: 15px; }
+#situation-text, #task-text { font-size: 12px; }
 
 .panel {
   background: var(--panel);

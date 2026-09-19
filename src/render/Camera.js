@@ -33,8 +33,21 @@ function smoothDamp(current, target, vel, key, smoothTime, dt) {
   return target + (change + temp) * exp;
 }
 
+// The canvas no longer fills the window — it owns the left column only, so
+// every aspect calculation has to come from the element, not the viewport.
+export function stageSize() {
+  const stage = document.getElementById('stage');
+  const w = stage?.clientWidth || window.innerWidth;
+  const h = stage?.clientHeight || window.innerHeight;
+  return { w: Math.max(1, w), h: Math.max(1, h) };
+}
+export function stageAspect() {
+  const { w, h } = stageSize();
+  return w / h;
+}
+
 export function createCamera() {
-  const aspect = window.innerWidth / window.innerHeight;
+  const aspect = stageAspect();
   const camera = new THREE.OrthographicCamera(
     (-VIEW_SIZE * aspect) / 2, (VIEW_SIZE * aspect) / 2,
     VIEW_SIZE / 2, -VIEW_SIZE / 2,
@@ -74,7 +87,7 @@ function applyProjection(camera, view) {
   const d = camera.userData;
   if (Math.abs(view - d.appliedView) < 0.0005) return;
   d.appliedView = view;
-  const aspect = window.innerWidth / window.innerHeight;
+  const aspect = stageAspect();
   camera.left = (-view * aspect) / 2;
   camera.right = (view * aspect) / 2;
   camera.top = view / 2;
@@ -216,6 +229,7 @@ export function shakeCamera(camera, strength = 0.5, duration = 0.45) {
 export function resizeCamera(camera, renderer) {
   camera.userData.appliedView = -1;   // force a projection rebuild at the new aspect
   applyProjection(camera, Math.max(3, camera.userData.view + camera.userData.punch + camera.userData.wide));
-  renderer.setSize(window.innerWidth, window.innerHeight);
+  const { w, h } = stageSize();
+  renderer.setSize(w, h, false);
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 }

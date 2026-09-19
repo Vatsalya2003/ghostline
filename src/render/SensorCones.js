@@ -92,7 +92,18 @@ const FRAG = /* glsl */ `
     float sweepPos = fract(uTime * 0.16);
     float sweep = smoothstep(0.050, 0.0, abs(a - sweepPos)) * 0.13 * (1.0 - uDegraded);
 
-    float alpha = (radial + rimGlow + pulse + sweep) * edges;
+    // Outline-first cone: the wedge is drawn as its border, with only a
+    // whisper of gradient inside. A filled cone hides the ground it is
+    // supposed to be revealing — the whole point is to see what is in there.
+    float sideLine = 1.0 - smoothstep(0.0, 0.026, min(a, 1.0 - a));
+    float rimLine  = smoothstep(0.90, 0.99, r) * (1.0 - smoothstep(0.99, 1.0, r));
+    float outline  = clamp(max(sideLine, rimLine * 1.15), 0.0, 1.0);
+
+    // Very light gradient: brightest at the unit, gone by the rim.
+    float fill = (0.055 + 0.13 * smoothstep(1.0, 0.0, r)) * edges;
+
+    float alpha = fill + outline * 0.85 + (pulse + sweep) * 0.45 * edges;
+    alpha += rimGlow * 0.25 * edges;
     vec3  color = uColor;
 
     // --- degradation ---------------------------------------------------

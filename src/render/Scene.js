@@ -92,7 +92,11 @@ function makeGroundTexture(tiles = GROUND_SIZE, px = 32) {
 export function createRenderer(canvas) {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-  renderer.setSize(window.innerWidth, window.innerHeight);
+  // Sized to the stage column, not the viewport — the map no longer owns the
+  // whole window. `false` keeps CSS in charge of the element's box.
+  const stage = document.getElementById('stage');
+  renderer.setSize(stage?.clientWidth || window.innerWidth,
+                   stage?.clientHeight || window.innerHeight, false);
   renderer.shadowMap.enabled = true;
   // PCFSoftShadowMap is gone in three r186 — the renderer warns and silently
   // uses PCFShadowMap anyway. Naming it is the same picture with a clean
@@ -109,7 +113,7 @@ export function createRenderer(canvas) {
   renderer.setClearColor(ENVIRONMENT === 'day' ? 0x6f7d8c : PALETTE.bg, 1);
   // Low sun, so less exposure lift than a scene lit by emissives alone — but
   // enough to keep the shadow side off the floor.
-  if (ENVIRONMENT === 'day') renderer.toneMappingExposure = 1.0;
+  if (ENVIRONMENT === 'day') renderer.toneMappingExposure = 1.15;
   return renderer;
 }
 
@@ -165,7 +169,7 @@ export function createScene() {
   // Key: cold moonlight at night, a low warm sun by day.
   // Low and warm: the long raking shadows are what give flat ground its
   // shape. A high sun flattens terrain into a texture swatch.
-  const key = new THREE.DirectionalLight(day ? 0xffc98a : 0xc2e4de, day ? 2.35 : 2.9);
+  const key = new THREE.DirectionalLight(day ? 0xffd4a0 : 0xc2e4de, day ? 3.0 : 2.9);
   key.position.set(day ? 26 : 8, day ? 9 : 14, day ? 15 : 6);
   key.castShadow = true;
   key.shadow.mapSize.set(day ? 3072 : 2048, day ? 3072 : 2048);
@@ -186,7 +190,7 @@ export function createScene() {
   // the dark ground it is standing on.
   // Cool fill from the opposite side — sky light in the shadows, which is
   // what actually happens at dusk and what stops shadows reading as black.
-  const rim = new THREE.DirectionalLight(day ? 0x6d90bd : 0x9a7f5e, day ? 0.7 : 1.0);
+  const rim = new THREE.DirectionalLight(day ? 0x8fb0d8 : 0x9a7f5e, day ? 1.25 : 1.0);
   rim.position.set(-11, 7, -9);
   rim.name = 'rim-light';
   scene.add(rim);
@@ -196,14 +200,14 @@ export function createScene() {
   // most of what sells "outdoors at night" on flat-shaded geometry.
   // By day this is the big one: blue sky above, warm soil bounce below.
   const bounce = day
-    ? new THREE.HemisphereLight(0x7d9cc4, 0x8a6a45, 1.25)
+    ? new THREE.HemisphereLight(0xa8c4e4, 0xa08462, 2.1)
     : new THREE.HemisphereLight(0x44635f, 0x0d1311, 1.45);
   scene.add(bounce);
 
   // Floor of ambient so nothing ever goes fully to black.
   // Deliberately low. Uniform ambient is what makes a scene read as a
   // render; the contrast between lit and unlit ground is the depth cue.
-  scene.add(new THREE.AmbientLight(day ? 0x54606b : 0x22302d, day ? 0.3 : 0.8));
+  scene.add(new THREE.AmbientLight(day ? 0x7b8892 : 0x22302d, day ? 0.75 : 0.8));
 
   let sky = null;
   let terrain = null;
