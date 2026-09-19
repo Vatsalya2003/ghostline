@@ -304,7 +304,7 @@ export const mission1 = {
         },
         FIRE: {
           tag: CALIBRATION.MISUSE,
-          healthDelta: -10,
+          healthDelta: -15,
           log: 'Suppressive fire into an occluded space. No contact struck. Position given away.',
           response: 'Firing blind. — No effect observed. They know where we are now.',
           fx: 'impact',
