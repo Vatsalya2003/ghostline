@@ -301,7 +301,7 @@ export class Unit {
     // alpha, so push opacity up as degradation rises.
     const opacity = status === STATUS.HEALTHY ? 0.24 : 0.52;
 
-    if (this.currentName !== 'Walk') this.idleForStatus();
+    if (this.currentName !== 'Walk' && !this.down) this.idleForStatus();
 
     if (animate) {
       gsap.to(this.cone.material.uniforms.uDegraded, { value: degraded, duration: 0.9 });
@@ -339,15 +339,56 @@ export class Unit {
     gsap.to(this.cone.mesh.rotation, { y: target, duration, ease: 'power2.out' });
   }
 
-  moveTo(x, z, duration = 0.4) {
+  moveTo(x, z, duration = 0.4, { run = false } = {}) {
     this.faceTowards(x, z, Math.min(duration, 0.3));
     // A damaged unit limps rather than marches. The clip is the same one; the
     // playback rate carries the whole read.
-    this.play('Walk', { fade: 0.18, timeScale: this.status === STATUS.DAMAGED ? 0.6 : 1.15 });
+    //
+    // `run` is for the beats where the squad is leaving somewhere rather than
+    // advancing into it — an extraction with a fuse running should not look
+    // like a patrol.
+    const clip = run && this.clips?.Run && this.status !== STATUS.DAMAGED ? 'Run' : 'Walk';
+    this.play(clip, { fade: 0.18, timeScale: this.status === STATUS.DAMAGED ? 0.6 : 1.15 });
     return gsap.to(this.group.position, {
       x, z, duration, ease: 'power2.inOut',
       onComplete: () => this.idleForStatus(),
     });
+  }
+
+  // One burst, then back to whatever this unit's idle is. The clip is shorter
+  // than the tracers it goes with, so the return to idle is scheduled rather
+  // than hung off the clip ending — otherwise the rig snaps back to neutral
+  // while rounds are still visibly in the air.
+  fire(hold = 0.9) {
+    if (!this.play('Shoot', { fade: 0.1 })) return;
+    gsap.delayedCall(hold, () => {
+      if (this.currentName === 'Shoot') this.idleForStatus();
+    });
+  }
+
+  // Overarm throw for ordnance.
+  throwOrdnance(hold = 0.8) {
+    if (!this.play('Attack', { fade: 0.1 })) return;
+    gsap.delayedCall(hold, () => {
+      if (this.currentName === 'Attack') this.idleForStatus();
+    });
+  }
+
+  // A unit that is lost stays down. One-shot, clamped at the last frame, and
+  // it deliberately does not return to idle — a wreck on the board for the
+  // rest of the mission is the point.
+  fall() {
+    const action = this.play('Death', { fade: 0.15 });
+    if (!action) return;
+    action.setLoop(THREE.LoopOnce, 1);
+    action.clampWhenFinished = true;
+    this.down = true;
+  }
+
+  // Cleared by a mission restart, which reuses the same unit objects.
+  standUp() {
+    this.down = false;
+    this.idleForStatus();
   }
 
   // Signature unchanged — main.js calls update(t) with elapsed seconds — so

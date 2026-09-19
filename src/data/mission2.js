@@ -502,6 +502,7 @@ export const mission2 = {
           response: 'Direct ascent. — BETA-2 is dropping back. BETA-2 is below recovery depth and out of power. She is gone. The mean was 41%. Hers was 11%.',
           fx: 'impact',
           impactUnit: 'BETA-2',
+          lostUnit: 'BETA-2',
           damages: { 'BETA-2': { integrity: -100, battery: -100 } },
           note: 'An average is not a fleet. It described none of your three vehicles, and the one it hid is the one you lost.',
         },

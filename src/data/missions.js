@@ -2,6 +2,7 @@
 // file — no engine change, which is the promise the architecture makes.
 import { mission1 } from './mission1.js';
 import { mission2 } from './mission2.js';
+import { mission3 } from './mission3.js';
 
 export const MISSIONS = [
   {
@@ -17,6 +18,13 @@ export const MISSIONS = [
     name: 'BLACK CURRENT',
     blurb: 'Undersea. Three AUVs, an anomaly logged twice and never explained, and an analyst that is right about everything except the world.',
     duration: '~8 min',
+  },
+  {
+    id: 'ammo-depot',
+    mission: mission3,
+    name: 'AMMUNITION DEPOT',
+    blurb: 'A compound, a room full of people the machine has to sort into hostages and hostiles, and a fire nobody modelled.',
+    duration: '~7 min',
   },
 ];
 

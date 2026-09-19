@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { createSky } from './Sky.js';
 import { createTerrain } from './Terrain.js';
 import { createSeabed } from './Seabed.js';
+import { createDepotGround } from './Depot.js';
 
 // 'day'   — late evening at a semi-arid installation: low sun, long shadows,
 //            warm key against a cool sky, practical lights doing real work.
@@ -129,6 +130,7 @@ export function createRenderer(canvas) {
 
 export function createScene({ environment = ENVIRONMENT, renderer = null } = {}) {
   const undersea = environment === 'undersea';
+  const depot = environment === 'depot';
   activeEnvironment = environment;
   // Deep water is dark, but an unreadable board is not a style. The survey
   // lights on the vehicles carry the contrast; the exposure just has to keep
@@ -185,7 +187,7 @@ export function createScene({ environment = ENVIRONMENT, renderer = null } = {})
   // light and cannot blow the fragment budget on a demo laptop.
 
   // Key: high, cold, off the north-east. Moonlight, not a studio light.
-  const day = ENVIRONMENT === 'day' && !undersea;
+  const day = (ENVIRONMENT === 'day' || depot) && !undersea;
 
   // Key: cold moonlight at night, a low warm sun by day.
   // Low and warm: the long raking shadows are what give flat ground its
@@ -195,8 +197,9 @@ export function createScene({ environment = ENVIRONMENT, renderer = null } = {})
   const key = new THREE.DirectionalLight(
     undersea ? 0xd6e6e0 : day ? 0xffd4a0 : 0xc2e4de,
     undersea ? 1.55 : day ? 3.0 : 2.9);
-  key.position.set(undersea ? 24 : day ? 26 : 8, undersea ? 56 : day ? 9 : 14,
-                   undersea ? 32 : day ? 15 : 6);
+  key.position.set(undersea ? 24 : depot ? 62 : day ? 26 : 8,
+                   undersea ? 56 : depot ? 44 : day ? 9 : 14,
+                   undersea ? 32 : depot ? 38 : day ? 15 : 6);
   key.castShadow = true;
   key.shadow.mapSize.set(day ? 3072 : 2048, day ? 3072 : 2048);
   key.shadow.camera.near = undersea ? 10 : 1;
@@ -205,8 +208,11 @@ export function createScene({ environment = ENVIRONMENT, renderer = null } = {})
   // fully black. On the seabed that showed up as two enormous hard-edged
   // wedges of void across the map — it read as missing geometry, and it was
   // a 22-unit shadow camera over a 200-unit floor.
-  key.shadow.camera.far = undersea ? 180 : day ? 140 : 50;
-  const s = undersea ? 48 : GROUND_SIZE * (day ? 1.5 : 0.75);
+  key.shadow.camera.far = undersea ? 180 : depot ? 220 : day ? 140 : 50;
+  // Has to enclose everything the camera can reach, or the ground outside it
+  // samples the clamped edge of the shadow map and goes dark — which reads as
+  // a pale lit diamond stamped on a dark plain rather than as a lighting bug.
+  const s = undersea ? 48 : depot ? 72 : GROUND_SIZE * (day ? 1.5 : 0.75);
   key.shadow.camera.left = -s;
   key.shadow.camera.right = s;
   key.shadow.camera.top = s;
@@ -247,6 +253,14 @@ export function createScene({ environment = ENVIRONMENT, renderer = null } = {})
   if (undersea) {
     terrain = createSeabed(scene);
     ground.visible = false;   // no concrete pad on a seabed
+  } else if (depot) {
+    sky = createSky(scene, {
+      top: 0x35506f,
+      horizon: 0xd79a62,
+      ground: 0x7a6248,
+    });
+    terrain = createDepotGround(scene);
+    ground.visible = false;   // the compound lays its own hardstanding
   } else if (day) {
     sky = createSky(scene, {
       top: 0x35506f,        // deep blue overhead

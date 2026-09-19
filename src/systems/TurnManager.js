@@ -149,7 +149,11 @@ export class TurnManager {
     // their own via `setsFlag`, and the mission's primary objective says
     // which flag decides a complete run.
     if (outcome.relayOnline) this.state.relayOnline = true;
-    if (outcome.setsFlag) this.state[outcome.setsFlag] = true;
+    // A single outcome can satisfy more than one objective — evacuating the
+    // hostages both records the evacuation and accounts for them.
+    if (outcome.setsFlag) {
+      for (const flag of [].concat(outcome.setsFlag)) this.state[flag] = true;
+    }
     if (outcome.revealHostiles) {
       this.state.hostilesRevealed = true;
       events.emit(GAME_EVENT.HOSTILES_REVEALED, { turn });

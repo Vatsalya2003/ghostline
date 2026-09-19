@@ -5,6 +5,7 @@ import { createCamera, resizeCamera, updateCamera, cutCamera, zoomCamera } from 
 import { createFogOfWar } from './render/FogOfWar.js';
 import { createLevel } from './render/Level.js';
 import { createSeabedLevel } from './render/SeabedLevel.js';
+import { createDepotLevel } from './render/DepotLevel.js';
 import { attachSurveyLights } from './render/Seabed.js';
 import { createSquad } from './render/Units.js';
 import { FX } from './render/FX.js';
@@ -50,9 +51,11 @@ const { scene, terrain } = createScene({ environment: mission1.environment, rend
 // over. Mission 1's flat compound keeps the original defaults.
 const fog = createFogOfWar(scene, mission1.environment === 'undersea'
   ? { size: 110, height: terrain.height, memSize: 256 }
-  : {});
-const level = mission1.environment === 'undersea'
-  ? createSeabedLevel(scene)
+  : mission1.environment === 'depot'
+    ? { size: 120, height: terrain.height, memSize: 256 }
+    : {});
+const level = mission1.environment === 'undersea' ? createSeabedLevel(scene)
+  : mission1.environment === 'depot' ? createDepotLevel(scene)
   : createLevel(scene);
 const squad = createSquad(scene);
 // At 240 metres nothing is lit until a vehicle lights it. The survey lights
@@ -305,6 +308,14 @@ pauseMenu = new PauseMenu({
   getTurn: () => turnManager.turn,
 });
 
+// The side panel only shows the last few lines. This holds the mission and
+// opens the whole transcript, which is the thing a player actually wants when
+// the debrief asks them to remember what happened on turn 4.
+document.getElementById('log-open')?.addEventListener('click', () => {
+  audio.select();
+  pauseMenu.show('log');
+});
+
 // Highest priority first. Contexts are picked by what is *visible*, so this
 // list can never disagree with the screen.
 input.addContext({
@@ -375,6 +386,23 @@ if (params.has('auto')) {
   setTimeout(step, 2500);
 }
 
+// ---------------------------------------------------------------- fire
+// Compound 14 burns through the back half of its mission. The fire is built
+// once and parked at zero; the mission turns it up. Level 1 is the fuel store
+// alight, level 2 is through the roofline and into the sensor picture — which
+// is the honest reason turn 7's readings are noisy.
+function updateFire(dt, t) {
+  const fire = level.fire;
+  if (!fire) return;
+  fire.update(dt, t);
+  const turn = turnManager.turn?.id ?? 0;
+  const wanted = !state.fireStarted ? 0 : turn >= 8 ? 2 : 1;
+  if (fire.level !== wanted) {
+    fire.level = wanted;
+    fire.setLevel(wanted);
+  }
+}
+
 // ---------------------------------------------------------------- loop
 // THREE.Clock is deprecated in r186. Timer is the replacement and wants an
 // explicit update() before either value is read.
@@ -390,6 +418,7 @@ function tick() {
   objectiveMarkers.update(dt, t);
   soundscape.update(dt);
   terrain?.dust.update(dt, t);
+  updateFire(dt, t);
   input.poll(dt);
   updateCamera(camera, dt, t);
   renderer.render(scene, camera);

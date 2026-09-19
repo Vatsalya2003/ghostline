@@ -158,10 +158,10 @@ export class Director {
 
   // Waits on the clock rather than on tween callbacks: if the ticker is
   // throttled (background tab, headless capture) the sequence must not stall.
-  moveSquad(moves, duration = 0.85) {
+  moveSquad(moves, duration = 0.85, opts = {}) {
     if (!moves) return Promise.resolve();
     for (const [id, [x, z]] of Object.entries(moves)) {
-      this.unit(id)?.moveTo(x, z, duration);
+      this.unit(id)?.moveTo(x, z, duration, opts);
     }
     return wait(duration + 0.05);
   }
@@ -236,6 +236,7 @@ export class Director {
       shooters.forEach((u, i) => {
         gsap.delayedCall(i * 0.09, () => {
           u.faceTowards(aim.x, aim.z, 0.2);
+          u.fire();
           this.fx.gunfire(u.position, aim, { rounds: 3, spread: 0.7 });
         });
       });
@@ -262,6 +263,7 @@ export class Director {
 
       const FUSE = 0.8;
       thrower.faceTowards(aim.x, aim.z, 0.25);
+      thrower.throwOrdnance(FUSE);
       this.fx.grenade(thrower.position, aim, {
         fuse: FUSE,
         onDetonate: () => {
@@ -307,6 +309,14 @@ export class Director {
         // A grenade hurts you when it detonates, not when it leaves your hand.
         if (hurtDelay > 0) gsap.delayedCall(hurtDelay, takeHit);
         else takeHit();
+
+        // A unit the mission says is lost falls and stays fallen. The wreck
+        // is on the board for the rest of the run, which is the whole reason
+        // losing one is supposed to feel different from taking damage.
+        if (outcome.lostUnit) {
+          const lost = this.unit(outcome.lostUnit);
+          gsap.delayedCall(hurtDelay + 0.35, () => lost?.fall());
+        }
 
         if (outcome.fx === 'ambush') {
           // Shooters in BETA-1's blind arc. Tracers run from the contacts to
@@ -413,7 +423,7 @@ export class Director {
     this.ui.hud.setHealth(this.state.health);
     this.ui.hud.setDrones(this.state.drones);
 
-    if (outcome.moves) await this.moveSquad(outcome.moves);
+    if (outcome.moves) await this.moveSquad(outcome.moves, 0.85, { run: !!outcome.urgent });
     await wait(0.25);
 
     if (outcome.response) {

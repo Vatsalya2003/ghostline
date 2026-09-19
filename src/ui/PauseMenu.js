@@ -99,6 +99,7 @@ export class PauseMenu {
   render() {
     const build = {
       menu: () => this.renderMenu(),
+      log: () => this.renderLog(),
       intel: () => this.renderIntel(),
       controls: () => this.renderControls(),
       remap: () => this.renderRemap(),
@@ -133,6 +134,44 @@ export class PauseMenu {
       this.button('ABORT TO TITLE', () => { this.hide(); this.onAbort?.(); }),
     );
     this.bodyEl.appendChild(list);
+  }
+
+  // The full transcript, with the game held. The side panel only has room for
+  // the last few lines, and by turn 8 the thing the player wants to re-read is
+  // four turns back — so it is worth stopping the mission for.
+  //
+  // Read straight out of the live log element rather than kept as a second
+  // copy: one source of truth, and it cannot drift out of step with the HUD.
+  renderLog() {
+    this.titleEl.textContent = 'MISSION LOG';
+    this.bodyEl.innerHTML = '';
+
+    const wrap = document.createElement('div');
+    wrap.className = 'log-pane';
+
+    const live = document.getElementById('log-lines');
+    const lines = live ? [...live.children] : [];
+    if (!lines.length) {
+      const empty = document.createElement('div');
+      empty.className = 'log-empty';
+      empty.textContent = 'No entries yet.';
+      wrap.appendChild(empty);
+    } else {
+      for (const line of lines) {
+        const copy = line.cloneNode(true);
+        copy.classList.remove('new');   // nothing in here is "just happened"
+        wrap.appendChild(copy);
+      }
+    }
+
+    this.bodyEl.appendChild(wrap);
+    const list = document.createElement('div');
+    list.className = 'menu-list';
+    list.append(this.button('RESUME MISSION', () => this.hide()));
+    this.bodyEl.appendChild(list);
+
+    // Open at the bottom: the newest line is the one being looked for.
+    requestAnimationFrame(() => { wrap.scrollTop = wrap.scrollHeight; });
   }
 
   renderIntel() {
@@ -276,7 +315,7 @@ export class PauseMenu {
       case CONTROL.CONFIRM: this.ring.activate(); return true;
       case CONTROL.CANCEL:
         audio.select();
-        if (this.pane === 'menu') this.hide();
+        if (this.pane === 'menu' || this.pane === 'log') this.hide();
         else { this.input.pad.cancelCapture(); this.pane = 'menu'; this.render(); }
         return true;
       case CONTROL.PAUSE: this.hide(); return true;

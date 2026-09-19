@@ -31,6 +31,17 @@ export const ACTION_LABELS = {
   REROUTE: 'REROUTE',
   TOW_RECOVERY: 'TOW RECOVERY',
   STAGED_ASCENT: 'STAGED ASCENT',
+  // Ammunition Depot's verbs. A compound mission: watching, identifying and
+  // deciding who is in a room, with a fire burning through the back half.
+  MARK_TARGET: 'MARK TARGET',
+  HOLD_FIRE: 'HOLD FIRE',
+  THERMAL_SWEEP: 'THERMAL SWEEP',
+  BREACH_QUIET: 'BREACH QUIET',
+  SET_CHARGE: 'SET CHARGE',
+  SHORT_FUSE: 'SHORT FUSE',
+  LONG_FUSE: 'LONG FUSE',
+  EVAC_HOSTAGES: 'EVAC HOSTAGES',
+  CROSS_CHECK: 'CROSS-CHECK',
 };
 
 export const CONFIDENCE = {

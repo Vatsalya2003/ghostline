@@ -433,3 +433,148 @@ Three walkers restore a relay at a desert station, late evening.
   systems, and it's much harder to teach.
 
 Dry Creek is the parachute. Black Current is the argument.
+
+---
+
+# PART 5 — MISSION 3: AMMUNITION DEPOT
+
+**Run it:** `http://localhost:5173/?mission=ammo-depot`
+
+## The setup
+
+An enemy compound holding a large stock of weapons and ammunition. Command
+wants it gone. Three robots go in together and stay together the whole way.
+
+**Ten turns, five phases, two turns each.** Your analyst is **VERITAS**.
+
+## The rule that runs through the whole thing
+
+> **In every phase, the first turn is a reading the AI gets right and you
+> should accept. The second is the same kind of reading with something
+> missing from it.**
+
+That is the design. A player who learns "always doubt the machine" fails turns
+1, 3, 5, 7 and 9. A player who learns "always confirm" fails 2, 4, 6, 8 and 10.
+**Neither reflex survives ten turns**, which is the only way to teach
+calibration rather than a habit.
+
+## Phase by phase
+
+### PHASE 1 — SCOUT
+
+**Turn 1 · Overwatch.** Clean long-range read. Three sensors agree the alarm
+bus is dead, and VERITAS says *"on this side"* — it names its own limit.
+→ **CONFIRM.**
+
+**Turn 2 · North wall.** A storage block hides two thirds of the wall.
+VERITAS reports **LOW** and says it will not commit an entry on it.
+→ **SEND DRONE.** There is a service door back there with a live alarm
+contact. Confirming here trips the whole compound.
+
+*The lesson: a machine telling you where its knowledge stops is the cheapest
+warning you will ever get. Spend your drone exactly there.*
+
+### PHASE 2 — SECURITY
+
+**Turn 3 · Patrol.** Two guards, fixed circuit, both in the open, watched for
+three full laps. A forty-second gap, every lap. → **BREACH QUIET.**
+
+**Turn 4 · Half cover.** A third figure behind crates — a shoulder and part of
+a head. VERITAS reports **HIGH** from a silhouette.
+→ **MARK TARGET** or **SEND DRONE.**
+
+> ⚠️ **It really is a guard.** You are still wrong if you shoot on that HIGH,
+> because you accepted a number built from an outline. **Being right by luck
+> is not calibration** — and next room it is a person in a chair.
+
+**🔥 The fire starts here.** If you shoot, a round goes into the fuel store.
+That fire is now burning for the rest of the mission.
+
+### PHASE 3 — HOSTAGES ⭐ the core
+
+**Turn 5 · The room.** Six figures. VERITAS classifies five: four bound at the
+wrists with no weapons, one standing with a rifle. All five fully in frame.
+**Restraints and weapons visible — this is an earned HIGH.** → **CONFIRM.**
+
+*Turn 5 exists so you can see what the machine looks like when it is genuinely
+sure. You need that to tell turn 6 apart from it.*
+
+**Turn 6 · The sixth figure. THIS IS THE KEY TURN.**
+
+Behind a filing cabinet. Bad angle, mostly hidden, not moving. VERITAS reports
+*"consistent with an armed combatant"* — **HIGH**, again.
+
+**It is a hostage.** A fifth civilian who hid when the shooting started,
+crouched with her arms round her knees. That posture reads as "braced
+combatant" to a template matcher.
+
+→ **HOLD FIRE** or **SEND DRONE.**
+
+| Choice | Result |
+|---|---|
+| HOLD FIRE | ✅ She stands up, hands open. Recovered |
+| SEND DRONE | ✅ Confirms unarmed civilian |
+| CONFIRM / FIRE | ❌ **−30. You kill her.** And VERITAS says so, out loud |
+
+> **Same HIGH. A tenth of the evidence. A person on the other end.** If you
+> press ASK WHY it tells you exactly what it has: *"I do not have hands, I do
+> not have a weapon, I do not have a face."*
+
+### PHASE 4 — APPROACH
+
+**Turn 7 · Interference.** The generator hall throws EM and the fire pushes
+smoke into the optical path. VERITAS's own confidence swings — 71, 63, 88 —
+and **it tells you the number is not real.**
+→ **CROSS-CHECK** (ALPHA's acoustic array doesn't care about EM).
+
+*A degraded instrument is not an unanswerable question. Go and get a different
+instrument.*
+
+**Turn 8 · Out of scope.** The hostages' stairwell is inside the blast radius.
+VERITAS **refuses to recommend** — it will give you blast modelling and fire
+spread but says weighing those lives is outside its parameters.
+→ **EVAC HOSTAGES** or **OVERRIDE.**
+
+> This is the most useful thing it says all mission. It is not refusing to
+> work — it is refusing to launder a moral decision into a confidence value.
+> Pressing CONFIRM here is agreeing with a recommendation that doesn't exist.
+
+### PHASE 5 — FINALE
+
+**Turn 9 · The charge.** VERITAS proposes a four-minute fuse. **The arithmetic
+is correct.** What it has no model for is the fire, which is three minutes from
+this room — so its own fuse lets the fire get there first.
+→ **SHORT FUSE.** (CROSS-CHECK is free and shows you the three-minute figure.)
+
+**Turn 10 · Extract.** It routes on distance: across the yard, 210 m shorter.
+**The yard is where the fuel store is burning**, and BETA-1 has been on a
+degraded sensor since the corridor.
+→ **OVERRIDE** or **FALL BACK** for the south gate.
+
+*It routed on distance because distance is what it was given.*
+
+## 🗺 Evaluating the depot map
+
+The compound is **one continuous place** and the ten camera positions walk a
+single line through it, from outside the wire in the south-west to the bunker
+in the east.
+
+| Look for | Why it's there |
+|---|---|
+| **The wire** — wall panels with posts, sliding gate, corner guard tower | The boundary the whole mission is organised around |
+| **Hardstanding inside, scrub outside** | You should be able to see the compound's shape with every building deleted |
+| **Vehicle tracks** from the gate to each building | Regular, worn, going somewhere — says *used*, not *generated* |
+| **The storage block** (north) | Exists because turn 2 needs something to hide a wall behind |
+| **The fuel store** (east yard) | Exists because turn 3 needs something to catch fire |
+| **The main building, open-roofed** | The hostage room. Turns 5–6 happen inside it, so you have to see in |
+| **The filing cabinet** | Small, and the most important object on the map |
+| **The ammunition bunker** | Earth-bermed, blast wall standing off the door. Should read as the hardest thing here |
+
+**The critical test:** can you tell what this place *is* before anyone speaks?
+A walled compound with a gate, vehicle tracks to the buildings that take
+deliveries, and one structure built to survive an explosion.
+
+**Known rough edges** — please confirm you see them:
+- The graded platform still has a visible straight edge where it meets the
+  hillside. Softer than it was, not gone.
+- The robots are the same walker models as the other missions.

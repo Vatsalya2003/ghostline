@@ -7,20 +7,22 @@ through their sensors. Each turn the squad AI tells you what it recommends and
 how confident it is — but sensors break, and a broken sensor still sounds
 confident.
 
-**There are two missions on one engine.**
+**There are three missions on one engine.**
 
-| | **DRY CREEK** | **BLACK CURRENT** |
-|---|---|---|
-| Where | A desert relay station, late evening | An undersea test range at 240 m |
-| Units | 3 walkers | 3 AUVs *(still using the walker models — see below)* |
-| The failure you learn | A sensor breaks and keeps reporting | Every reading is true **and** misleading |
-| Length | ~6 min | ~8 min |
-| Run it | `http://localhost:5173/` | `http://localhost:5173/?mission=black-current` |
+| | **DRY CREEK** | **BLACK CURRENT** | **AMMUNITION DEPOT** |
+|---|---|---|---|
+| Where | A desert relay station | An undersea test range at 240 m | An enemy compound, with a fire in it |
+| Turns | 6 | 6 | 10 (five phases of two) |
+| The failure you learn | A sensor breaks and keeps reporting | Every reading is true **and** misleading | The same HIGH confidence, built from almost nothing |
+| Length | ~6 min | ~8 min | ~7 min |
+| Run it | `http://localhost:5173/` | `?mission=black-current` | `?mission=ammo-depot` |
 
 Dry Creek is the ninety-second demo: you *watch* a sensor break, then you're
-asked to believe it. Black Current is the harder one — a machine reading a
-working instrument correctly and still being wrong, which is the failure that
-actually happens in autonomous systems.
+asked to believe it. Black Current is a machine reading a working instrument
+correctly and still being wrong. Ammunition Depot puts a person on the end of
+the answer — the machine has to sort a room into hostages and hostiles, and on
+turn 6 it gives you the same HIGH it earned on turn 5 for a figure it cannot
+actually see.
 
 **Design docs:** `team-brief.md` (what we're making) · `development-plan.md`
 (build order) · `mission-options.md` (both missions, side by side) ·
@@ -133,6 +135,8 @@ same colour for the same robot.
 **Left panel**
 - **SITUATION** — what's happening
 - **YOUR CALL** — what you're actually deciding this turn, in plain English
+- **MISSION LOG** — the last few entries. **FULL LOG** holds the mission and
+  opens the whole transcript; `ESC` or RESUME puts you back
 
 **Bottom**
 - **COMMS** — the AI's line, typed out. The header names the unit the reading
@@ -267,6 +271,40 @@ place.** A player who looks at the ground can read the answer before the AI
 concedes the point. Follow the trunk cable and the chain — they'll take you
 there.
 
+## Mission 3 — AMMUNITION DEPOT
+
+`http://localhost:5173/?mission=ammo-depot`
+
+Ten turns in five phases, two turns each. **The pattern inside every phase is
+the same and it is deliberate:** the first turn is a clean reading the AI gets
+right and you should accept, and the second is the same kind of reading with
+something missing from it.
+
+A player who learns "always doubt" fails the odd turns. A player who learns
+"always confirm" fails the even ones. Neither reflex survives ten turns.
+
+| Phase | Turn | What it tests |
+|---|---|---|
+| **SCOUT** | 1 · Overwatch | Three sensors agree and the AI names its own limit. Accept it |
+| | 2 · North wall | It reports **LOW** and says it will not commit. Send a drone — there's a live alarm contact back there |
+| **SECURITY** | 3 · Patrol | Fully observed, three laps, both guards in the open. An earned HIGH |
+| | 4 · Half cover | A shoulder behind crates, and a HIGH built from a silhouette. **The fire starts here if you shoot** |
+| **HOSTAGES** | 5 · The room | Five figures in clean frame, restraints and rifle visible. Correct, and properly earned |
+| | 6 · The sixth figure ⭐ | Same HIGH, a tenth of the evidence, and **a hostage behind it** |
+| **APPROACH** | 7 · Interference | The AI's own number swings on its own. It says so. Use a different instrument |
+| | 8 · Out of scope | It refuses to recommend — the hostages are in the blast radius. **OVERRIDE** |
+| **FINALE** | 9 · The charge | Its fuse arithmetic is right and has no fire model in it |
+| | 10 · Extract | It routes on distance. The short way is across the burning fuel store |
+
+**Turn 6 is the key turn.** It is the same machine that was right about five
+people, now confident about one it cannot see. `HOLD FIRE` or `SEND DRONE`.
+Pressing `CONFIRM` kills an unarmed civilian, and the mission tells you so.
+
+**The fire is the spine of the back half.** It starts as scenery in phase 2,
+becomes an honest reason the sensors are noisy in phase 4, and is a clock in
+phase 5. It is never the AI's fault and the AI never lies about it — it simply
+has no model for how fast it moves, because nothing gave it one.
+
 ---
 
 # 3. TESTING
@@ -280,8 +318,14 @@ there.
 | `http://localhost:5173/?auto=CONFIRM,CONFIRM,CONFIRM,CONFIRM,CONFIRM,CONFIRM` | Plays a full bad run to the debrief |
 | `?mission=black-current&skip=1` | Straight into Black Current turn 1 |
 | `?mission=black-current&auto=CONFIRM,COMPARE_LOGS,INSPECT_SEABED,REROUTE` | Plays the calibrated path up to turn 5 |
+| `?mission=ammo-depot&skip=1` | Straight into Ammunition Depot turn 1 |
+| `?mission=ammo-depot&auto=CONFIRM,SEND_DRONE,BREACH_QUIET,MARK_TARGET,CONFIRM` | Plays phases 1–3 and hands you **turn 6** |
 
-`?mission=` accepts `dry-creek` / `black-current`, or just `1` / `2`.
+`?mission=` accepts `dry-creek` / `black-current` / `ammo-depot`, or `1`/`2`/`3`.
+
+> ⚠ `npm run verify` currently only walks **mission 1**. Missions 2 and 3 are
+> checked by a schema lint and by playing them. Extending `verify.mjs` to loop
+> the registry is the highest-value test job outstanding.
 
 **This is also the judge demo:** `?auto=CONFIRM,SEND_DRONE` puts turn 3 on
 screen with the breach already played out.
@@ -386,11 +430,13 @@ desert. Nothing in `/systems` changed to add it.
 ```
 src/data/mission1.js   Dry Creek  — dialogue, confidence, outcomes, grades
 src/data/mission2.js   Black Current
+src/data/mission3.js   Ammunition Depot
 src/data/missions.js   registry + the ?mission= switch
 src/systems/           TurnManager, GameState, Director, Dialogue, Audio, Input
 src/render/            Scene, Camera, Units, SensorCones, FogOfWar, FX
   Terrain.js + Level.js         the desert
   Seabed.js  + SeabedLevel.js   the undersea range
+  Depot.js   + DepotLevel.js    Compound 14
   AssetLoader.js                FBX loading, with procedural fallback
 src/ui/                CommsPanel, CommandBar, StatusHUD, MissionLog, Debrief
 src/style/main.css     HUD, palette, scanlines, the 70/30 split layout

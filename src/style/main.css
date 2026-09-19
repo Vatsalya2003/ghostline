@@ -176,6 +176,29 @@ html, body {
   width: 330px; max-height: 42vh; overflow: hidden; padding: 8px 10px;
   display: flex; flex-direction: column; gap: 4px;
 }
+#log-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+#log-open {
+  font: inherit; font-size: 9px; letter-spacing: 0.12em; text-transform: uppercase;
+  color: var(--cyan); background: transparent; cursor: pointer;
+  border: 1px solid rgba(76, 224, 216, 0.4); border-radius: 0;
+  padding: 2px 7px; transition: background 120ms linear, color 120ms linear;
+}
+#log-open:hover, #log-open:focus-visible {
+  background: rgba(76, 224, 216, 0.16); color: #d6fffb; outline: none;
+}
+.log-pane {
+  display: flex; flex-direction: column; gap: 4px;
+  max-height: 52vh; overflow-y: auto;
+  padding: 10px 12px; margin-bottom: 14px;
+  border: 1px solid rgba(76, 224, 216, 0.18);
+  background: rgba(5, 10, 9, 0.6);
+}
+.log-pane div { font-size: 12px; line-height: 1.5; color: #9fc4bd; }
+.log-pane div::before { content: '> '; color: var(--dim); }
+.log-pane div.turn-mark { color: var(--amber); margin-top: 8px; }
+.log-pane div.turn-mark::before { content: ''; }
+.log-empty { color: var(--dim); font-style: italic; }
+.log-empty::before { content: ''; }
 #log-lines { display: flex; flex-direction: column; gap: 3px; overflow-y: auto; }
 #log-lines div { font-size: 11px; line-height: 1.45; color: #9fc4bd; }
 #log-lines div::before { content: '> '; color: var(--dim); }
