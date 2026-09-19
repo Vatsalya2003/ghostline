@@ -55,10 +55,10 @@ export const mission1 = {
       id: 1,
       name: 'APPROACH',
       situation: 'Squad holds at the south treeline. Relay Station 7, two hundred metres.',
-      camera: { x: -3, z: 4, zoom: 20 },
+      camera: { x: -3, z: 4, zoom: 16 },
       statuses: { LEAD: 'healthy', 'UNIT-2': 'healthy', 'UNIT-3': 'healthy' },
       intro: [
-        { type: 'pan', x: -3, z: 4, zoom: 20, duration: 1.2 },
+        { type: 'pan', x: -3, z: 4, zoom: 16, duration: 1.2 },
         { type: 'log', text: 'SQUAD IN POSITION — SOUTH TREELINE' },
       ],
       ai: {
@@ -110,10 +110,10 @@ export const mission1 = {
       id: 2,
       name: 'CONTACT',
       situation: 'Heat bloom at the west outbuilding. Nothing resolves.',
-      camera: { x: -4, z: 0, zoom: 17 },
+      camera: { x: -4, z: 0, zoom: 14 },
       statuses: { LEAD: 'healthy', 'UNIT-2': 'healthy', 'UNIT-3': 'healthy' },
       intro: [
-        { type: 'pan', x: -4, z: 0, zoom: 17, duration: 1.0 },
+        { type: 'pan', x: -4, z: 0, zoom: 14, duration: 1.0 },
         { type: 'alert' },
         { type: 'log', text: 'THERMAL RETURN — WEST OUTBUILDING — UNRESOLVED' },
       ],
@@ -175,12 +175,14 @@ export const mission1 = {
       id: 3,
       name: 'BREACH',
       situation: 'Breach charge on the south door. UNIT-2 stacks closest.',
-      camera: { x: 2.6, z: 2.5, zoom: 13 },
+      camera: { x: 2.6, z: 1.5, zoom: 14 },
       statuses: { LEAD: 'healthy', 'UNIT-2': 'glitch', 'UNIT-3': 'healthy' },
       // The demo beat. Order matters: damage first, silence, then the
       // confident recommendation arrives from the unit that just broke.
       intro: [
-        { type: 'pan', x: 2.6, z: 2.5, zoom: 13, duration: 1.1 },
+        { type: 'pan', x: 2.6, z: 1.5, zoom: 14, duration: 1.1 },
+        { type: 'move', moves: { LEAD: [1.4, 3.6], 'UNIT-2': [2.7, 3.5], 'UNIT-3': [4.0, 3.8] } },
+        { type: 'face', target: [2.6, 2] },
         { type: 'log', text: 'BREACH CHARGE SET — SOUTH DOOR' },
         { type: 'wait', duration: 0.6 },
         { type: 'breach' },
@@ -253,10 +255,10 @@ export const mission1 = {
       id: 4,
       name: 'INTERIOR',
       situation: 'Entry hall. A divider wall cuts the room in half.',
-      camera: { x: 3.0, z: -3.0, zoom: 15 },
+      camera: { x: 3.0, z: -3.0, zoom: 13 },
       statuses: { LEAD: 'healthy', 'UNIT-2': 'glitch', 'UNIT-3': 'healthy' },
       intro: [
-        { type: 'pan', x: 3.0, z: -3.0, zoom: 15, duration: 1.1 },
+        { type: 'pan', x: 3.0, z: -3.0, zoom: 13, duration: 1.1 },
         { type: 'move', moves: { LEAD: [1.0, 0.5], 'UNIT-2': [-0.5, 1.0], 'UNIT-3': [2.5, 0.0] } },
         { type: 'log', text: 'SQUAD INSIDE — DIVIDER WALL AHEAD' },
       ],
@@ -318,10 +320,10 @@ export const mission1 = {
       id: 5,
       name: 'RELAY',
       situation: 'Relay console. Authentication challenge on screen.',
-      camera: { x: 1.2, z: -5.0, zoom: 12 },
+      camera: { x: 1.2, z: -5.0, zoom: 10.5 },
       statuses: { LEAD: 'healthy', 'UNIT-2': 'glitch', 'UNIT-3': 'healthy' },
       intro: [
-        { type: 'pan', x: 1.2, z: -5.0, zoom: 12, duration: 1.1 },
+        { type: 'pan', x: 1.2, z: -5.0, zoom: 10.5, duration: 1.1 },
         { type: 'move', moves: { LEAD: [1.2, -3.6], 'UNIT-2': [-0.2, -3.0], 'UNIT-3': [3.0, -4.0] } },
         { type: 'log', text: 'RELAY CONSOLE — AUTHENTICATION REQUIRED' },
       ],
@@ -382,10 +384,10 @@ export const mission1 = {
       id: 6,
       name: 'EXTRACT',
       situation: 'Relay handled. Extraction window closing.',
-      camera: { x: -1, z: 1, zoom: 19 },
+      camera: { x: -1, z: 1, zoom: 16 },
       statuses: { LEAD: 'healthy', 'UNIT-2': 'glitch', 'UNIT-3': 'healthy' },
       intro: [
-        { type: 'pan', x: -1, z: 1, zoom: 19, duration: 1.2 },
+        { type: 'pan', x: -1, z: 1, zoom: 16, duration: 1.2 },
         { type: 'log', text: 'EXTRACTION WINDOW — SIX MINUTES' },
       ],
       ai: {

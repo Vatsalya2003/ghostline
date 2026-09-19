@@ -9,7 +9,107 @@
   <body>
     <div id="app">
       <canvas id="scene"></canvas>
+
+      <div id="ui">
+        <!-- ============ HUD ============ -->
+        <div id="hud">
+          <div class="panel" id="turn-box">
+            <div class="label">Operation</div>
+            <div id="turn-name">STANDBY</div>
+            <div id="turn-count">TURN — / —</div>
+          </div>
+
+          <div class="panel" id="health-box">
+            <div class="label">Squad integrity</div>
+            <div id="health-bar"><div id="health-fill"></div></div>
+            <div id="health-value">100%</div>
+          </div>
+
+          <div class="panel" id="squad-box">
+            <div class="label">Unit status</div>
+            <div id="squad-list"></div>
+          </div>
+
+          <div class="panel" id="drone-box">
+            <div class="label">Recon drones</div>
+            <div id="drone-pips"></div>
+          </div>
+        </div>
+
+        <!-- ============ SITUATION + LOG ============ -->
+        <div id="middle">
+          <div class="panel" id="situation">
+            <div class="label">Situation</div>
+            <div id="situation-text">—</div>
+          </div>
+          <div class="panel" id="log">
+            <div class="label">Mission log</div>
+            <div id="log-lines"></div>
+          </div>
+        </div>
+
+        <!-- ============ COMMS + COMMANDS ============ -->
+        <div id="bottom">
+          <div class="panel" id="comms">
+            <div>
+              <div id="comms-head">
+                <span class="label">Comms</span>
+                <span id="comms-source">—</span>
+                <span id="comms-relay"></span>
+              </div>
+              <div id="comms-text"></div>
+            </div>
+            <div id="confidence">
+              <div class="label">Stated confidence</div>
+              <div id="conf-label">—</div>
+              <div id="conf-bar">
+                <div class="conf-seg"></div><div class="conf-seg"></div><div class="conf-seg"></div>
+              </div>
+              <div id="conf-note"></div>
+            </div>
+          </div>
+          <div id="commands"></div>
+        </div>
+      </div>
+
+      <div id="fx-overlay"></div>
+      <div id="damage-flash"></div>
+
+      <!-- ============ SCREENS ============ -->
+      <div class="screen" id="screen-title">
+        <h2>DEFENSE TECH JAM · TRUST YOUR SYNTHETIC TEAMMATES</h2>
+        <h1>OVERRIDE<br />PROTOCOL</h1>
+        <p id="title-sub">OPERATION DRY CREEK — RELAY STATION 7</p>
+        <button class="btn" id="btn-begin">BEGIN MISSION</button>
+        <p class="label" id="title-hint">CONFIDENCE IS WHAT IT SAYS. THE CONE IS WHAT IT SEES.</p>
+      </div>
+
+      <div class="screen hidden" id="screen-briefing">
+        <h2>MISSION BRIEFING</h2>
+        <h1 style="font-size: clamp(22px, 3.4vw, 38px)">RELAY STATION 7</h1>
+        <ul id="briefing-list"></ul>
+        <button class="btn" id="btn-deploy">DEPLOY</button>
+      </div>
+
+      <div class="screen hidden" id="screen-debrief">
+        <h2 id="debrief-head">DEBRIEF</h2>
+        <div id="debrief-grid">
+          <div class="report" id="report-mission">
+            <h3>Mission outcome</h3>
+            <div class="verdict-line" id="mission-result">—</div>
+            <div class="sub" id="mission-sub"></div>
+          </div>
+          <div class="report" id="report-trust">
+            <h3>Trust calibration</h3>
+            <div id="mode-rows"></div>
+          </div>
+        </div>
+        <div id="verdict"></div>
+        <div id="decision-list"></div>
+        <button class="btn" id="btn-replay">RUN IT AGAIN</button>
+      </div>
     </div>
+
     <script type="module" src="/src/main.js"></script>
   </body>
 </html>

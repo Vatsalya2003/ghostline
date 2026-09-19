@@ -72,7 +72,7 @@ export class Unit {
       degraded: 0,
       // Kept low: three cones overlap constantly and additive blending
       // blows out to white if each one is strong on its own.
-      opacity: 0.30,
+      opacity: 0.24,
     }).attachTo(this.group).addTo(scene);
     this.cone.setHeading(heading);
     this.baseRange = coneRange;
@@ -96,11 +96,17 @@ export class Unit {
       : status === STATUS.GLITCH ? this.baseRange * 0.45
       : this.baseRange * 0.7;
 
+    // A broken cone has to stay loud, not fade away: the static eats a lot of
+    // alpha, so push opacity up as degradation rises.
+    const opacity = status === STATUS.HEALTHY ? 0.24 : 0.52;
+
     if (animate) {
       gsap.to(this.cone.material.uniforms.uDegraded, { value: degraded, duration: 0.9 });
+      gsap.to(this.cone.material.uniforms.uOpacity, { value: opacity, duration: 0.9 });
       this.setConeRange(range, 0.9);
     } else {
       this.cone.degraded = degraded;
+      this.cone.material.uniforms.uOpacity.value = opacity;
       this.setConeRange(range, 0);
     }
   }

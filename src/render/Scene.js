@@ -8,7 +8,7 @@ export const PALETTE = {
   dim: 0x4a5a52,
 };
 
-export const GROUND_SIZE = 20;
+export const GROUND_SIZE = 30;
 
 // Procedural grid texture — kept in-code so nothing loads from disk or a CDN.
 function makeGridTexture(tiles = GROUND_SIZE, px = 64) {
