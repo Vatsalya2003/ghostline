@@ -25,8 +25,19 @@ export const MODEL_FACING_OFFSET = Math.PI;
 export const CLIP_FILES = {
   idle: 'rifle-crouch-walk-to-idle.fbx',
   walk: 'walk-forward.fbx',
+  crouchwalk: 'crouched-walking-with-gun.fbx',
+  run: 'run-forward.fbx',
   glitch: 'sensor-error.fbx',
-  hit: 'death-from-the-front.fbx',
+  death: 'death-from-the-front.fbx',
+};
+
+// How each clip behaves once started.
+//   loop   — runs until something else takes over (default)
+//   return — plays once, then falls back to the default clip
+//   hold   — plays once and freezes on the last frame
+export const CLIP_MODES = {
+  glitch: 'return',
+  death: 'hold',
 };
 
 export const DEFAULT_CLIP = 'idle';

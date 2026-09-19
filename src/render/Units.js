@@ -4,7 +4,7 @@ import { clone as cloneSkinned } from 'three/examples/jsm/utils/SkeletonUtils.js
 import { PALETTE } from './Scene.js';
 import { SensorCone } from './SensorCones.js';
 import {
-  loadCharacter, loadClips, MODEL_FACING_OFFSET, DEFAULT_CLIP,
+  loadCharacter, loadClips, MODEL_FACING_OFFSET, DEFAULT_CLIP, CLIP_MODES,
 } from './ModelLoader.js';
 import { attachRifle } from './Weapon.js';
 import { StatusRim } from './StatusRim.js';
@@ -277,22 +277,48 @@ export class Unit {
     if (!next || this.currentClip === name) return false;
 
     const previous = this.currentClip ? this.actions.get(this.currentClip) : null;
-    next.reset().setEffectiveTimeScale(1).setEffectiveWeight(1).play();
+    const mode = CLIP_MODES[name] || 'loop';
+
+    next.reset().setEffectiveTimeScale(1).setEffectiveWeight(1);
+    if (mode === 'loop') {
+      next.setLoop(THREE.LoopRepeat, Infinity);
+      next.clampWhenFinished = false;
+    } else {
+      next.setLoop(THREE.LoopOnce, 1);
+      next.clampWhenFinished = true;
+    }
+    next.play();
+
     if (previous && fade > 0) {
       next.crossFadeFrom(previous, fade, false);
     } else if (previous) {
       previous.stop();
     }
     this.currentClip = name;
+
+    // One-shot reactions hand back to the resting clip when they finish.
+    if (mode === 'return') {
+      const onFinished = (event) => {
+        if (event.action !== next) return;
+        this.mixer.removeEventListener('finished', onFinished);
+        if (this.currentClip === name) this.playAnimation(DEFAULT_CLIP);
+      };
+      this.mixer.addEventListener('finished', onFinished);
+    }
     return true;
   }
 
-  moveTo(x, z, duration = 0.4) {
+  moveTo(x, z, duration = 0.4, clip = null) {
     this.faceTowards(x, z, Math.min(duration, 0.3));
-    const walking = this.playAnimation('walk');
+
+    // Short repositions read as a careful crouch-walk, long hauls as a run.
+    const distance = Math.hypot(x - this.group.position.x, z - this.group.position.z);
+    const chosen = clip || (distance > 4.5 ? 'run' : distance < 1.8 ? 'crouchwalk' : 'walk');
+
+    const moving = this.playAnimation(chosen);
     return gsap.to(this.group.position, {
       x, z, duration, ease: 'power2.inOut',
-      onComplete: () => { if (walking) this.playAnimation(DEFAULT_CLIP); },
+      onComplete: () => { if (moving) this.playAnimation(DEFAULT_CLIP); },
     });
   }
 

@@ -38,8 +38,17 @@ export class Director {
           await wait(beat.duration);
           break;
         case 'move':
-          await this.moveSquad(beat.moves);
+          await this.moveSquad(beat.moves, beat.duration ?? 0.85, beat.clip);
           break;
+        // { type: 'anim', unit: 'BETA-1', clip: 'crouchwalk' } — explicit
+        // animation control from mission data. Omit `unit` to drive the
+        // whole squad.
+        case 'anim': {
+          const targets = beat.unit ? [this.unit(beat.unit)] : this.squad.all;
+          for (const u of targets) u?.playAnimation(beat.clip, beat.fade ?? 0.3);
+          if (beat.hold) await wait(beat.hold);
+          break;
+        }
         case 'face':
           for (const u of this.squad.all) u.faceTowards(beat.target[0], beat.target[1], 0.4);
           await wait(0.45);
@@ -72,6 +81,9 @@ export class Director {
         case 'status': {
           const u = this.unit(beat.unit);
           audio.glitch();
+          // A sensor coming apart gets the sensor-error reaction, which
+          // hands itself back to idle when it finishes.
+          if (u && beat.status !== 'healthy') u.playAnimation('glitch', 0.15);
           if (u) u.setStatus(beat.status);
           this.state.statuses[beat.unit] = beat.status;
           this.ui.hud.setStatuses(this.state.statuses);
@@ -86,10 +98,10 @@ export class Director {
 
   // Waits on the clock rather than on tween callbacks: if the ticker is
   // throttled (background tab, headless capture) the sequence must not stall.
-  moveSquad(moves, duration = 0.85) {
+  moveSquad(moves, duration = 0.85, clip = null) {
     if (!moves) return Promise.resolve();
     for (const [id, [x, z]] of Object.entries(moves)) {
-      this.unit(id)?.moveTo(x, z, duration);
+      this.unit(id)?.moveTo(x, z, duration, clip);
     }
     return wait(duration + 0.05);
   }
@@ -140,6 +152,8 @@ export class Director {
     switch (outcome.fx) {
       case 'impact': case 'ambush': {
         const u = this.unit(outcome.impactUnit || 'ALPHA');
+        // Heavy hits put the unit down; lighter ones just flash.
+        if (u && (outcome.healthDelta || 0) <= -30) u.playAnimation('death', 0.12);
         if (u) this.fx.hitFlash(u);
         audio.impact();
         shakeCamera(this.camera, 0.7, 0.5);
