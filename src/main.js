@@ -7,6 +7,7 @@ import { createLevel } from './render/Level.js';
 import { createSquad } from './render/Units.js';
 import { FX } from './render/FX.js';
 import { mission1 } from './data/mission1.js';
+import { depot } from './data/depot.js';
 import { GameState } from './systems/GameState.js';
 import { TurnManager } from './systems/TurnManager.js';
 import { Director } from './systems/Director.js';
@@ -41,19 +42,24 @@ const HOME = squad.all.map((u) => ({
 }));
 
 // ---------------------------------------------------------------- game
-const state = new GameState(mission1);
-const turnManager = new TurnManager(mission1, state);
+// AMMUNITION DEPOT is the mission. ?m=relay brings back the six-turn relay
+// mission — kept working as the parachute, not deleted.
+const MISSIONS = { depot, relay: mission1 };
+const mission = MISSIONS[new URLSearchParams(location.search).get('m')] || depot;
+
+const state = new GameState(mission);
+const turnManager = new TurnManager(mission, state);
 
 const ui = {
   comms: new CommsPanel({ onType: () => audio.typeTick() }),
   commandBar: new CommandBar(handleAction),
-  hud: new StatusHUD(mission1),
+  hud: new StatusHUD(mission),
   log: new MissionLog(),
 };
 
 const director = new Director({ camera, squad, fx, ui, turnManager, state, level });
-const debrief = new Debrief(mission1, replay);
-const screens = new Screens(mission1, {
+const debrief = new Debrief(mission, replay);
+const screens = new Screens(mission, {
   onBegin: () => { audio.unlock(); audio.select(); screens.hideTitle(); screens.showBriefing(); },
   onDeploy: () => { audio.select(); screens.hideBriefing(); startMission(); },
 });
@@ -110,6 +116,8 @@ function startMission() {
   turnManager.start();
   ui.hud.setHealth(state.health);
   ui.hud.setDrones(state.drones);
+  ui.hud.setFire(state.fire, mission.cookoffThreshold);
+  for (const u of squad.all) u.setEnvironment(0);
 }
 
 function replay() {
@@ -131,8 +139,9 @@ const input = new Input({
 
 initVoices();
 ui.hud.setTurn(null);
-ui.hud.setHealth(100);
-ui.hud.setDrones(mission1.drones);
+ui.hud.setHealth(mission.startHealth);
+ui.hud.setFire(mission.startFire || 0, mission.cookoffThreshold);
+ui.hud.setDrones(mission.drones);
 ui.hud.setStatuses(state.statuses);
 
 window.addEventListener('resize', () => resizeCamera(camera, renderer));
@@ -172,4 +181,4 @@ function tick() {
 tick();
 
 // Console handles for tuning and for the plan's step-5 check.
-window.OP = { state, turnManager, director, squad, camera, scene, mission: mission1, startMission };
+window.OP = { state, turnManager, director, squad, camera, scene, mission, startMission };

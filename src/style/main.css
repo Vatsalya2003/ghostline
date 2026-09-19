@@ -118,6 +118,28 @@ html, body {
   52% { transform: translateX(1px); opacity: 1; text-shadow: 1px 0 var(--red), -1px 0 var(--cyan); }
 }
 
+/* Fire: a second meter that only ever climbs. Amber at a smoulder, red once
+   it is close to the stack. Mirrors the health bar so the two read as a pair. */
+#fire-box { min-width: 190px; }
+#fire-bar {
+  height: 10px; border: 1px solid rgba(224, 168, 76, 0.35); position: relative; background: #140f08;
+}
+#fire-fill {
+  position: absolute; inset: 1px auto 1px 1px; width: 0%;
+  background: var(--amber); box-shadow: 0 0 10px rgba(224, 168, 76, 0.5);
+  transition: width 600ms ease, background 300ms linear;
+}
+#fire-fill.hot { background: var(--red); box-shadow: 0 0 12px rgba(224, 82, 76, 0.65); }
+#fire-fill.critical { animation: fire-pulse 0.7s steps(2, end) infinite; }
+#fire-value { font-size: 12px; letter-spacing: 0.1em; color: var(--dim); }
+#fire-value.lit { color: var(--amber); }
+#fire-value.critical { color: var(--red); }
+
+@keyframes fire-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
+
 #drone-box { min-width: 120px; }
 #drone-pips { display: flex; gap: 5px; }
 .pip { width: 16px; height: 8px; border: 1px solid var(--hairline); }

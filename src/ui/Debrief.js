@@ -6,6 +6,8 @@ const OUTCOME_COPY = {
   complete: { title: 'MISSION COMPLETE', sub: 'Relay restored. Squad extracted.', cls: 'outcome-complete' },
   partial: { title: 'OBJECTIVE FAILED', sub: 'Squad extracted. The relay never came up.', cls: 'outcome-partial' },
   aborted: { title: 'MISSION ABORTED', sub: 'You called it off at the objective.', cls: 'outcome-aborted' },
+  costly: { title: 'OBJECTIVE TAKEN', sub: 'The depot is gone. So is a hostage you were sent to bring out.', cls: 'outcome-partial' },
+  cookoff: { title: 'STACK COOKED OFF', sub: 'The fire reached the ammunition room before you did. Nobody set a charge.', cls: 'outcome-lost' },
   lost: { title: 'SQUAD LOST', sub: 'Integrity reached zero. No units recovered.', cls: 'outcome-lost' },
 };
 

@@ -64,6 +64,12 @@ export class TurnManager {
     if (alt && this.state.health > alt.threshold) return { ...outcome, ...alt };
     const below = outcome.altIfHealthBelow;
     if (below && this.state.health < below.threshold) return { ...outcome, ...below };
+    // Fire variants let one turn read differently depending on whether the
+    // player set the building alight eight turns ago.
+    const fireAbove = outcome.altIfFireAbove;
+    if (fireAbove && this.state.fire > fireAbove.threshold) return { ...outcome, ...fireAbove };
+    const fireBelow = outcome.altIfFireBelow;
+    if (fireBelow && this.state.fire < fireBelow.threshold) return { ...outcome, ...fireBelow };
     return outcome;
   }
 
@@ -81,6 +87,8 @@ export class TurnManager {
     // Probe: adds information, does not end the turn or get graded.
     if (outcome.consumesTurn === false) {
       this.probesUsed.add(`${turn.id}:${action}`);
+      // Thinking is not free once the building is alight.
+      this.state.applyFire(this.state.fireLit ? (this.mission.fireSpreadPerProbe || 0) : 0);
       this.state.pushLog(outcome.log);
       const probe = { turn, action, outcome, probe: true };
       this.emit('probe', probe);
@@ -90,7 +98,11 @@ export class TurnManager {
     if (outcome.consumesDrone) this.state.drones -= 1;
     if (outcome.relayOnline) this.state.relayOnline = true;
     if (outcome.revealHostiles) this.state.hostilesRevealed = true;
+    if (outcome.hostageKilled) this.state.hostageKilled = true;
+    if (outcome.hostagesMoved) this.state.hostagesMoved = true;
+    if (outcome.igniteFire) this.state.fireLit = true;
 
+    this.state.applyFire(outcome.fireDelta);
     this.state.applyHealth(outcome.healthDelta);
     this.state.record(turn.id, action, outcome.tag, outcome.note);
     this.state.pushLog(outcome.log);
@@ -100,6 +112,8 @@ export class TurnManager {
 
     if (this.state.health <= 0) {
       this.endMission('lost');
+    } else if (this.cookedOff()) {
+      this.endMission('cookoff');
     } else if (outcome.endsMission) {
       this.endMission(outcome.endsMission);
     }
@@ -107,8 +121,17 @@ export class TurnManager {
   }
 
   // Called by the presentation layer once the outcome has finished playing.
+  // The stack goes up on its own once the fire reaches it. A loss condition
+  // that has nothing to do with squad health — the clock you started yourself.
+  cookedOff() {
+    const t = this.mission.cookoffThreshold;
+    return !!t && this.state.fire >= t;
+  }
+
   advanceTurn() {
     if (this.state.missionOver) return null;
+    this.state.applyFire(this.state.fireLit ? (this.mission.fireSpreadPerTurn || 0) : 0);
+    if (this.cookedOff()) return this.endMission('cookoff');
     this.state.turnIndex += 1;
     if (this.state.turnIndex >= this.mission.turns.length) {
       return this.endMission(this.state.relayOnline ? 'complete' : 'partial');
@@ -119,7 +142,8 @@ export class TurnManager {
   endMission(outcome) {
     if (this.state.missionOver) return null;
     this.state.missionOver = true;
-    this.state.outcome = outcome;
+    // Completing the mission having shot a hostage is not the same ending.
+    this.state.outcome = (outcome === 'complete' && this.state.hostageKilled) ? 'costly' : outcome;
     const summary = this.state.summary();
     this.emit('end', summary);
     return summary;

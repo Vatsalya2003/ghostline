@@ -12,6 +12,12 @@ export class StatusHUD {
     this.value = document.getElementById('health-value');
     this.squad = document.getElementById('squad-list');
     this.pips = document.getElementById('drone-pips');
+    this.fireFill = document.getElementById('fire-fill');
+    this.fireValue = document.getElementById('fire-value');
+    this.fireBox = document.getElementById('fire-box');
+    document.getElementById('fire-label').textContent = mission.fireLabel || 'Fire';
+    // Missions that cannot burn do not show a fire meter at all.
+    this.fireBox.style.display = mission.cookoffThreshold ? '' : 'none';
     this.situation = document.getElementById('situation-text');
     this.task = document.getElementById('task-text');
     document.getElementById('objective').textContent = mission.objective;
@@ -42,6 +48,24 @@ export class StatusHUD {
         `<span class="state">${STATE_LABEL[status]}</span>`;
       this.squad.appendChild(chip);
     }
+  }
+
+  // Fire reads as a state, not a percentage — the player needs "is this
+  // getting dangerous", not two significant figures.
+  setFire(fire, threshold = 85) {
+    if (!this.fireBox || this.fireBox.style.display === 'none') return;
+    const pct = Math.min(100, fire);
+    const hot = fire >= threshold * 0.55;
+    const critical = fire >= threshold * 0.8;
+    this.fireFill.style.width = `${pct}%`;
+    this.fireFill.classList.toggle('hot', hot);
+    this.fireFill.classList.toggle('critical', critical);
+    this.fireValue.textContent = fire <= 0 ? 'CONTAINED'
+      : critical ? 'AT THE STACK'
+      : hot ? 'SPREADING'
+      : 'BURNING';
+    this.fireValue.classList.toggle('lit', fire > 0 && !critical);
+    this.fireValue.classList.toggle('critical', critical);
   }
 
   setDrones(n) {

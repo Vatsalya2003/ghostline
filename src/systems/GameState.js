@@ -11,14 +11,28 @@ export class GameState {
   reset() {
     this.health = this.mission.startHealth;
     this.drones = this.mission.drones;
+    // Fire is a second resource that only ever moves one way. It is lit by
+    // impatience and fed by hesitation, which is what gives the free probes
+    // a price and makes verification a real decision instead of a free one.
+    this.fire = this.mission.startFire || 0;
+    this.fireLit = false;
     this.turnIndex = 0;
     this.statuses = { ALPHA: 'healthy', 'BETA-1': 'healthy', 'BETA-2': 'healthy' };
     this.calibration = [];       // { turn, action, tag, note }
     this.log = [];
     this.relayOnline = false;
     this.hostilesRevealed = false;
+    this.hostageKilled = false;
+    this.hostagesMoved = false;
     this.missionOver = false;
     this.outcome = null;          // 'complete' | 'lost' | 'aborted'
+  }
+
+  applyFire(delta) {
+    if (!delta) return this.fire;
+    this.fire = Math.max(0, Math.min(100, this.fire + delta));
+    if (this.fire > 0) this.fireLit = true;
+    return this.fire;
   }
 
   applyHealth(delta) {
@@ -78,6 +92,9 @@ export class GameState {
       keyTurnLine: this.keyTurnFailure() ? this.mission.keyTurnVerdict : null,
       decisions: [...this.calibration],
       relayOnline: this.relayOnline,
+      fire: this.fire,
+      hostageKilled: this.hostageKilled,
+      hostagesMoved: this.hostagesMoved,
     };
   }
 }

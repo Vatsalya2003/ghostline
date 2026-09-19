@@ -21,6 +21,16 @@ export class Director {
 
   unit(id) { return this.squad.all.find((u) => u.id === id); }
 
+  // Smoke degrades every cone at once. Pushed to the models and the HUD from
+  // one place so the meter and the ground can never disagree.
+  syncEnvironment() {
+    const threshold = this.state.mission?.cookoffThreshold;
+    this.ui.hud.setFire(this.state.fire, threshold);
+    if (!threshold) return;
+    const level = Math.min(1, this.state.fire / threshold);
+    for (const u of this.squad.all) u.setEnvironment(level * 0.8);
+  }
+
   async playIntro(turn) {
     for (const beat of turn.intro || []) {
       switch (beat.type) {
@@ -101,6 +111,7 @@ export class Director {
     this.ui.hud.setTurn(turn);
     this.ui.hud.setStatuses(this.state.statuses);
     this.ui.hud.setDrones(this.state.drones);
+    this.syncEnvironment();
     this.ui.comms.setConfidence('NONE');
 
     // Reflect the turn's declared statuses on the models (cone degradation
@@ -171,6 +182,8 @@ export class Director {
     this.ui.log.push(outcome.log);
     this.ui.hud.setHealth(this.state.health);
     this.ui.hud.setDrones(this.state.drones);
+    if (outcome.igniteFire) { audio.alarm(); this.flash(0xe0a84c); }
+    this.syncEnvironment();
 
     if (outcome.moves) await this.moveSquad(outcome.moves);
     await wait(0.25);
@@ -193,6 +206,7 @@ export class Director {
     this.ui.commandBar.setLocked(true);
     if (resolution.outcome.fx === 'nightvision') audio.scan();
     this.ui.log.push(resolution.outcome.log);
+    this.syncEnvironment();
     audio.radioOpen();
     await this.ui.comms.say(resolution.outcome.response, {
       source: resolution.turn.ai.unit,
@@ -214,6 +228,7 @@ export class Director {
 
   reset() {
     this.hostilesShown = false;
+    this.syncEnvironment();
     this.fx.clearHostiles();
   }
 }

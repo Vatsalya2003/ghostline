@@ -160,6 +160,29 @@ export class Unit {
     }
   }
 
+  // Smoke is a different kind of blindness from damage: nothing is broken,
+  // every unit degrades at once, and it gets worse the longer you take. It
+  // composes on top of status rather than replacing it, so a glitched unit in
+  // smoke is worse off than either alone.
+  setEnvironment(level) {
+    this.environment = Math.max(0, Math.min(1, level || 0));
+    const statusDegraded = this.status === STATUS.HEALTHY ? 0
+      : this.status === STATUS.GLITCH ? 1 : 0.65;
+    const statusRange = this.status === STATUS.HEALTHY ? this.baseRange
+      : this.status === STATUS.GLITCH ? this.baseRange * 0.45
+      : this.baseRange * 0.7;
+
+    const degraded = Math.min(1, statusDegraded + this.environment * 0.85);
+    const range = statusRange * (1 - this.environment * 0.45);
+    const opacity = this.status === STATUS.HEALTHY
+      ? 0.24 + this.environment * 0.24
+      : 0.52;
+
+    gsap.to(this.cone.material.uniforms.uDegraded, { value: degraded, duration: 1.2 });
+    gsap.to(this.cone.material.uniforms.uOpacity, { value: opacity, duration: 1.2 });
+    this.setConeRange(range, 1.2);
+  }
+
   // Rebuilding geometry per frame would be wasteful; scaling the wedge is the
   // cheap way to shrink range and it keeps the shader's uv space intact.
   setConeRange(range, duration = 0.6) {
