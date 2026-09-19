@@ -82,6 +82,19 @@ function buildDrone() {
     rotors.push(blade, disc);
   }
 
+  // Scan beam. A cone hanging off the gimbal, hidden until the drone is
+  // actually inspecting something — this is the visual that says "it is
+  // looking at *this* spot" rather than "it is flying around".
+  const beamMat = new THREE.MeshBasicMaterial({
+    color: PALETTE.cyan, transparent: true, opacity: 0,
+    blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide,
+  });
+  const beam = new THREE.Mesh(new THREE.ConeGeometry(0.55, 1, 18, 1, true), beamMat);
+  beam.position.y = -0.5;       // apex at the gimbal, opening downward
+  beam.renderOrder = 9;
+  beam.visible = false;
+  gimbal.add(beam);
+
   // Navigation lights: red port, green starboard. Tiny, but they are the
   // detail that makes the thing read as an aircraft rather than a prop.
   for (const [dx, colour] of [[-0.3, 0xff5a4a], [0.3, 0x63ff9a]]) {
@@ -97,7 +110,7 @@ function buildDrone() {
 
   for (const o of body.children) { o.castShadow = true; }
 
-  root.userData = { body, gimbal, lens: lensMat, rotors };
+  root.userData = { body, gimbal, lens: lensMat, rotors, beam, beamMat };
   return root;
 }
 
@@ -115,15 +128,21 @@ export class Drone {
     this.group.position.y = DOCK_Y;
     scene.add(this.group);
 
-    const { body, gimbal, lens, rotors } = this.group.userData;
+    const { body, gimbal, lens, rotors, beam, beamMat } = this.group.userData;
     this.body = body;
     this.gimbal = gimbal;
     this.lens = lens;
     this.rotors = rotors;
+    this.beam = beam;
+    this.beamMat = beamMat;
 
     this.power = 0;        // 0 docked, 1 flying — drives rotor speed and bob
     this.spin = 0;
     this.flying = false;
+    // Tweened by the sortie; update() renders it through a flicker, so the
+    // two never fight over beamMat.opacity.
+    this.beamLevel = 0;
+    this.bank = 0;
 
     // Ground light the drone casts while it sweeps. One unshadowed point,
     // switched off between sweeps so it costs nothing for most of the mission.
@@ -132,55 +151,138 @@ export class Drone {
     scene.add(this.lamp);
   }
 
-  // Launch from `from`, sweep `to`, hold for the scan, come home and land.
-  // Returns a promise that settles when the drone is back on the deck, so the
-  // Director can keep its beat timing in one place.
-  sweep(from, to, { onScan = null, hold = 1.1 } = {}) {
+  // Fly a reconnaissance sortie: launch from `from`, transit to `to`, orbit
+  // and inspect it, then come home and land.
+  //
+  // `to` may carry a `hover` height (a mast needs more clearance than open
+  // ground) and a `key` naming the place, which is what makes turn 2's
+  // outbuilding sortie visibly a different flight from turn 4's divider run.
+  //
+  // Returns a promise that settles when the drone is back on the deck — or
+  // immediately, if the sortie is aborted by a restart.
+  sweep(from, to, { onScan = null, hold = 1.4 } = {}) {
     if (this.flying) return Promise.resolve();
     this.flying = true;
+    this.target = to.key || null;
 
+    const cruise = to.hover || CRUISE_Y;
     this.group.visible = true;
     this.group.position.set(from.x, DOCK_Y, from.z);
     this.faceTowards(to.x, to.z, 0);
 
+    const a = new THREE.Vector3(from.x, DOCK_Y, from.z);
+    const b = new THREE.Vector3(to.x, cruise, to.z);
+    const span = Math.hypot(b.x - a.x, b.z - a.z);
+
+    // Transit time scales with distance, so a short hop to the perimeter does
+    // not take as long as a run across the compound to the relay mast. The
+    // flight reads as a journey rather than a fixed-length animation.
+    const transit = THREE.MathUtils.clamp(span * 0.16, 0.8, 2.2);
+
+    // Lateral bow on the flight path. A drone sliding along a straight line
+    // between two points looks like a tween; a shallow curve, banked into,
+    // looks like something flying.
+    const bowSign = ((Math.round(to.x + to.z) % 2) === 0) ? 1 : -1;
+    const bow = Math.min(span * 0.18, 2.4) * bowSign;
+    const nx = -(b.z - a.z) / Math.max(span, 1e-3);
+    const nz = (b.x - a.x) / Math.max(span, 1e-3);
+
     const tl = gsap.timeline();
-    // Spin up before it leaves the ground.
+    this.tl = tl;
+
+    // Spin up on the deck before it leaves the ground.
     tl.to(this, { power: 1, duration: 0.45, ease: 'power2.in' }, 0);
-    tl.to(this.group.position, { y: CRUISE_Y, duration: 0.85, ease: 'power2.out' }, 0.25);
-    tl.to(this.group.position, {
-      x: to.x, z: to.z, duration: 1.0, ease: 'power2.inOut',
-      onUpdate: () => this.faceTowards(to.x, to.z, 0.25),
-    }, 0.6);
+    tl.to(this.group.position, { y: cruise, duration: 0.8, ease: 'power2.out' }, 0.25);
 
-    // Sensor head tips down into the sweep, then levels off.
-    tl.to(this.gimbal.rotation, { x: 0.85, duration: 0.5, ease: 'power2.out' }, 1.2);
-    tl.to(this.lamp, { intensity: 11, duration: 0.4 }, 1.3);
-    tl.call(() => { if (onScan) onScan(); }, null, 1.6);
-    tl.to(this.gimbal.rotation, { x: 0, duration: 0.5, ease: 'power2.inOut' }, 1.6 + hold);
-    tl.to(this.lamp, { intensity: 0, duration: 0.6 }, 1.6 + hold);
+    // Transit. Position is driven by hand rather than by three separate
+    // tweens, so the arc, the bank and the heading all stay in step.
+    const out = { p: 0 };
+    tl.to(out, {
+      p: 1, duration: transit, ease: 'power2.inOut',
+      onUpdate: () => {
+        const k = out.p;
+        const arc = Math.sin(k * Math.PI);           // 0 at both ends
+        this.group.position.x = a.x + (b.x - a.x) * k + nx * bow * arc;
+        this.group.position.z = a.z + (b.z - a.z) * k + nz * bow * arc;
+        this.group.position.y = a.y + (b.y - a.y) * k + arc * 0.5;
+        this.bank = -bowSign * arc * 0.28;
+        this.faceTowards(b.x, b.z, 0.2);
+      },
+    }, 0.55);
 
-    // Home and land.
-    tl.to(this.group.position, {
-      x: from.x, z: from.z, duration: 1.0, ease: 'power2.inOut',
-      onUpdate: () => this.faceTowards(from.x, from.z, 0.3),
-    }, 2.3 + hold);
-    tl.to(this.group.position, { y: DOCK_Y, duration: 0.7, ease: 'power2.in' }, 3.1 + hold);
-    tl.to(this, { power: 0, duration: 0.6, ease: 'power2.out' }, 3.4 + hold);
-    tl.call(() => { this.flying = false; this.group.visible = false; });
+    const arrive = 0.55 + transit;
 
-    return new Promise((resolve) => { tl.eventCallback('onComplete', resolve); });
+    // On station: gimbal tips down, beam opens, lamp comes up, and the drone
+    // orbits the point it is inspecting instead of parking over it.
+    tl.call(() => { this.inspecting = true; this.orbit = { x: b.x, z: b.z, y: cruise }; }, null, arrive);
+    tl.to(this.gimbal.rotation, { x: 1.0, duration: 0.45, ease: 'power2.out' }, arrive);
+    tl.to(this.lamp, { intensity: 13, duration: 0.4 }, arrive);
+    tl.to(this, { beamLevel: 0.22, duration: 0.35 }, arrive);
+    tl.call(() => { if (onScan) onScan(); }, null, arrive + 0.35);
+
+    const leave = arrive + hold;
+    tl.call(() => { this.inspecting = false; }, null, leave);
+    tl.to(this.gimbal.rotation, { x: 0, duration: 0.45, ease: 'power2.inOut' }, leave);
+    tl.to(this.lamp, { intensity: 0, duration: 0.5 }, leave);
+    tl.to(this, { beamLevel: 0, duration: 0.4 }, leave);
+
+    // Home, on the mirrored bow so the return leg is visibly its own flight.
+    const back = { p: 0 };
+    tl.to(back, {
+      p: 1, duration: transit, ease: 'power2.inOut',
+      onUpdate: () => {
+        const k = back.p;
+        const arc = Math.sin(k * Math.PI);
+        this.group.position.x = b.x + (a.x - b.x) * k - nx * bow * arc;
+        this.group.position.z = b.z + (a.z - b.z) * k - nz * bow * arc;
+        this.bank = bowSign * arc * 0.28;
+        this.faceTowards(a.x, a.z, 0.25);
+      },
+    }, leave + 0.45);
+
+    const home = leave + 0.45 + transit;
+    tl.to(this.group.position, { y: DOCK_Y, duration: 0.7, ease: 'power2.in' }, home);
+    tl.to(this, { power: 0, duration: 0.6, ease: 'power2.out' }, home + 0.2);
+    tl.call(() => this.land());
+
+    return new Promise((resolve) => { this.settle = resolve; });
   }
 
-  // Mission restart. Kills any sweep in flight and puts the drone back on the
-  // deck, so a replay never starts with last run's aircraft still airborne.
-  reset() {
-    gsap.killTweensOf([this, this.group.position, this.gimbal.rotation, this.lamp]);
+  // End of sortie, however it ended.
+  //
+  // Settling the promise here rather than off the timeline's onComplete
+  // matters: killing a timeline's children does not fire its onComplete, so an
+  // aborted sweep used to strand whatever was awaiting it. A stranded await in
+  // the Director is not a hang — the continuation runs later, against the
+  // *next* mission.
+  land() {
     this.flying = false;
-    this.power = 0;
-    this.lamp.intensity = 0;
-    this.gimbal.rotation.set(0, 0, 0);
+    this.inspecting = false;
+    this.target = null;
+    this.orbit = null;
+    this.bank = 0;
     this.group.visible = false;
+    this.beamLevel = 0;
+    this.beamMat.opacity = 0;
+    this.lamp.intensity = 0;
+    this.tl = null;
+    const settle = this.settle;
+    this.settle = null;
+    if (settle) settle();
+  }
+
+  // Mission restart. Aborts any sortie in flight and puts the drone back on
+  // the deck, so a replay never starts with last run's aircraft still up.
+  reset() {
+    // Kill the timeline itself, not just its targets. Killing only the targets
+    // leaves the timeline alive with its callbacks unfired — the exact shape
+    // of the restart-mid-sweep bug.
+    this.tl?.kill();
+    gsap.killTweensOf([this, this.group.position, this.gimbal.rotation, this.lamp]);
+    this.power = 0;
+    this.gimbal.rotation.set(0, 0, 0);
     this.group.position.set(0, DOCK_Y, 0);
+    this.land();                 // settles any promise still waiting on us
   }
 
   faceTowards(x, z, duration = 0.3) {
@@ -214,14 +316,43 @@ export class Drone {
       this.rotors[i].rotation.y = i % 4 < 2 ? this.spin : -this.spin;
     }
 
+    // On station: a slow orbit around the point being inspected. This is the
+    // difference between "the drone arrived" and "the drone is looking at
+    // something" — and it is legible from the tactical camera in a way a
+    // hovering dot is not.
+    if (this.inspecting && this.orbit) {
+      this.orbitPhase = (this.orbitPhase || 0) + dt * 1.05;
+      const r = 0.95;
+      this.group.position.x = this.orbit.x + Math.sin(this.orbitPhase) * r;
+      this.group.position.z = this.orbit.z + Math.cos(this.orbitPhase) * r;
+      // Keep the nose on the thing it is inspecting, not on the flight path.
+      this.faceTowards(this.orbit.x, this.orbit.z, 0.3);
+      this.bank = 0.16;
+    }
+
     const hover = this.power * 0.05;
     this.body.position.y = Math.sin(t * 4.1) * hover;
-    this.body.rotation.z = Math.sin(t * 2.3) * hover * 0.9;
+    // Bank into the turn, with the idle wobble on top.
+    this.body.rotation.z = (this.bank || 0) + Math.sin(t * 2.3) * hover * 0.9;
     this.body.rotation.x = Math.cos(t * 1.7) * hover * 0.7;
 
-    // The gimbal scans side to side whenever the drone is up, so the sensor
-    // never looks parked.
-    this.gimbal.rotation.y = Math.sin(t * 1.9) * 0.55 * this.power;
+    // The gimbal sweeps side to side whenever the drone is up, so the sensor
+    // never looks parked. It sweeps wider while actually inspecting.
+    const sweepWidth = this.inspecting ? 0.75 : 0.55;
+    this.gimbal.rotation.y = Math.sin(t * 1.9) * sweepWidth * this.power;
+
+    // Stretch the scan cone so it always reaches the ground, whatever height
+    // the drone is holding, and let it breathe while it reads.
+    if (this.beamLevel > 0.001) {
+      this.beam.visible = true;
+      const drop = Math.max(0.6, this.group.position.y / Math.max(this.group.scale.y, 1e-3));
+      this.beam.scale.set(1, drop, 1);
+      this.beam.position.y = -drop * 0.5;
+      this.beamMat.opacity = this.beamLevel * (0.75 + 0.25 * Math.sin(t * 6.5));
+    } else if (this.beam.visible) {
+      this.beam.visible = false;
+      this.beamMat.opacity = 0;
+    }
 
     this.lamp.position.set(this.group.position.x, this.group.position.y - 0.2, this.group.position.z);
   }

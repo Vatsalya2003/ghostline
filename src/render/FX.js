@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import gsap from 'gsap';
 import { PALETTE } from './Scene.js';
 import { Drone } from './Drone.js';
+import { CombatFX } from './CombatFX.js';
 import { spawnModel, preload } from './AssetLoader.js';
 
 // Impacts, drone scans, hostile markers. Deterministic — every burst uses a
@@ -12,6 +13,10 @@ export class FX {
     this.active = [];
     this.hostiles = [];
     this.drone = new Drone(scene);
+    // Gunfire, grenades, explosions and strike sparks. Kept in its own system
+    // because all of it is positional and none of it is about a unit's own
+    // materials, which is what the methods below deal in.
+    this.combat = new CombatFX(scene);
     // Hostiles are not revealed until the ambush, five turns in. Fetching a
     // 695 KB rig at that exact moment would stall the beat the mission turns
     // on, so it is warmed now while the title card is still up.
@@ -21,15 +26,29 @@ export class FX {
     this.clock = 0;
   }
 
-  // A recon sweep: the drone actually launches, flies out, scans and returns.
-  // The expanding ring still fires at the scan point, so every caller that
-  // used to rely on `ring` alone gets the same read plus an aircraft.
-  droneSweep(from, to, { color = PALETTE.cyan, radius = 9 } = {}) {
+  // A recon sortie. `to` is a resolved place from Level.PLACES — it carries a
+  // hover height and a key naming the ground, so turn 2's outbuilding run and
+  // turn 4's divider run are visibly different flights.
+  //
+  // `onArrive` fires when the drone is actually on station and looking down,
+  // not when the order is given: that is the moment the sweep's consequences
+  // (fog lifting, contacts painting) should land, so what the player sees is
+  // caused by the aircraft rather than coincident with it.
+  droneSweep(from, to, { color = PALETTE.cyan, radius = 7, onArrive = null } = {}) {
     this.drone.setColor(color);
     return this.drone.sweep(from, to, {
-      onScan: () => this.ring(to.x, to.z, { color, radius, duration: 1.1 }),
+      onScan: () => {
+        this.ring(to.x, to.z, { color, radius, duration: 1.1 });
+        if (onArrive) onArrive(to);
+      },
     });
   }
+
+  // ---- combat, forwarded so callers only need the one fx handle ----------
+  gunfire(from, to, opts) { this.combat.gunfire(from, to, opts); }
+  grenade(from, to, opts) { return this.combat.grenade(from, to, opts); }
+  explosion(at, opts) { this.combat.explosion(at, opts); }
+  unitHit(at, opts) { this.combat.unitHit(at, opts); }
 
   burst(x, z, { color = PALETTE.red, count = 22, spread = 2.2, life = 0.75 } = {}) {
     const geo = new THREE.BufferGeometry();
@@ -143,7 +162,10 @@ export class FX {
   }
 
   // Called on mission restart alongside clearHostiles.
-  resetDrone() { this.drone.reset(); }
+  resetDrone() {
+    this.drone.reset();
+    this.combat.clear();
+  }
 
   clearHostiles() {
     for (const h of this.hostiles) {
@@ -163,6 +185,7 @@ export class FX {
   update(dt) {
     this.clock += dt;
     this.drone.update(dt, this.clock);
+    this.combat.update(dt);
 
     for (let i = this.active.length - 1; i >= 0; i--) {
       const p = this.active[i];

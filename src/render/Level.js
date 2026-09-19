@@ -61,6 +61,61 @@ function wallRun(group, { x, z, length, axis, height = WALL_H }) {
   }
 }
 
+// -------------------------------------------------------- recon & objectives
+//
+// Named places in the compound, in world coordinates. The mission file talks
+// about "the outbuilding", "the divider", "the entry" in prose and moves units
+// to literal numbers; it has no table of where those words point. Rather than
+// push coordinates into mission data — which is gameplay's file, and which
+// would be a second source of truth for the same positions — the presentation
+// layer keeps its own gazetteer here and resolves by name.
+//
+// `hover` is how high the drone sits over the place while it inspects it;
+// taller structures need more clearance than open ground.
+// `y` is the height a ground marker has to sit at to clear whatever is already
+// standing there — the relay mast has a 0.3-unit plinth, and a marker ring laid
+// on the floor would be swallowed by it.
+export const PLACES = {
+  perimeter:   { x: -3.6, z: 2.6, y: 0.10, hover: 3.0, label: 'PERIMETER' },
+  outbuilding: { x: -5.5, z: -1.5, y: 0.02, hover: 3.2, label: 'W OUTBUILDING' },
+  entry:       { x: 2.6, z: -0.4, y: 0.10, hover: 3.2, label: 'ENTRY HALL' },
+  divider:     { x: 3.2, z: -5.4, y: 0.10, hover: 3.4, label: 'INTERIOR DIVIDER' },
+  relay:       { x: 5.5, z: -5.5, y: 0.34, hover: 4.6, label: 'RELAY MAST' },
+  console:     { x: 1.2, z: -5.0, y: 0.14, hover: 3.0, label: 'RELAY CONSOLE' },
+  extraction:  { x: -6.5, z: 5.2, y: 0.02, hover: 3.2, label: 'EXTRACTION' },
+};
+
+// Which place a recon sweep goes to, by turn. The mission's four SEND_DRONE
+// beats each describe a different piece of ground, and the player is supposed
+// to be able to see that the drone went somewhere different each time.
+const RECON_BY_TURN = {
+  1: 'perimeter',     // APPROACH  — "route confirmed clear, as reported"
+  2: 'outbuilding',   // CONTACT   — "drone sweeps the outbuilding"
+  3: 'entry',         // BREACH    — "drone enters first"
+  4: 'divider',       // INTERIOR  — "drone clears the divider"
+  5: 'console',       // RELAY
+  6: 'extraction',    // EXTRACT
+};
+
+// `outcome.reveal` names a level object directly; it wins over the turn table
+// because it is the mission file being explicit about where to look.
+const REVEAL_PLACE = {
+  generator: 'outbuilding',
+  tower: 'relay',
+  relayConsole: 'console',
+  door: 'entry',
+};
+
+// Resolve a recon destination from whatever the turn happens to carry.
+// Falls back to the relay — the mission objective — so a turn that grows a
+// new drone option later still sends the aircraft somewhere sensible.
+export function reconTarget({ turnId, reveal } = {}) {
+  const key = (reveal && REVEAL_PLACE[reveal])
+    || RECON_BY_TURN[turnId]
+    || 'relay';
+  return { key, ...PLACES[key] };
+}
+
 // Deterministic scatter. Every run of the demo has to look identical, so
 // nothing here touches Math.random.
 function jitter(seed, spread = 1) {

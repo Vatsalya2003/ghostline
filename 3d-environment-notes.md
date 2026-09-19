@@ -111,3 +111,94 @@ the shadow pass, then thin the `INTERIOR` table.
 4. **The breach door is still a plain box.** It is a single `Mesh` because the
    Director tweens its rotation, position and material directly, and a swap
    would have meant touching that beat. Dressed with a frame instead.
+
+---
+
+# PASS 2 — DRONE, COMBAT VFX, OBJECTIVE PRESENCE
+
+Second pass, same scope boundary (presentation only — no gameplay, scoring,
+audio, voice or input was touched). Three things changed.
+
+## 1. The drone goes somewhere different every turn
+
+It used to fly to `tower.position + 2.5` on every sweep, so turn 2's
+outbuilding recon and turn 4's divider recon looked identical.
+
+The mission names its ground in prose — "the outbuilding", "the divider",
+"the entry" — and has no table of where those words point. Rather than push
+coordinates into `mission1.js` (gameplay's file, and a second source of truth
+for positions the level already owns), the presentation layer keeps its own
+gazetteer: `PLACES` and `reconTarget()` in `Level.js`.
+
+```
+turn 1 → perimeter     turn 4 → divider
+turn 2 → outbuilding   turn 5 → console
+turn 3 → entry         turn 6 → extraction
+```
+
+`outcome.reveal` wins over the turn table when the mission names a level
+object outright, so turn 2's `reveal: 'generator'` resolves to the
+outbuilding either way.
+
+The flight itself is now a bowed arc with distance-scaled transit time, a
+bank into the curve, an orbit while it inspects, a downward scan cone, and a
+mirrored return leg. **Fog now lifts at the place the drone looked, when it
+gets there** — not at the launch point, and not before it arrives.
+
+## 2. Combat happens somewhere
+
+Every violent outcome in the mission is tagged `fx: 'impact'`, because to the
+scoring layer a collapsing gantry, a burst of own fire and a frag are the
+same event: health went down. Visually they are not. `Director.weaponFX()`
+dispatches on the **action the player chose** instead:
+
+| Action | What you see |
+|---|---|
+| `FIRE` | every undamaged unit turns, muzzle-flashes, tracers converge on the target, sparks where they land. Turn 2's outcome also ruptures the generator — an explosion, because the log says it ruptured |
+| `GRENADE` | the nearest unit throws; the grenade arcs, blinks, lands, detonates. The squad's own damage is **held back to the detonation** rather than firing when it leaves the hand |
+| ambush | tracers run *from* the two contacts *to* the unit that was hit — the arc that was never in BETA-1's picture |
+| breach | a real explosion at the door, not a screen flash standing in for one |
+| any impact | sparks off the chassis plus a smoke puff, on top of the existing hit flash |
+
+Nothing here is decorative. If you cannot name the two world positions an
+effect connects, it is not in `CombatFX.js`.
+
+## 3. Objectives are places
+
+`ObjectiveMarkers.js` puts a ground ring and bracket at the relay mast and the
+extraction point, coloured by the same `state.objectives()` array the HUD row
+reads — so a marker cannot disagree with its own row. Deliberately small: this
+is a scene you read by sensor light, and a waypoint pillar would undo that.
+
+## Traps found in this pass
+
+**A killed GSAP timeline does not fire its `onComplete`.** `Drone.sweep()`
+resolved its promise off `tl.eventCallback('onComplete')`, and `reset()` killed
+the timeline's *targets*. Restarting mid-sweep therefore stranded whatever was
+awaiting the sortie. Settling now happens in `Drone.land()`, which both the
+timeline and `reset()` call. (Gameplay had independently guarded the symptom
+with a `missionRun` stamp; this fixes the cause. Both are worth having.)
+
+**Adding a PointLight per muzzle flash costs a shader recompile.** Three keys
+its programs partly on scene light count, so add-then-remove changes it twice
+and can recompile every material on screen — on the exact frame something
+exploded. `CombatFX` holds a fixed pool of four lights at zero intensity.
+Verified: light count is 13 before, during and after a full volley plus a
+detonation.
+
+**A sub-second effect cannot be verified in this headless browser.** SwiftShader
+runs at ~180 ms/frame and GSAP ticks roughly once per 600 ms, so a 0.4 s tracer
+goes from zero-length to faded-out inside a single tick and is never drawn.
+The tracers are correct — a probe shows them reaching full length — but to see
+them in a still you have to clone the mesh (a clone gets its own scale vector,
+which GSAP is not tweening) and hold it open. Worth knowing before anyone else
+concludes an effect is broken.
+
+Tracers also now **grow, hold, then fade** rather than grow-and-fade, so a
+frame that runs long cannot skip straight past their visible window.
+
+## Cost
+
+Scene at rest is unchanged. During the loudest beat in the mission, combat
+adds roughly 40 short-lived meshes, all on shared geometry, none living past
+about 1.3 seconds, and zero additional lights.
