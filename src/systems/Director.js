@@ -98,7 +98,9 @@ export class Director {
           setTimeout(() => this.screenFX?.alert(false), 2600);
           break;
         case 'breach': {
-          audio.breach();
+          // Panned to the door itself, not dead centre — same point every
+          // other effect on this beat aims at.
+          audio.breach(2.6, 2);
           const door = this.level.door;
           gsap.to(door.rotation, { x: -1.45, z: 0.12, duration: 0.5, ease: 'power4.in' });
           gsap.to(door.position, { y: 0.06, z: 3.1, duration: 0.6, ease: 'power3.out' });
@@ -127,7 +129,7 @@ export class Director {
             this.focusUnit(u.id);
             this.markers?.flare(u.id);
           }
-          audio.impact();
+          audio.impact(u?.position.x, u?.position.z);
           punchZoom(this.camera, -0.9);
           this.flash();
           await wait(0.35);
@@ -135,7 +137,9 @@ export class Director {
         }
         case 'status': {
           const u = this.unit(beat.unit);
-          audio.glitch();
+          // The signature moment: the sensor that just broke should sound like
+          // it broke where it stands, not in the middle of the stereo image.
+          audio.glitch(u?.position.x, u?.position.z);
           if (u) {
             u.setStatus(beat.status);
             // Put the eye on the cone that just broke, and break the frame
@@ -298,7 +302,7 @@ export class Director {
             this.markers?.flare(u.id);
             this.fx.unitHit(u.position);
           }
-          audio.impact();
+          audio.impact(u?.position.x, u?.position.z);
           shakeCamera(this.camera, 0.7, 0.5);
           punchZoom(this.camera, -1.0);
           this.lightKick(3.0, 0.5);
@@ -321,7 +325,9 @@ export class Director {
       }
       case 'scan': {
         const u = this.unit('ALPHA');
-        audio.scan();
+        // Panned to the launch point, same convention as Soundscape's own
+        // droneLaunch — dead centre reads as a HUD beep, not an aircraft.
+        audio.scan(u.position.x, u.position.z);
 
         // Where this turn's sweep is actually going. Every SEND_DRONE beat in
         // the mission describes a different piece of ground — the perimeter,
@@ -352,7 +358,7 @@ export class Director {
         panCamera(this.camera, (u.position.x + place.x) / 2, (u.position.z + place.z) / 2, 1.3);
         break;
       }
-      case 'move': audio.moveStep(); break;
+      case 'move': audio.moveStep(this.squad.lead?.position.x, this.squad.lead?.position.z); break;
       case 'relay':
         audio.relay();
         this.fx.ring(this.level.tower.position.x, this.level.tower.position.z, { radius: 8, duration: 1.2 });

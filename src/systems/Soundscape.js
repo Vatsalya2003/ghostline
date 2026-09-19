@@ -71,6 +71,7 @@ export class Soundscape {
     this.clock = 0;
     this.droneOut = 0;            // seconds of drone flight left
     this.turn = null;
+    this.over = false;            // mission ended — stop populating the world
 
     this.v = new THREE.Vector3();
     this.installSpatial();
@@ -103,6 +104,23 @@ export class Soundscape {
 
     // One place for every refused command — mouse, number key or pad alike.
     events.on(GAME_EVENT.COMMAND_REJECTED, () => audio.deny());
+
+    // The mission is over the moment this fires; the debrief lands about a
+    // second later, behind a fade. Let the compound recede under the resolving
+    // tone instead of holding a tension bed under a screen of numbers.
+    events.on(GAME_EVENT.MISSION_END, () => this.windDown());
+  }
+
+  // Tension goes first and fastest — it is the one bed that would read as the
+  // mission still being live. The room tone under everything is left alone: a
+  // debrief in total silence sounds like the game crashed.
+  windDown() {
+    this.over = true;
+    this.droneOut = 0;
+    audio.setLayer('droneLoop', 0, 0.6);
+    audio.setLayer('tension', 0, 1.2);
+    audio.setLayer('field', 0, 2.4);
+    audio.setLayer('interior', 0, 2.4);
   }
 
   // ---------------------------------------------------------------- spatial
@@ -157,7 +175,9 @@ export class Soundscape {
 
   // ------------------------------------------------------------------ frame
   update(dt) {
-    if (isPaused() || !audio.ctx) return;
+    // A distant clank landing behind the debrief numbers reads as the compound
+    // still being out there with someone in it. The mission is over.
+    if (isPaused() || this.over || !audio.ctx) return;
     this.clock += dt;
     this.steps();
     this.detail(dt);
@@ -222,6 +242,7 @@ export class Soundscape {
   }
 
   reset() {
+    this.over = false;
     this.prev.clear();
     this.travel.clear();
     this.rand = rng(SEED);
