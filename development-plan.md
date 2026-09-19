@@ -1,4 +1,4 @@
-# OVERRIDE PROTOCOL — DEVELOPMENT PLAN
+# GHOSTLINE — DEVELOPMENT PLAN
 ### 11 steps. Each has a prompt, a test, and a stop rule.
 ### Work top to bottom. Do not skip ahead.
 

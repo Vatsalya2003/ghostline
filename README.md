@@ -1,4 +1,4 @@
-# OVERRIDE PROTOCOL
+# GHOSTLINE
 
 A six-turn tactical game about **when to trust an AI teammate.**
 

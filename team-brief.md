@@ -1,4 +1,4 @@
-# OVERRIDE PROTOCOL — TEAM BRIEF
+# GHOSTLINE — TEAM BRIEF
 ### Defense Tech Jam 2026 · Trust Your Synthetic Teammates (NAWCTSD)
 ### Read this first. ~5 minutes.
 
@@ -217,6 +217,6 @@ offline-first. Those are what the challenge is asking for.
 ## 10. WHAT WE SAY TO JUDGES
 
 > People don't trust AI too much or too little. They trust it at the wrong
-> times. Override Protocol trains the timing.
+> times. Ghostline trains the timing.
 
 Then we show Turn 3 live. That's the pitch.

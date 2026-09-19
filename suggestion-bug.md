@@ -1,4 +1,4 @@
-# OVERRIDE PROTOCOL — BUGS & SUGGESTIONS
+# GHOSTLINE — BUGS & SUGGESTIONS
 
 Write it down the moment you see it. Don't fix it in your head and move on —
 by turn 5 you will have forgotten.

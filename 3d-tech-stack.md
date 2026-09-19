@@ -1,4 +1,4 @@
-# OVERRIDE PROTOCOL — 3D TECH STACK
+# GHOSTLINE — 3D TECH STACK
 ### Locked for the 3D path. Hand to Claude Code.
 
 ---
@@ -116,7 +116,7 @@ feeling productive.
 ## FOLDER STRUCTURE
 
 ```
-override-protocol/
+ghostline/
 ├── index.html
 ├── vite.config.js
 ├── package.json

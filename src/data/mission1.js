@@ -33,7 +33,7 @@ export const CONFIDENCE = {
 
 export const mission1 = {
   id: 'mission-1',
-  title: 'OVERRIDE PROTOCOL',
+  title: 'GHOSTLINE',
   subtitle: 'OPERATION DRY CREEK — RELAY STATION 7',
   objective: 'RESTORE THE RELAY · BRING THE SQUAD HOME',
 
