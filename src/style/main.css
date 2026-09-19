@@ -754,3 +754,118 @@ body.pad-active .cmd .key { opacity: 0.35; }   /* pad navigates, it does not typ
 @media (prefers-reduced-motion: reduce) {
   #comms-tx.on { animation: none; }
 }
+
+/* ============================================================ TACTICAL MAP */
+/* A sensor console, not a street map: same hairlines and uppercase labels as
+   every other panel, and the canvas does all the drawing.
+
+   It sits over the board rather than in the HUD column. A map panel in the
+   column is ~140px of height, and the column does not have 140px to give —
+   it pushed the situation text and the command bar off the bottom. */
+
+#map-box {
+  position: absolute;
+  left: 12px;
+  /* Clear of the control-prompt strip along the bottom of the stage. */
+  bottom: 46px;
+  z-index: 30;
+  width: clamp(148px, 14vw, 202px);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 10px 9px;
+}
+
+#map-box .label { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+
+#map-hint { color: rgba(76, 224, 216, 0.55); letter-spacing: 0.14em; }
+
+#minimap {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  border: 1px solid var(--hairline);
+  background: var(--bg);
+  cursor: pointer;
+}
+
+#minimap:hover { border-color: rgba(76, 224, 216, 0.6); }
+
+/* What the symbols mean, in the width the panel already occupies. */
+#map-keys {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1px 8px;
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--dim);
+}
+
+#map-keys li { display: flex; align-items: baseline; gap: 4px; white-space: nowrap; }
+
+#map-keys .key.unit  { color: var(--cyan); }
+#map-keys .key.obj   { color: var(--amber); }
+#map-keys .key.brief { color: var(--dim); }
+#map-keys .key.poss  { color: var(--amber); }
+#map-keys .key.host  { color: var(--red); }
+#map-keys .key.haz   { color: var(--red); }
+#map-keys .key.drone { color: var(--cyan); }
+
+/* The overlay stays see-through: the board underneath is the thing the map is
+   describing, and losing sight of it while reading the map is disorienting. */
+#screen-map {
+  background: rgba(5, 8, 7, 0.72);
+  gap: 10px;
+  padding: 3vh 4vw;
+  justify-content: flex-start;
+}
+
+#map-head {
+  width: 100%;
+  max-width: 1100px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+#screen-map h2 { margin: 0; }
+
+#map-legend { display: flex; flex-wrap: wrap; gap: 14px; align-items: center; }
+
+#map-legend .key { margin-right: 4px; }
+#map-legend .key.unit  { color: var(--cyan); }
+#map-legend .key.obj   { color: var(--amber); }
+#map-legend .key.poss  { color: var(--amber); }
+#map-legend .key.host  { color: var(--red); }
+#map-legend .key.haz   { color: var(--red); }
+#map-legend .key.drone { color: var(--cyan); }
+#map-legend .key.brief { color: var(--dim); }
+
+#map-canvas {
+  display: block;
+  width: 100%;
+  max-width: 1100px;
+  flex: 1 1 auto;
+  min-height: 0;
+  border: 1px solid var(--hairline);
+  background: var(--bg);
+  cursor: grab;
+  touch-action: none;
+}
+
+#map-canvas:active { cursor: grabbing; }
+
+#map-readout {
+  width: 100%;
+  max-width: 1100px;
+  color: var(--cyan);
+  letter-spacing: 0.14em;
+}
+
+/* The map is not allowed to imply certainty the game does not have. When the
+   line on screen came from a degraded sensor, the readout says so. */
+#map-readout.degraded { color: var(--amber); }

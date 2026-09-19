@@ -46,7 +46,7 @@ function flatRing(geo, color, opacity, renderOrder) {
 
 // Which place each mission objective sits on. Mission data names objectives by
 // id; Level names the ground by key. This is the one line that joins them.
-const OBJECTIVE_PLACE = {
+export const OBJECTIVE_PLACE = {
   relay: 'relay',
   extract: 'extraction',
 };

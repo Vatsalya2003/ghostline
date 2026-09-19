@@ -21,6 +21,7 @@ export const CONTROL = {
   ZOOM_IN: 'zoomIn',
   INFO: 'info',
   PAUSE: 'pause',
+  OPEN_MAP: 'openMap',
   NAV_UP: 'navUp',
   NAV_DOWN: 'navDown',
   NAV_LEFT: 'navLeft',
@@ -45,6 +46,7 @@ export const STANDARD_BUTTONS = {
   7: CONTROL.ZOOM_IN,      // RT / R2
   8: CONTROL.INFO,         // Back / Select / Share
   9: CONTROL.PAUSE,        // Start / Options
+  10: CONTROL.OPEN_MAP,    // L3 / left stick click — unused by anything else
   12: CONTROL.NAV_UP,
   13: CONTROL.NAV_DOWN,
   14: CONTROL.NAV_LEFT,
@@ -56,7 +58,7 @@ export const STANDARD_BUTTONS = {
 export const REMAP_ORDER = [
   CONTROL.CONFIRM, CONTROL.CANCEL, CONTROL.CONTEXT, CONTROL.TACTICAL,
   CONTROL.PREV_UNIT, CONTROL.NEXT_UNIT, CONTROL.ZOOM_OUT, CONTROL.ZOOM_IN,
-  CONTROL.INFO, CONTROL.PAUSE,
+  CONTROL.INFO, CONTROL.PAUSE, CONTROL.OPEN_MAP,
 ];
 
 export const CONTROL_NAME = {
@@ -70,6 +72,7 @@ export const CONTROL_NAME = {
   [CONTROL.ZOOM_IN]: 'ZOOM IN',
   [CONTROL.INFO]: 'MISSION INFO',
   [CONTROL.PAUSE]: 'PAUSE',
+  [CONTROL.OPEN_MAP]: 'TACTICAL MAP',
 };
 
 const DEFAULTS = {

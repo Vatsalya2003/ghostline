@@ -17,6 +17,7 @@ export const BINDINGS = [
   { control: CONTROL.ZOOM_IN,   name: 'ZOOM IN',          pad: 'RT',     keys: ['e'],                 keyGlyph: 'E' },
   { control: CONTROL.INFO,      name: 'MISSION INFO',     pad: 'BACK',   keys: ['i'],                 keyGlyph: 'I' },
   { control: CONTROL.PAUSE,     name: 'PAUSE',            pad: 'START',  keys: ['p'],                 keyGlyph: 'P' },
+  { control: CONTROL.OPEN_MAP,  name: 'TACTICAL MAP',     pad: 'L3',     keys: ['m'],                 keyGlyph: 'M' },
   { control: CONTROL.NAV_UP,    name: 'NAVIGATE',         pad: 'D-PAD',  keys: ['ArrowUp'],           keyGlyph: 'ARROWS' },
   { control: CONTROL.NAV_DOWN,  name: 'NAVIGATE',         pad: 'D-PAD',  keys: ['ArrowDown'],         keyGlyph: 'ARROWS' },
   { control: CONTROL.NAV_LEFT,  name: 'NAVIGATE',         pad: 'D-PAD',  keys: ['ArrowLeft'],         keyGlyph: 'ARROWS' },
