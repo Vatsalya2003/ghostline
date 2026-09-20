@@ -21,7 +21,7 @@ const ORDER = [
 ];
 
 export class Debrief {
-  constructor(mission, onReplay) {
+  constructor(mission, onReplay, onSelect) {
     this.mission = mission;
     this.screen = document.getElementById('screen-debrief');
     this.head = document.getElementById('debrief-head');
@@ -33,8 +33,10 @@ export class Debrief {
     this.decisions = document.getElementById('decision-list');
     this.replayBtn = document.getElementById('btn-replay');
     this.replayBtn.addEventListener('click', onReplay);
+    this.selectBtn = document.getElementById('btn-select');
+    this.selectBtn.addEventListener('click', () => onSelect?.());
     this.ring = new FocusRing({ onFocus: () => audio.hover() });
-    this.ring.setItems([this.replayBtn]);
+    this.ring.setItems([this.replayBtn, this.selectBtn]);
   }
 
   show(summary) {

@@ -13,7 +13,7 @@ import { createSquad } from './render/Units.js';
 import { FX } from './render/FX.js';
 import { UnitMarkers } from './render/UnitMarkers.js';
 import { ObjectiveMarkers } from './render/ObjectiveMarkers.js';
-import { selectedMission } from './data/missions.js';
+import { selectedMission, missionWasRequested, launchMission } from './data/missions.js';
 
 // Which mission this session is running. Everything downstream takes the
 // mission as a parameter already, so selection is a single binding.
@@ -115,11 +115,29 @@ const director = new Director({ camera, squad, fx, ui, turnManager, state, level
 // Ambient beds, footsteps and stereo placement. Subscribes to Events on its
 // own, so it needs nothing from the turn spine beyond a frame tick.
 const soundscape = new Soundscape({ camera, squad, state, level });
-const debrief = new Debrief(mission1, replay);
+const debrief = new Debrief(mission1, replay, toMissionSelect);
 const screens = new Screens(mission1, {
-  onBegin: () => { audio.unlock(); audio.select(); screens.hideTitle(); screens.showBriefing(); },
+  onBegin: () => { audio.unlock(); audio.select(); screens.hideTitle(); screens.showSelect(); },
   onDeploy: () => { audio.select(); screens.hideBriefing(); startMission(); },
+  // Picking the mission already loaded costs nothing; picking the other one
+  // rebuilds the world, which is a reload. See missions.launchMission.
+  onPickMission: (entry) => {
+    if (entry.id === chosen.id) { screens.hideSelect(); screens.showBriefing(); return; }
+    launchMission(entry.id);
+  },
 });
+
+function toMissionSelect() {
+  audio.select();
+  stopSpeaking();
+  director.reset();
+  state.reset();
+  debrief.hide();
+  screenFX.fadeClear();
+  screens.hideBriefing();
+  screens.hideTitle();
+  screens.showSelect();
+}
 
 let pendingEnd = null;
 // Bumped by every deploy and restart. A beat that was in flight when the player
@@ -295,6 +313,7 @@ function abortToTitle() {
   input.clearUnitSelection();
   debrief.hide();
   screens.hideBriefing();
+  screens.hideSelect();
   screenFX.fadeClear();
   screens.showTitle();
 }
@@ -362,10 +381,16 @@ input.addContext(input.screenContext({
   ring: debrief.ring, label: 'RUN IT AGAIN',
 }));
 input.addContext(input.screenContext({
+  name: 'select', priority: 55,
+  el: document.getElementById('screen-select'),
+  ring: screens.selectRing, label: 'SELECT MISSION',
+  onCancel: () => { screens.hideSelect(); screens.showTitle(); },
+}));
+input.addContext(input.screenContext({
   name: 'briefing', priority: 50,
   el: document.getElementById('screen-briefing'),
   ring: screens.briefingRing, label: 'DEPLOY',
-  onCancel: () => { screens.hideBriefing(); screens.showTitle(); },
+  onCancel: () => { screens.hideBriefing(); screens.showSelect(); },
 }));
 input.addContext(input.screenContext({
   name: 'title', priority: 40,
@@ -390,8 +415,15 @@ document.addEventListener('pointerdown', () => audio.unlock(), { once: true });
 const params = new URLSearchParams(location.search);
 if (params.has('skip') || params.has('auto')) {
   screens.hideTitle();
+  screens.hideSelect();
   screens.hideBriefing();
   startMission();
+} else if (params.has('deploy') || missionWasRequested()) {
+  // Arrived here from the select screen (or with ?mission= set by hand):
+  // the choice is already made, so go straight to that mission's briefing.
+  screens.hideTitle();
+  screens.hideSelect();
+  screens.showBriefing();
 }
 // ?ui=pause|intel|controls opens the overlay straight away — demo rehearsal,
 // and the only way to check these screens in a headless capture.
@@ -464,4 +496,4 @@ function tick() {
 tick();
 
 // Console handles for tuning and for the plan's step-5 check.
-window.OP = { occlusion, state, turnManager, director, squad, camera, scene, fog, fx, screenFX, input, pauseMenu, audio, soundscape, mission: mission1, startMission };
+window.OP = { occlusion, screens, state, turnManager, director, squad, camera, scene, fog, fx, screenFX, input, pauseMenu, audio, soundscape, mission: mission1, startMission };
