@@ -26,13 +26,17 @@ You are scored twice — mission outcome and trust calibration — and the two a
 allowed to disagree. Completing the mission while being told your judgement was
 poor is a designed outcome, not a bug.
 
-## The three missions
+## The missions
 
-| | Environment | Turns | The failure it teaches |
+| | Environment | Turns | Registered |
 |---|---|---|---|
-| **DRY CREEK** | `day` — desert relay station | 6 | A sensor breaks and keeps reporting |
-| **BLACK CURRENT** | `undersea` — test range at 240 m | 6 | Every reading is true *and* misleading |
-| **AMMUNITION DEPOT** | `depot` — enemy compound, on fire | 10 | The same HIGH, built from almost nothing |
+| **DRY CREEK** | `day` — desert relay station | 6 | yes |
+| **AMMUNITION DEPOT** | `depot` — enemy compound, on fire | 10 | yes |
+| **BLACK CURRENT** | `undersea` — test range at 240 m | 6 | **no — held as the fallback** |
+
+Black Current is written, playable and on disk at `src/data/mission2.js`. It
+is deliberately left out of `src/data/missions.js` so the select screen shows
+two. Add a row back and it works again with no other change.
 
 ---
 
@@ -72,7 +76,7 @@ back to the procedural chassis. Ask for the folder directly if you want them.
 | `npm run dev` | Vite dev server with hot reload | — |
 | `npm run build` | Production bundle to `dist/` | ~12 s |
 | `npm run preview` | Serve the built bundle | — |
-| `npm run verify` | Walks every path through **mission 1** | ~2 s |
+| `npm run verify` | Walks both registered missions | ~4 s |
 | `npm run sim` | Headless run of one command list | instant |
 | `npm run e2e` | Plays missions in headless Chromium | ~2 min |
 | `npm test` | Input/gamepad mapping tests | ~1 s |
@@ -100,8 +104,9 @@ spine. That is the promise the architecture makes, and it is worth keeping.
 src/
   data/                 ALL mission content
     mission1.js         Dry Creek     + the shared CALIBRATION / ACTION_LABELS
-    mission2.js         Black Current
+    mission2.js         Black Current (unregistered fallback)
     mission3.js         Ammunition Depot
+    depot-layout.js     Compound 14's zones, walls, paths — every coordinate
     missions.js         registry + the ?mission= switch
 
   systems/              the spine — no THREE.js in here
@@ -134,6 +139,7 @@ src/
     Terrain.js + Level.js           'day'      — the desert
     Seabed.js  + SeabedLevel.js     'undersea' — Test Range 9
     Depot.js   + DepotLevel.js      'depot'    — Compound 14
+    Occlusion.js                    roofs lift, walls fade, so you can see in
 
   ui/                   DOM only, no canvas
     CommsPanel.js       the AI's line, typed out
@@ -281,6 +287,27 @@ CONFIRM: {
 `none` · `move` · `scan` · `impact` · `ambush` · `alarm` · `relay` ·
 `nightvision`
 
+### Zones and traversal (Ammunition Depot)
+
+Turns name a **zone**; `src/data/depot-layout.js` owns every coordinate. A
+turn spreads `...at('HOLDING')` and gets its camera anchor and zoom from the
+layout, so re-laying the map cannot leave a turn pointing at a place that no
+longer exists.
+
+Squad movement between zones goes on the **turn**, not the outcome:
+
+```js
+advance: travel('YARD', 'HOLDING'),   // authored waypoints + formation
+```
+
+Whichever command the player picks, the squad still has to be wherever the
+next turn happens. Putting it on outcomes means remembering it on all four of
+them — and forgetting one leaves the squad standing in the yard while the
+camera visits rooms they are not in.
+
+**Contact markers (`alert`) and drone targets (`reveal`) are raw coordinates**
+and do not come from the layout. If you move the map, grep for them.
+
 ## Traps that have already caught someone
 
 1. **`moves` is a map, not an array.** `{ ALPHA: [x, z] }`, not
@@ -292,6 +319,13 @@ CONFIRM: {
    `verify` catches this for mission 1 only.
 4. **An objective `flag` must actually be set** by some outcome's `setsFlag`,
    or the objective can never complete.
+5. **`endsMission` names the ending** — `'aborted'`, not `true`. `true` gets
+   written straight into `state.outcome` and the debrief reads it.
+6. **The last turn must not set `endsMission`.** `advanceTurn` ends the
+   mission on its own and picks complete vs partial from the objectives;
+   declaring it short-circuits that.
+7. **Every flagged objective must be met for MISSION COMPLETE.** If your
+   mission has two, both count.
 
 ## Design principles that make a mission *good*
 
@@ -320,7 +354,14 @@ These are not style preferences — they are what makes the mechanic teach.
 
 ## Camera
 
-Orthographic, 45° elevation and azimuth, fixed 40 units back. **One writer:**
+Orthographic, 45° elevation, **rotatable azimuth**, fixed 40 units back.
+`rotateView(±1)` snaps a quarter turn in 0.4s; the projection and elevation
+never change, because the tactical read depends on the board being drawn the
+same way every time. Anything that needs to know which way the screen points
+must call `cameraBasis()` — screen-right is only `+x,−z` at the default
+azimuth.
+
+**One writer:**
 everything (pans, zooms, shake, punch) sets *targets* on `camera.userData` and
 `updateCamera()` is the only thing that touches the transform, once per frame.
 Before that rule existed, a pan tween and a shake loop fought each other on
@@ -372,6 +413,16 @@ charge indicator, so turn 10's `relay` FX *is* the detonation.
 - **GLSL has no shadowing.** Two `float outline` declarations in one scope
   means the shader silently fails to compile and the visual just vanishes,
   with only a console warning. Check the console after shader edits.
+- **An orthographic camera translated parallel to itself keeps its
+  direction**, so one `lookAt` at construction is enough — right up until the
+  view can rotate. Then the rig moves to the new azimuth and goes on facing
+  the old one, and the board leaves the screen. `applyCameraTransform` re-aims
+  every frame.
+- **A material shared across meshes fades all of them.** Occlusion clones one
+  material per wall *run*: shared fades the whole building, per-panel pops a
+  hole in a wall.
+- **Box geometry is long on local +x**, so aligning a run of panels to a line
+  needs `atan2(-dz, dx)`.
 
 ---
 
@@ -413,12 +464,16 @@ Chrome on macOS needs:
 GHOSTLINE_CHROME="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
 ```
 
-## ⚠ The known gap
+## How verify scales
 
-**`npm run verify` only walks mission 1.** It imports `mission1` directly.
-Missions 2 and 3 are covered by a schema lint and by playing them, which is
-weaker. **Extending `verify.mjs` to loop `MISSIONS` is the highest-value test
-job outstanding.**
+Full enumeration is exponential in turn count — six turns is 1,344 paths, ten
+is about a quarter of a million. So enumeration takes a budget (40,000 paths,
+`GHOSTLINE_PATHS` to change it) and **coverage is guaranteed separately** by
+walking one targeted path per outcome. Every outcome, ending and grade is
+still genuinely proven reachable rather than sampled.
+
+Currently ~6.4M assertions across both registered missions in about four
+seconds.
 
 ---
 
@@ -481,7 +536,7 @@ polish.
 | Add a mission | Copy a data file, add a registry row |
 | Work on a map | `Depot.js` / `Seabed.js` / `Terrain.js` + their Level files |
 | Improve the HUD | `src/ui/` and `src/style/main.css` |
-| **Highest value right now** | Make `verify.mjs` loop all three missions |
+| **Highest value right now** | Bake mission 3's voice once `piper` is available |
 
 ## Other documents
 

@@ -260,3 +260,30 @@ alone deliberately rather than silently reshaping a rehearsed map.
 | P2 | Missions 2 and 3 have no baked voice — captions and TTS only |
 | P2 | All three missions use the same walker models; mission 2 should be AUVs |
 | P2 | Audio-suspend and GSAP-timeline pause on the FULL LOG panel are verified by reading, not by running — headless has no AudioContext |
+
+---
+
+# FINAL BUILD PASS — fixed (branch `3d_V2`, from tag `pre-final`)
+
+| # | Sev | What | Cause |
+|---|---|---|---|
+| 1 | **P0** | MISSION COMPLETE after shooting an unarmed hostage | `primaryObjectiveMet()` returned the **first** flagged objective, not all of them. Invisible while every mission had one flag; wrong the moment one had two. Found by `verify` within a minute of it covering mission 3 |
+| 2 | **P0** | The board left the screen on view rotation | The camera never re-aimed. One `lookAt` at construction is correct for an ortho camera translated parallel to itself — and stops being correct the moment the azimuth can change |
+| 3 | **P1** | Squad stood in the yard for turns 5–10 while the camera visited rooms they were not in | Traversal was attached per-outcome, so it only fired on the three outcomes it had been remembered on. Now on the turn |
+| 4 | **P1** | `state.outcome` was `true` | mission3 wrote `endsMission: true`; the field **names** the ending (`'aborted'`). Its final turn also declared `endsMission` at all, short-circuiting `advanceTurn`, which is what picks complete vs partial |
+| 5 | **P1** | Every unswept metre of the depot read as a hole in the ground | `FogOfWar` had no `'depot'` case and fell through to the **night** curtain — 0.78 opacity of near-black over a sunlit map |
+| 6 | **P1** | Squad walked backwards up the hill before setting off | They deployed at the engine's default home positions, which belong to mission 1's compound. Missions can now declare `deploy` |
+| 7 | **P1** | Contact markers and drone sweeps pointed at open ground | `alert` and `reveal` coordinates were written against the previous compound — including turn 6's, the one contact the player has to look at before deciding whether to shoot it |
+| 8 | **P2** | Perimeter wall rendered as a zigzag of notches | Panels aligned with `atan2(dx,dz)`; box geometry is long on local **+x**, so it needs `atan2(-dz,dx)` |
+| 9 | **P2** | Two captions could interleave character by character | `say()` did not cancel a running typewriter. Never fires in normal play (the spine awaits each line) but now guarded |
+| 10 | **P2** | `npm run audio` failed on macOS | `scripts/cdp.mjs` only knew Linux Chrome paths |
+
+**Still open**
+
+| Sev | What |
+|---|---|
+| P1 | Mission 3 has no baked voice — `piper` is not installed on the build machine. Runs on Web Speech (verified working: 199 voices, Samantha picked) with captions paced to an estimate. Bake it when the tooling is available |
+| P2 | The room's six figures are described but not modelled — only the filing cabinet and the contact marker are on the board |
+| P2 | The depot's graded platform still shows a straight edge where it meets the hillside |
+| P2 | Residual soft diagonal banding on open seabed sediment (mission 2, unregistered) |
+| P2 | `sim.mjs` still runs mission 1 only |
