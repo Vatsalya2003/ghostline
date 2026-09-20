@@ -13,20 +13,6 @@
     <div id="app">
       <div id="stage">
         <canvas id="scene"></canvas>
-
-        <!-- Over the board rather than in the column: the HUD panels need that
-             height for the situation, the comms captions and the commands. -->
-        <div class="panel" id="map-box">
-          <div class="label">Tactical map <span id="map-hint">[M] EXPAND</span></div>
-          <canvas id="minimap"></canvas>
-          <ul id="map-keys">
-            <li><span class="key unit">&#9632;</span>SQUAD</li>
-            <li><span class="key obj">&#9670;</span>OBJECTIVE</li>
-            <li><span class="key brief">&#9633;</span>BRIEFED</li>
-            <li><span class="key host">&#10005;</span>HOSTILE</li>
-            <li><span class="key haz">&#9650;</span>HAZARD</li>
-          </ul>
-        </div>
       </div>
 
       <div id="ui">
@@ -37,7 +23,19 @@
             <div id="objective">—</div>
             <div id="turn-name">STANDBY</div>
             <div id="turn-count">TURN — / —</div>
+
+            <!-- The log lives with the objective it is a record of. Same panel,
+                 divided by a hairline rather than a gap, so the column reads as
+                 one instrument instead of two stacked boxes. -->
+            <div id="log">
+              <div id="log-head">
+                <span class="label">Mission log</span>
+                <button id="log-open" type="button" title="Pause and read the full log">FULL LOG</button>
+              </div>
+              <div id="log-lines"></div>
+            </div>
           </div>
+
 
           <!-- Only on screen once the compound knows you are in it. -->
           <div class="panel hidden" id="alarm-box">
@@ -65,6 +63,21 @@
 
         <!-- ============ SITUATION + LOG ============ -->
         <div id="middle">
+          <!-- In the column with the rest of the instruments. The tactical
+               picture belongs beside the objective it is about, not floating
+               in the opposite corner of the board. -->
+          <div class="panel" id="map-box">
+            <div class="label">Tactical map <span id="map-hint">[M] EXPAND</span></div>
+            <canvas id="minimap"></canvas>
+            <ul id="map-keys">
+              <li><span class="key unit">&#9632;</span>SQUAD</li>
+              <li><span class="key obj">&#9670;</span>OBJECTIVE</li>
+              <li><span class="key brief">&#9633;</span>BRIEFED</li>
+              <li><span class="key host">&#10005;</span>HOSTILE</li>
+              <li><span class="key haz">&#9650;</span>HAZARD</li>
+            </ul>
+          </div>
+
           <div class="panel" id="situation">
             <div class="label">Situation</div>
             <div id="situation-text">—</div>
@@ -72,13 +85,6 @@
               <span class="label">Your call</span>
               <div id="task-text">—</div>
             </div>
-          </div>
-          <div class="panel" id="log">
-            <div id="log-head">
-              <span class="label">Mission log</span>
-              <button id="log-open" type="button" title="Pause and read the full log">FULL LOG</button>
-            </div>
-            <div id="log-lines"></div>
           </div>
         </div>
 
