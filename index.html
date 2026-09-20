@@ -87,6 +87,14 @@
           <div class="panel" id="comms">
             <div>
               <div id="comms-head">
+                <!-- Who is talking, as a face rather than a string. The badge
+                     number matches the chip in UNIT STATUS and the marker on
+                     the board, so the voice, the row and the robot are one
+                     thing. -->
+                <span id="comms-portrait" data-unit="">
+                  <span class="cp-eye"></span>
+                  <span class="cp-badge">—</span>
+                </span>
                 <span class="label">Comms</span>
                 <span id="comms-source">—</span>
                 <span id="comms-relay"></span>
@@ -122,8 +130,27 @@
         <h2>DEFENSE TECH JAM · TRUST YOUR SYNTHETIC TEAMMATES</h2>
         <h1>GHOSTLINE</h1>
         <p id="title-sub">OPERATION DRY CREEK — RELAY STATION 7</p>
-        <button class="btn" id="btn-begin">BEGIN MISSION</button>
+        <div id="title-actions">
+          <button class="btn" id="btn-begin">BEGIN MISSION</button>
+          <button class="btn ghost" id="btn-tutorial">TUTORIAL</button>
+        </div>
         <p class="label" id="title-hint">CONFIDENCE IS WHAT IT SAYS. THE CONE IS WHAT IT SEES.</p>
+      </div>
+
+      <div class="screen hidden" id="screen-tutorial">
+        <h2>HOW TO PLAY</h2>
+        <h1 style="font-size: clamp(22px, 3.4vw, 38px)">SUPERVISING THE SQUAD</h1>
+        <ul id="tutorial-list">
+          <li><b>YOU ARE NOT THE SHOOTER.</b> ALPHA, BETA-1 and BETA-2 act on your orders. You choose one command per turn from the list on the right.</li>
+          <li><b>VERITAS IS YOUR ANALYST.</b> It reads the sensors and recommends. It is usually right. It only knows what it was given.</li>
+          <li><b>STATED CONFIDENCE IS A CLAIM, NOT A FACT.</b> HIGH means the machine is sure — not that it can see. Check the cone, the map and the room before you accept it.</li>
+          <li><b>ASK WHY</b> is free. It makes VERITAS show its basis without spending the turn.</li>
+          <li><b>SEND DRONE</b> buys certainty with a finite resource. You have three. Watch it fly, scan, and report.</li>
+          <li><b>[M] OPENS THE TACTICAL MAP.</b> Pan, zoom, and step markers. It never knows more than the squad does.</li>
+          <li><b>[P] PAUSES · FULL LOG</b> reopens the whole transcript when you need to remember what happened.</li>
+          <li><b>THERE ARE PEOPLE IN THERE.</b> Telling a captive from a fighter is your job, not the machine's.</li>
+        </ul>
+        <button class="btn" id="btn-tutorial-back">BACK</button>
       </div>
 
       <div class="screen hidden" id="screen-briefing">

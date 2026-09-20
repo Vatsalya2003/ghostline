@@ -823,7 +823,7 @@ body.pad-active .cmd .key { opacity: 0.35; }   /* pad navigates, it does not typ
 
 #map-box {
   position: absolute;
-  left: 12px;
+  right: 12px;
   /* Clear of the control-prompt strip along the bottom of the stage. */
   bottom: 46px;
   z-index: 30;
@@ -927,3 +927,66 @@ body.pad-active .cmd .key { opacity: 0.35; }   /* pad navigates, it does not typ
 /* The map is not allowed to imply certainty the game does not have. When the
    line on screen came from a degraded sensor, the readout says so. */
 #map-readout.degraded { color: var(--amber); }
+
+
+/* ---------- speaking-bot portrait ----------
+   A face for the voice. Same hairline-and-cyan language as every other panel:
+   a rounded chassis, a single sensor eye, and the unit's own badge number, so
+   the caption, the UNIT STATUS chip and the marker on the board all agree
+   about who is talking. Colour follows the speaker; a degraded sensor drives
+   the same amber the readout uses. */
+#comms-portrait {
+  flex: 0 0 auto;
+  position: relative;
+  width: 26px; height: 26px;
+  border: 1px solid var(--hairline);
+  border-radius: 6px 6px 7px 7px;
+  background: linear-gradient(180deg, rgba(76,224,216,0.10), rgba(6,11,10,0.5));
+  display: inline-flex; align-items: center; justify-content: center;
+  transition: border-color 160ms linear, box-shadow 160ms linear;
+}
+/* The eye. Sits high in the chassis like a sensor head, and pulses only while
+   somebody is actually speaking. */
+#comms-portrait .cp-eye {
+  position: absolute; top: 5px; left: 50%; transform: translateX(-50%);
+  width: 11px; height: 3px; border-radius: 2px;
+  background: var(--cyan); opacity: 0.85;
+}
+#comms-portrait .cp-badge {
+  position: absolute; bottom: 2px; left: 0; right: 0;
+  text-align: center;
+  font-family: var(--mono); font-size: 9px; letter-spacing: 0.1em;
+  color: var(--dim);
+}
+#comms-portrait[data-unit] { border-color: rgba(76, 224, 216, 0.45); }
+#comms-portrait[data-unit] .cp-badge { color: var(--cyan); }
+/* Speaking: the eye lights and the chassis picks up a rim. */
+#comms-portrait.talking { border-color: var(--cyan); box-shadow: 0 0 10px rgba(76,224,216,0.25); }
+#comms-portrait.talking .cp-eye { animation: cp-blink 1.1s ease-in-out infinite; }
+@keyframes cp-blink { 0%,100% { opacity: 0.45; } 50% { opacity: 1; } }
+/* A unit reporting from a broken sensor is the one thing the portrait says
+   on its own, and it says it the same colour the map readout does. */
+#comms-portrait.degraded { border-color: var(--amber); box-shadow: none; }
+#comms-portrait.degraded .cp-eye { background: var(--amber); }
+#comms-portrait.degraded .cp-badge { color: var(--amber); }
+
+#comms-head { display: flex; align-items: center; gap: 8px; }
+
+/* ---------- title screen actions ----------
+   BEGIN and TUTORIAL side by side. TUTORIAL is the quieter of the two: it is
+   there to be found, not to compete with the button that starts the game. */
+#title-actions { display: flex; gap: 10px; align-items: center; justify-content: center; flex-wrap: wrap; }
+.btn.ghost { background: transparent; border-color: var(--hairline); color: var(--dim); }
+.btn.ghost:hover, .btn.ghost.focused { border-color: var(--cyan); color: var(--cyan); }
+
+#tutorial-list {
+  list-style: none; margin: 4px 0 20px; padding: 0;
+  width: min(760px, 86vw); text-align: left;
+  display: flex; flex-direction: column; gap: 9px;
+}
+#tutorial-list li {
+  font-family: var(--mono); font-size: 12px; line-height: 1.6;
+  color: var(--dim); padding-left: 14px; position: relative;
+}
+#tutorial-list li::before { content: '·'; position: absolute; left: 2px; color: var(--cyan); }
+#tutorial-list b { color: #9fc4bd; font-weight: 400; letter-spacing: 0.06em; }

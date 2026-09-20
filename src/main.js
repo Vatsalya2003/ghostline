@@ -457,6 +457,12 @@ input.addContext(input.screenContext({
   onCancel: () => { screens.hideBriefing(); screens.showTitle(); },
 }));
 input.addContext(input.screenContext({
+  name: 'tutorial', priority: 45,
+  el: document.getElementById('screen-tutorial'),
+  ring: screens.tutorialRing, label: 'BACK',
+  onCancel: () => { screens.hideTutorial(); screens.showTitle(); },
+}));
+input.addContext(input.screenContext({
   name: 'title', priority: 40,
   el: document.getElementById('screen-title'),
   ring: screens.titleRing, label: 'BEGIN MISSION',
