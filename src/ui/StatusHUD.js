@@ -20,6 +20,7 @@ export class StatusHUD {
     this.objectiveEl = document.getElementById('objective');
     this.objectiveEl.textContent = mission.objective;
     this.selected = null;
+    this.lead = mission.lead || null;
   }
 
   // Which unit LB/RB last framed. Kept on the HUD so a re-render of the chips
@@ -28,6 +29,16 @@ export class StatusHUD {
     this.selected = id;
     for (const chip of this.squad.children) {
       chip.classList.toggle('selected', chip.dataset.unit === id);
+    }
+  }
+
+  // Who has the squad. main.js has always called this; until now it did not
+  // exist, so the optional-call quietly did nothing and the handover was
+  // invisible outside the log.
+  setLead(id) {
+    this.lead = id;
+    for (const chip of this.squad.children) {
+      chip.classList.toggle('lead', chip.dataset.unit === id);
     }
   }
 
@@ -74,7 +85,9 @@ export class StatusHUD {
     this.squad.innerHTML = '';
     for (const [id, status] of Object.entries(statuses)) {
       const chip = document.createElement('div');
-      chip.className = `unit-chip ${status}` + (id === this.selected ? ' selected' : '');
+      chip.className = `unit-chip ${status}`
+        + (id === this.selected ? ' selected' : '')
+        + (id === this.lead ? ' lead' : '');
       chip.dataset.unit = id;
       chip.innerHTML = `<span class="badge">${UNIT_BADGE[id] || '?'}</span>${id}` +
         `<span class="state">${STATE_LABEL[status]}</span>`;

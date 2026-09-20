@@ -155,13 +155,33 @@ export class TurnManager {
       for (const flag of [].concat(outcome.setsFlag)) this.state[flag] = true;
     }
 
-    // Command handover. The mission names the successor; nothing here knows
-    // or cares what the units are called.
-    if (outcome.promotes) {
-      const from = this.state.promote(outcome.promotes);
+    // A unit the outcome says is lost is out of the chain of command for the
+    // rest of the run, so record it before working out who leads.
+    if (outcome.lostUnit) this.state.unfit.add(outcome.lostUnit);
+
+    // Command handover. Two ways in. The mission can name a successor
+    // outright, which is how an authored beat hands the squad over for a
+    // reason the data knows about. Failing that, if whoever is leading has
+    // just taken the hit, command moves down the chain on its own — a lead
+    // that is face-down or blind cannot go on running the squad, and leaving
+    // it in charge was a real hole here: `lostUnit` dropped a robot to the
+    // floor and it stayed the lead, still talking.
+    let promoteTo = outcome.promotes || null;
+    let promoteWhy = outcome.promoteReason || null;
+    if (!promoteTo) {
+      const hit = outcome.lostUnit || (outcome.healthDelta < 0 ? outcome.impactUnit : null);
+      if (hit && hit === this.state.lead) {
+        promoteTo = this.state.nextInCommand();
+        promoteWhy = outcome.lostUnit === hit
+          ? `${hit} is down.`
+          : `${hit} is damaged and cannot command.`;
+      }
+    }
+    if (promoteTo) {
+      const from = this.state.promote(promoteTo);
       if (from) {
         events.emit(GAME_EVENT.LEAD_CHANGED, {
-          from, to: outcome.promotes, reason: outcome.promoteReason || null,
+          from, to: promoteTo, reason: promoteWhy,
         });
       }
     }

@@ -117,6 +117,13 @@ export const mission3 = {
   // late costs you the clean ending but not the squad.
   responseTurns: 5,
 
+  // Chain of command. If whoever is leading takes a hit or goes down and the
+  // outcome does not name a successor itself, the next name on this list that
+  // is still standing takes the squad. Order is the only thing that matters
+  // here — the systems layer never knows what the units are called.
+  lead: 'ALPHA',
+  succession: ['ALPHA', 'BETA-2', 'BETA-1'],
+
   // This mission's endings, in its own words.
   outcomeCopy: {
     complete: { title: 'MISSION COMPLETE', sub: 'Depot destroyed. Hostages out. Nobody ever knew you were there.' },
@@ -518,7 +525,7 @@ export const mission3 = {
         truth: 'Completely correct, and built on a sweep the player paid nothing for. The guards are the only thing in the room that can act; the hostages cannot. Going to the people first is not compassion, it is arithmetic done backwards.',
       },
       advance: travel('DOORWAY', 'HOLDING'),
-      actions: ['ENTER_ENGAGE', 'ASK_WHY', 'CHECK_HOSTAGES', 'FALL_BACK'],
+      actions: ['ENTER_ENGAGE', 'ASK_WHY', 'CHECK_HOSTAGES'],
       outcomes: {
         ASK_WHY: {
           consumesTurn: false,
@@ -550,15 +557,6 @@ export const mission3 = {
           raisesAlarm: true,
           setsFlag: 'hostageKilled',
           note: 'You walked past two armed men to reach the people they were holding. They did not need to stop you; they only needed to shoot first, and the people you came for were the closest thing to them.',
-        },
-        FALL_BACK: {
-          tag: CALIBRATION.DISUSE,
-          healthDelta: -8,
-          holdsPosition: true,
-          log: 'Squad withdraws from the door. The room stays as it is.',
-          response: 'Off the door. Those six are still in there, Commander, and two of them are armed.',
-          fx: 'none',
-          note: 'You had the room mapped, the threat counted and the squad stacked, and you used none of it.',
         },
       },
       // No sweep means no read. The decision is the same and the player is
@@ -641,7 +639,7 @@ export const mission3 = {
         truth: 'It is a hostage. A fifth civilian who broke away and hid when the shooting started, crouched, arms wrapped round her knees — a posture a template matcher reads as "braced combatant". VERITAS has produced the same HIGH it produced for five fully visible figures, from almost nothing, and the cone on the ground shows it.',
       },
       advance: travel('HOLDING', 'CORRIDOR'),
-      actions: ['HOLD_FIRE', 'ASK_WHY', 'THERMAL_SWEEP', 'SEND_DRONE', 'FIRE'],
+      actions: ['HOLD_FIRE', 'ASK_WHY', 'THERMAL_SWEEP', 'FIRE'],
       outcomes: {
         ASK_WHY: {
           consumesTurn: false,
@@ -671,19 +669,6 @@ export const mission3 = {
           resolveActors: { sixth: { kind: 'civilian', pose: 'stand' } },
           setsFlag: 'hostagesSafe',
           note: 'Free, instant, and it turned a shape into a person before anyone pulled a trigger.',
-          holdsPosition: true,
-        },
-        SEND_DRONE: {
-          tag: CALIBRATION.CALIBRATED,
-          healthDelta: 0,
-          consumesDrone: true,
-          log: 'Drone flown for an angle behind the cabinet. Unarmed civilian, crouched. Recovered with the others.',
-          response: 'Drone has her — no weapon, civilian clothing, she is hiding. I was going to have you shoot her, Commander.',
-          fx: 'scan',
-          reveal: { x: 12.9, z: -6.6 },
-          resolveActors: { sixth: { kind: 'civilian', pose: 'crouch' } },
-          setsFlag: 'hostagesSafe',
-          note: 'You spent an aircraft on the one question in the mission that could not be taken back. Correct.',
           holdsPosition: true,
         },
         FIRE: {

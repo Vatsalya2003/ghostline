@@ -812,3 +812,55 @@ body.pad-active .cmd .key { opacity: 0.35; }   /* pad navigates, it does not typ
 }
 
 #key-turn-line.alarm { color: #ff8d86; border-left: 2px solid var(--red); padding-left: 10px; }
+
+/* ---- command handover ---------------------------------------------------
+   Centre screen for three seconds when the squad changes hands. Loud on
+   purpose: the player is about to be talked to by a different robot, and
+   discovering that from a name change in the comms panel is too quiet. */
+#handover {
+  position: absolute;
+  left: 50%;
+  top: 38%;
+  transform: translate(-50%, -50%);
+  z-index: 40;
+  pointer-events: none;
+  text-align: center;
+  font-family: var(--mono);
+  padding: 18px 34px;
+  background: rgba(8, 14, 13, 0.92);
+  border: 1px solid var(--amber);
+  box-shadow: 0 0 34px rgba(224, 168, 76, 0.28), inset 0 0 22px rgba(224, 168, 76, 0.08);
+  animation: handover-in 0.28s ease-out;
+}
+/* Same shape as #alarm-box: the class does nothing without this, and an
+   un-hidden panel sat on screen for a whole run the last time it was
+   forgotten. */
+#handover.hidden { display: none; }
+
+#handover-head {
+  font-size: 10px;
+  letter-spacing: 0.26em;
+  color: var(--dim);
+  margin-bottom: 8px;
+}
+#handover-why {
+  font-size: 15px;
+  letter-spacing: 0.06em;
+  color: var(--red);
+  margin-bottom: 10px;
+}
+#handover-to {
+  font-size: 22px;
+  letter-spacing: 0.14em;
+  color: var(--amber);
+  text-shadow: 0 0 16px rgba(224, 168, 76, 0.5);
+}
+
+@keyframes handover-in {
+  from { opacity: 0; transform: translate(-50%, -50%) scale(0.92); }
+  to   { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+}
+
+/* The unit chip for whoever currently has the squad. */
+.unit-chip.lead { border-left: 2px solid var(--amber); padding-left: 6px; }
+.unit-chip.lead .badge { background: var(--amber); color: var(--bg); }

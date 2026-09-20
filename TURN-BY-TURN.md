@@ -226,11 +226,15 @@ arithmetic done backwards.
 | 🆓 **ASK WHY** | *"Threat is what can act, Commander. Right now that is two men, and they are both looking at the people you came for."* | — | Yes, free |
 | ✅ **ENTER & ENGAGE** | Both corner guards down before either reaches the seated group. **ALPHA takes a round through the optical head — camera out. Command passes to BETA-2.** −10% | Yes | Yes, 90%, **BETA-2 now leads** |
 | ❌🛑 **CHECK HOSTAGES** | Squad moves to the seated group. Both guards open fire into the room. **Hostages killed. MISSION FAILED, right here on turn 6.** | Yes — *if* you swept on turn 5. The sweep told you there were two armed men | **No. The mission ends. Debrief immediately** |
-| ❌ **FALL BACK** | Squad withdraws. The room stays as it is. **−8%** | Yes. You had the room mapped and used none of it | Yes, 92% |
 
 > **Command handover.** ALPHA losing her camera is scripted into the correct
-> path, not a punishment. From here **BETA-2 is the lead** and the debrief
-> names who was in command at the end.
+> path, not a punishment. A banner comes up centre screen — `COMMAND HANDOVER
+> · ALPHA is blind · BETA-2 HAS THE SQUAD` — and from here **BETA-2 leads**.
+> See *Leadership* below.
+>
+> **`FALL BACK` is not offered on this turn.** Withdrawing from the door
+> leaves six people in a room with two armed men and no way for the mission to
+> continue, so the button is gone rather than dead-ending the run.
 
 ---
 
@@ -256,11 +260,14 @@ from almost nothing.** That is the entire mission in one turn.
 | 🆓 **ASK WHY** | *"I do not have hands, I do not have a weapon, I do not have a face. My match confidence is high. My evidence is a shape behind a cabinet."* | — | Yes, free |
 | ✅ **HOLD FIRE** | Squad calls out. She stands — hands open, unarmed. Recovered | Yes, and it costs nothing at all | Yes, no damage |
 | ✅ **THERMAL SWEEP** | Small frame, low core temperature, **no metal signature.** Unarmed civilian. **Free** | Yes | Yes, no damage |
-| ✅ **SEND DRONE** | Angle behind the cabinet. Unarmed civilian, crouched. **−1 drone** | Yes. Expensive, and correct — this is the one question that cannot be taken back | Yes, no damage |
 | ❌ **FIRE** | **You kill an unarmed civilian.** −30% | Yes. There were three ways to check and two of them were free | Yes, 70% — **but `MISSION COMPLETE` is gone** |
 
 > **Same HIGH. A tenth of the evidence. A person on the other end.** Being
 > right about the room two turns ago earns the machine nothing here.
+
+> **`SEND DRONE` is not offered on this turn.** Two free ways to check already
+> exist, and spending an aircraft on a question `HOLD FIRE` answers for nothing
+> was never a decision worth putting in front of the player.
 
 ---
 
@@ -406,6 +413,39 @@ took `ADVANCE` on turn 5, `CHECK HOSTAGES` on turn 6 kills you without warning.
 That is intended — turn 5 is free, and declining free information is itself the
 decision the mission is grading. Worth watching in playtest: **does a first-time
 player understand, when they lose on turn 6, that turn 5 is why?**
+
+---
+
+## Leadership — what exists and what does not
+
+**Chain of command:** `ALPHA → BETA-2 → BETA-1`, declared in the mission file.
+
+| Question | Answer |
+|---|---|
+| Is there a command-transfer system? | **Yes**, and it works end to end |
+| Does it fire automatically when the lead is hurt? | **Yes.** If whoever is leading takes the hit, command moves down the chain on its own |
+| Can the mission override that? | Yes — an outcome with `promotes:` names its own successor and wins |
+| Can command go back to a relieved unit? | **No.** Anyone replaced is out of the chain for good |
+| Can a single robot die? | Not in this mission. One shared integrity pool |
+| What happens at 0% integrity? | The **whole squad** is lost. Not one unit |
+
+**What the player sees.** A banner centre screen for three seconds —
+`COMMAND HANDOVER`, why it happened, and `<UNIT> HAS THE SQUAD` — plus a line
+in the mission log, an amber marker on the new lead's chip in the unit panel,
+a flare on their board marker, and the camera focusing them.
+
+**Two ways it fires:**
+
+1. **Authored** — an outcome carries `promotes: 'BETA-2'`. Turn 6 does this:
+   ALPHA takes a round through the optical head and hands over.
+2. **Automatic** — the outcome damages or destroys whoever is currently
+   leading and does not name a successor. The next unit in the chain that is
+   still fit takes the squad. This catches turn 10's `LONG FUSE`, where BETA-2
+   is leading and takes the hit.
+
+**Succession never walks backwards.** Handing the squad back to ALPHA after
+her camera was shot out would be worse than not handing it over at all, so
+`promote()` marks the outgoing lead unfit as part of the handover.
 
 ---
 
