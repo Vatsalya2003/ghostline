@@ -49,6 +49,11 @@ export class GameState {
     this.alarmed = false;
     this.alarmTurn = null;
     this.responseIn = null;       // turns left before the response force lands
+
+    // Who is talking to the commander. ALPHA until something happens to her,
+    // and then whoever the mission promotes. Held as state rather than
+    // hardcoded so renaming the squad is a change in one data file.
+    this.lead = this.mission.lead || 'ALPHA';
   }
 
   // Spotted. Everything after this is a reaction rather than a decision,
@@ -60,6 +65,15 @@ export class GameState {
     this.alarmTurn = turnId;
     this.responseIn = responseTurns;
     return true;
+  }
+
+  // Command handover. Returns the outgoing lead so the presentation layer
+  // can say who lost it, or null if nothing changed.
+  promote(unitId) {
+    if (!unitId || unitId === this.lead) return null;
+    const previous = this.lead;
+    this.lead = unitId;
+    return previous;
   }
 
   // Called once per turn advance while the alarm is up.
@@ -159,6 +173,8 @@ export class GameState {
       verdict: this.mission.verdicts[this.dominantTag()],
       alarmed: this.alarmed,
       alarmTurn: this.alarmTurn,
+      lead: this.lead,
+      hostageKilled: !!this.hostageKilled,
       keyTurnFailed: !!this.keyTurnFailure(),
       keyTurnLine: this.keyTurnFailure() ? this.mission.keyTurnVerdict : null,
       decisions: [...this.calibration],

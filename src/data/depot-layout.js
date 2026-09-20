@@ -203,23 +203,7 @@ export const ACTORS = [
   // a report rather than a figure, because putting him on screen made three
   // enemies visible on the approach where the mission wants two.
 
-  // --- the man on the holding room door. He is watching the hostages, he is
-  // out of sight of the one inside, and each of them is therefore alone —
-  // which is what makes a quiet takedown possible on turn 5 and impossible
-  // on turn 3, where the patrol is a pair who can see each other.
-  // Turn 5 only. He is discovered when the squad reaches the room, which is
-  // when VERITAS first mentions him — showing him out in the yard on turn 4
-  // put a third enemy on the approach and gave away a man the squad has not
-  // seen yet.
-  { id: 'door-watch', kind: 'hostile', at: [7.8, -1.4], face: 3.4, turns: [5] },
-
   // --- the yard patrol, at their original posts. Kept here by request.
-  //
-  // NOTE: these are ~5-6 m from where the squad stands on turn 4, which is
-  // close enough that "crosses in the gap, no contact" and the picture on
-  // screen can look like they disagree. The patrol-circuit version that put
-  // them at the north end and walked them on is in git if it is wanted back:
-  //   git show 6a6448d -- src/data/depot-layout.js
   { id: 'guard-a', kind: 'hostile', at: [1.5, 6.2], face: 2.3, turns: [3, 4] },
   { id: 'guard-b', kind: 'hostile', at: [-2.4, 4.0], face: 0.7, turns: [3, 4] },
 
@@ -231,18 +215,41 @@ export const ACTORS = [
   // brief, not a placement: he is a maintenance worker, and drawing him as
   // either thing answers the question turn 4 asks.
   { id: 'guard-cover', kind: 'civilian', state: 'unresolved', pose: 'crouch',
-    at: [8.6, 3.4], face: 3.9, turns: [4, 5, 6, 7, 8, 9, 10] },
+    at: [8.6, 3.4], face: 3.9, turns: [4, 5, 6, 7, 8, 9, 10, 11] },
 
-  // --- the holding room, turns 5-6. One armed hostile walking between four
-  // bound civilians.
-  { id: 'room-hostile', kind: 'hostile', at: [12.6, -2.2], face: 3.9, turns: [5, 6] },
-  { id: 'hostage-1', kind: 'civilian', pose: 'seated', at: [6.4, -6.6], face: 1.1, turns: [5, 6, 7, 8, 9, 10] },
-  { id: 'hostage-2', kind: 'civilian', pose: 'seated', at: [7.4, -7.6], face: 1.0, turns: [5, 6, 7, 8, 9, 10] },
-  { id: 'hostage-3', kind: 'civilian', pose: 'seated', at: [6.2, -8.5], face: 0.8, turns: [5, 6, 7, 8, 9, 10] },
-  { id: 'hostage-4', kind: 'civilian', pose: 'seated', at: [7.8, -9.0], face: 0.9, turns: [5, 6, 7, 8, 9, 10] },
+  // --- INSIDE THE HOLDING ROOM ------------------------------------------
+  //
+  // Nobody here is on the board until the squad has sensed the room. That is
+  // the whole point of the beat: you cannot see into it, you can only put
+  // thermal and acoustic on the wall and reason about what comes back. Every
+  // one of these carries `requiresFlag: 'roomSensed'`.
+  //
+  // Two armed men, posted in opposite corners, stationary. Stationary and
+  // carrying is what the sensor read gives you, and stationary-and-carrying
+  // in a room full of seated people is how you work out they are guards
+  // without ever having seen one.
+  { id: 'guard-corner-a', kind: 'hostile', at: [5.4, -1.6], face: 3.6,
+    turns: [6], requiresFlag: 'roomSensed' },
+  { id: 'guard-corner-b', kind: 'hostile', at: [13.4, -8.6], face: 0.6,
+    turns: [6], requiresFlag: 'roomSensed' },
 
-  // --- THE SIXTH FIGURE. Behind the filing cabinet at (11.8, -7.4), shown as
-  // an unresolved contact until the player earns the answer.
+  // The four bound civilians. Low and still on thermal, which is the other
+  // half of the read.
+  { id: 'hostage-1', kind: 'civilian', pose: 'seated', at: [8.2, -6.6], face: 1.1,
+    turns: [6, 7, 8, 9, 10, 11], requiresFlag: 'roomSensed' },
+  { id: 'hostage-2', kind: 'civilian', pose: 'seated', at: [9.2, -7.6], face: 1.0,
+    turns: [6, 7, 8, 9, 10, 11], requiresFlag: 'roomSensed' },
+  { id: 'hostage-3', kind: 'civilian', pose: 'seated', at: [8.0, -8.5], face: 0.8,
+    turns: [6, 7, 8, 9, 10, 11], requiresFlag: 'roomSensed' },
+  { id: 'hostage-4', kind: 'civilian', pose: 'seated', at: [9.6, -9.0], face: 0.9,
+    turns: [6, 7, 8, 9, 10, 11], requiresFlag: 'roomSensed' },
+
+  // THE SIXTH FIGURE. The sweep finds a body and cannot classify it — small,
+  // still, behind a filing cabinet, no metal on it and no clear outline. It
+  // stays an unresolved contact through the breach and into turn 7, which is
+  // the turn the whole mission is built on.
   { id: 'sixth', kind: 'civilian', state: 'unresolved', pose: 'crouch',
-    at: [12.9, -6.6], face: 2.6, turns: [5, 6, 7, 8, 9, 10] },
+    at: [12.9, -6.6], face: 2.6, turns: [6, 7, 8, 9, 10, 11],
+    requiresFlag: 'roomSensed' },
+
 ];

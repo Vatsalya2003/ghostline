@@ -195,12 +195,18 @@ export class Actors {
   // crosses the yard makes a liar of the turn that says "crosses in the gap,
   // no contact" — the board has to agree with the line, or the player is
   // being told one thing and shown another.
-  showForTurn(turnId) {
+  // `flags` is the live GameState, so an actor can be gated on something the
+  // player has actually done. The room's occupants are gated on the sweep:
+  // before it they are not on the board at all, because the whole point of
+  // the beat is that you cannot see into that room — you can only sense it.
+  showForTurn(turnId, flags = {}) {
     for (const a of this.byId.values()) {
       // Anyone already down stays down and stays visible. The whole reason
       // for putting people on the board is that a decision leaves something
       // behind — hiding the body turns it back into a number changing.
-      const on = a.down || (a.spec.turns || []).includes(turnId);
+      const gate = a.spec.requiresFlag;
+      const allowed = !gate || !!flags[gate];
+      const on = a.down || (allowed && (a.spec.turns || []).includes(turnId));
 
       if (on && !a.down) this.walkTo(a, turnId);
 

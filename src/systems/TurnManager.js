@@ -155,6 +155,17 @@ export class TurnManager {
       for (const flag of [].concat(outcome.setsFlag)) this.state[flag] = true;
     }
 
+    // Command handover. The mission names the successor; nothing here knows
+    // or cares what the units are called.
+    if (outcome.promotes) {
+      const from = this.state.promote(outcome.promotes);
+      if (from) {
+        events.emit(GAME_EVENT.LEAD_CHANGED, {
+          from, to: outcome.promotes, reason: outcome.promoteReason || null,
+        });
+      }
+    }
+
     // Spotted. The compound now knows, and a clock starts.
     if (outcome.raisesAlarm
         && this.state.raiseAlarm(turn.id, this.mission.responseTurns ?? 5)) {

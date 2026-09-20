@@ -154,13 +154,18 @@ events.on(GAME_EVENT.TURN_START, ({ turn }) => {
   ui.comms.reset?.();
   // Show exactly the people this turn declares — nobody lingers into a room
   // they were never in.
-  actors?.showForTurn(turn.id);
+  actors?.showForTurn(turn.id, state);
 });
 
 // What a command did to the people on the board. Driven off the outcome so
 // the mission owns it, the same as every other consequence.
-events.on(GAME_EVENT.TURN_END, ({ outcome }) => {
-  if (outcome) actors?.applyOutcome(outcome);
+events.on(GAME_EVENT.TURN_END, ({ turn, outcome }) => {
+  if (!outcome) return;
+  actors?.applyOutcome(outcome);
+  // A sweep reveals the room inside the turn that ran it, not at the start
+  // of the next one — otherwise the player reads "six bodies in there" and
+  // is looking at an empty room until they press something else.
+  actors?.showForTurn(turn.id, state);
 });
 
 // Being seen. The compound reacts, the hostages are moved off the board the
@@ -171,6 +176,14 @@ events.on(GAME_EVENT.ALARM_RAISED, ({ responseIn }) => {
   screenFX.flash('breach', 600);
   audio.alarm?.();
   actors?.onAlarm();
+});
+
+events.on(GAME_EVENT.LEAD_CHANGED, ({ from, to, reason }) => {
+  ui.log.push(`COMMAND HANDOVER — ${from} → ${to}${reason ? ` · ${reason}` : ''}`);
+  ui.hud.setLead?.(to);
+  markers?.flare?.(to);
+  director.focusUnit?.(to);
+  audio.alert?.();
 });
 
 events.on(GAME_EVENT.RESPONSE_TICK, ({ responseIn }) => {

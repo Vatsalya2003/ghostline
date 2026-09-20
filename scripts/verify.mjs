@@ -315,7 +315,12 @@ function enumerate(mission, index, plan) {
   if (paths >= PATH_BUDGET) { truncated = true; return; }
   const turn = mission.turns[index];
   if (!turn) return walk(mission, plan);
-  const committing = turn.actions.filter((a) => turn.outcomes[a].consumesTurn !== false);
+  // Safest-first, so a truncated walk explores the space a competent player
+  // actually occupies rather than burning the whole budget on the branch
+  // where the mission ended at turn 2.
+  const committing = turn.actions
+    .filter((a) => turn.outcomes[a].consumesTurn !== false)
+    .sort((a, b) => actionRank(turn, a) - actionRank(turn, b));
   for (const action of committing) {
     if (paths >= PATH_BUDGET) { truncated = true; return; }
     if (turn.outcomes[action].endsMission) walk(mission, [...plan, action]);
@@ -323,11 +328,24 @@ function enumerate(mission, index, plan) {
   }
 }
 
-// The cheapest committing action on a turn — used to build a filler route to
-// whichever turn we actually want to test.
+// The filler action used to reach whichever turn we actually want to test.
+//
+// It has to be the *safest* action, not the first one listed. Picking first
+// meant that the moment a turn put a dangerous verb at the top of its menu —
+// turn 2 leads with ADVANCE, which alerts the compound — every coverage path
+// ran alarmed, no path could reach a clean ending, and verify reported
+// "complete is unreachable" about a mission that was fine.
+function actionRank(turn, a) {
+  const o = turn.outcomes[a];
+  return (o.endsMission ? 100 : 0)
+       + (o.raisesAlarm ? 50 : 0)
+       + (o.tag === CALIBRATION.CALIBRATED ? 0 : 10)
+       + Math.abs(o.healthDelta || 0) / 100;
+}
+
 function defaultAction(turn) {
   const committing = turn.actions.filter((a) => turn.outcomes[a].consumesTurn !== false);
-  return committing.find((a) => !turn.outcomes[a].endsMission) || committing[0];
+  return [...committing].sort((a, b) => actionRank(turn, a) - actionRank(turn, b))[0];
 }
 
 // One walk per outcome: fill the turns before it with defaults, take the

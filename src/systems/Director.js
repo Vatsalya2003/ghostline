@@ -419,6 +419,57 @@ export class Director {
         panCamera(this.camera, (u.position.x + place.x) / 2, (u.position.z + place.z) / 2, 1.3);
         break;
       }
+      // Taking the room. The squad goes through the door, both corner men are
+      // engaged, and one of ours pays for it — which is the beat the mission
+      // has been building to since the sweep. Sequenced rather than fired
+      // all at once so the player can read what happened to whom.
+      case 'breach-room': {
+        const targets = [].concat(outcome.dropActors || [])
+          .map((id) => this.actors?.positionOf(id))
+          .filter(Boolean);
+        const shooters = this.squad.all.filter((u) => u.status !== 'damaged');
+
+        punchZoom(this.camera, -1.4);
+        this.screenFX?.flash('breach', 320);
+        audio.breach?.();
+        await wait(0.25);
+
+        // Each corner taken in turn, by whoever is closest to it.
+        for (let i = 0; i < targets.length; i++) {
+          const aim = targets[i];
+          const nearest = shooters.reduce((best, u) => {
+            const d = (u.position.x - aim.x) ** 2 + (u.position.z - aim.z) ** 2;
+            return !best || d < best.d ? { u, d } : best;
+          }, null)?.u || shooters[0];
+
+          panCamera(this.camera, aim.x, aim.z, 0.5);
+          nearest.faceTowards(aim.x, aim.z, 0.15);
+          nearest.fire(0.8);
+          this.fx.gunfire(nearest.position, aim, { rounds: 4, spread: 0.45 });
+          this.focusUnit(nearest.id);
+          audio.impact();
+          shakeCamera(this.camera, 0.35, 0.3);
+          await wait(0.55);
+        }
+
+        // And the cost. The unit the mission names takes the hit, visibly,
+        // after the room is clear rather than during it.
+        const hurt = this.unit(outcome.impactUnit);
+        if (hurt) {
+          panCamera(this.camera, hurt.position.x, hurt.position.z, 0.5);
+          this.fx.hitFlash(hurt);
+          this.fx.unitHit(hurt.position);
+          this.markers?.flare(hurt.id);
+          this.focusUnit(hurt.id);
+          shakeCamera(this.camera, 0.7, 0.45);
+          this.lightKick(3.0, 0.5);
+          this.flash();
+          audio.impact();
+        }
+        await wait(0.5);
+        break;
+      }
+
       // Planting the charge. The squad has to visibly do it: walk to the
       // stack, kneel, and leave something behind that is still there next
       // turn and blinking. Before this, "charge is set" was a sentence with

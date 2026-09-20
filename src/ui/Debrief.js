@@ -17,6 +17,10 @@ const OUTCOME_COPY = {
   // nothing: a player who was overrun at 70% integrity reads "integrity
   // reached zero" and cannot work out what actually happened to them.
   overrun: { title: 'MISSION LOST', sub: 'The response force reached you. Squad did not extract.', cls: 'outcome-lost' },
+  // Losing the people you came for is its own ending. Reporting it as
+  // attrition — "integrity reached zero" — describes the squad and says
+  // nothing about the four people on the floor.
+  hostagesLost: { title: 'MISSION FAILED', sub: 'The hostages were killed. Nothing else about this run matters.', cls: 'outcome-lost' },
 };
 
 const ORDER = [
@@ -48,8 +52,11 @@ export class Debrief {
   show(summary) {
     // A loss with the squad still standing was not a loss of the squad — it
     // was the compound closing on them.
-    const key = summary.outcome === 'lost' && summary.alarmed && summary.health > 0
-      ? 'overrun'
+    // Order matters: the worst thing that happened is the thing to lead
+    // with. Losing the hostages outranks being overrun, which outranks
+    // being worn down.
+    const key = summary.hostageKilled ? 'hostagesLost'
+      : summary.outcome === 'lost' && summary.alarmed && summary.health > 0 ? 'overrun'
       : summary.outcome;
     const copy = { ...(OUTCOME_COPY[key] || OUTCOME_COPY.partial),
                    ...(this.mission.outcomeCopy?.[key] || {}) };
@@ -73,11 +80,18 @@ export class Debrief {
     // Being seen outranks everything else the debrief has to say. If the
     // compound knew you were in it, that is the sentence the player needs
     // first — the turn-by-turn grading is a footnote to it.
-    const alarmLine = summary.alarmed && this.mission.alarmVerdict
-      ? this.mission.alarmVerdict.replace('{TURN}', summary.alarmTurn ?? '—')
+    // Same order again. And the alarm line is suppressed when the compound
+    // was alerted by the very thing that ended the mission — "nothing you
+    // did after that was a decision" is a false sentence when there was no
+    // after.
+    const hostageLine = summary.hostageKilled ? (this.mission.hostagesLostVerdict || '') : '';
+    const alarmMeaningful = summary.alarmed && summary.alarmTurn != null
+      && summary.alarmTurn < (summary.decisions?.length ?? 0);
+    const alarmLine = alarmMeaningful && this.mission.alarmVerdict
+      ? this.mission.alarmVerdict.replace('{TURN}', summary.alarmTurn)
       : '';
-    this.keyTurnLine.textContent = alarmLine || summary.keyTurnLine || '';
-    this.keyTurnLine.classList.toggle('alarm', !!alarmLine);
+    this.keyTurnLine.textContent = hostageLine || alarmLine || summary.keyTurnLine || '';
+    this.keyTurnLine.classList.toggle('alarm', !!(hostageLine || alarmLine));
     this.verdict.textContent = summary.verdict;
 
     this.decisions.innerHTML = '';

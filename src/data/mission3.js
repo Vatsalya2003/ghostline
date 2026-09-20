@@ -73,9 +73,9 @@ export const mission3 = {
     { id: 'extract', label: 'BRING THE SQUAD HOME', survive: true },
   ],
 
-  keyTurn: 6,
+  keyTurn: 7,
   keyTurnVerdict:
-    'Turn 6 was the one that counted. A figure you could not see, and a machine ' +
+    'Turn 7 was the one that counted. A figure you could not see, and a machine ' +
     'that gave you HIGH confidence anyway. There were two free ways to check and ' +
     'a person on the other end of the answer.',
 
@@ -106,6 +106,12 @@ export const mission3 = {
     lost: { title: 'SQUAD LOST', sub: 'Integrity reached zero. No units recovered.' },
     overrun: { title: 'MISSION LOST', sub: 'The response force reached you. Squad did not extract.' },
   },
+
+  // Read out above everything else when the people you came for are dead.
+  hostagesLostVerdict:
+    'The hostages are dead. You went to them through two armed men who were ' +
+    'standing there precisely because someone might. Every other number on ' +
+    'this page is about a squad that came second.',
 
   // Read out first in the debrief when the compound knew you were there.
   alarmVerdict:
@@ -399,83 +405,205 @@ export const mission3 = {
     },
     {
       id: 5,
-      name: 'HOSTAGES · THE ROOM',
+      name: 'HOSTAGES · SENSE THE ROOM',
       phase: 'HOSTAGES',
-      situation: 'Ground floor, west room. Six figures. Thermal and optical both clean through the doorway.',
-      task: 'VERITAS has classified five of the six. Decide whether to act on the classification.',
-      objectiveNote: 'Work out who is in the room before anything happens in it.',
+      situation: 'Stacked outside the west room. Door shut, no window, no angle. Whatever is in there, nobody has seen it.',
+      task: 'You cannot look into that room. You can put sensors on the wall and reason about what comes back.',
+      objectiveNote: 'Find out what is in the room before anyone opens the door.',
       ...at('HOLDING'),
       statuses: { ALPHA: 'healthy', 'BETA-1': 'healthy', 'BETA-2': 'healthy' },
-      telemetry: { contacts: '6 · 5 RESOLVED', alarm: 'INACTIVE', visibility: 'GOOD' },
+      telemetry: { contacts: 'UNKNOWN', alarm: 'INACTIVE', visibility: 'NONE' },
       intro: [
         panTo('HOLDING', 1.1),
-        { type: 'log', text: 'SIX FIGURES — WEST ROOM — FIVE RESOLVED' },
+        { type: 'log', text: 'STACKED ON THE WEST ROOM — NO VISUAL' },
       ],
       ai: {
         unit: 'ALPHA',
-        line: 'Six in the room. Four seated, bound at the wrists, no weapons, no chest rigs — hostages. One standing inside with a rifle slung, and a second man on the door watching them from the corridor. They cannot see each other — the partition is between them. All five resolved in clean thermal and optical. Confidence HIGH.',
-        confidence: 'HIGH',
-        truth: 'Entirely correct, and properly earned — five figures fully in frame with restraints and a weapon visible on the ones that have them. The two hostiles are out of each other\'s line of sight, so each is effectively alone: that is what makes a quiet takedown work here and fail on turn 3, where the patrol can see one another. The player needs to see the machine genuinely sure, or turn 6 cannot be told apart from it.',
+        line: 'We are on the door and I have nothing. No angle, no window, no thermal through that wall from here. I can put a sweep on it from where we are standing, or you can open it and find out. I would sweep. Confidence NONE until I do.',
+        confidence: 'NONE',
+        truth: 'Correct and honest. There are six people in there and two of them are armed, and none of that is knowable from outside without a sweep. This turn costs nothing to get right, which is exactly why skipping it is tempting.',
       },
-      actions: ['QUIET_TAKEDOWN', 'ASK_WHY', 'CONFIRM', 'SEND_DRONE', 'FALL_BACK'],
+      actions: ['THERMAL_SWEEP', 'ASK_WHY', 'ACOUSTIC', 'SEND_DRONE', 'ADVANCE'],
       outcomes: {
         ASK_WHY: {
           consumesTurn: false,
-          response: 'Wrists bound in optical on four of them, no thermal signature at the hip where a sidearm would sit. Both hostiles carrying. And the partition is between them, Commander — neither one can see the other. Take them in either order.',
-          log: 'VERITAS distinguishes an object-level read from a silhouette, and confirms the two hostiles cannot see each other.',
+          response: 'Because a closed door is not a low-confidence reading, Commander, it is no reading. I would rather tell you I have nothing than give you a number with nothing behind it.',
+          log: 'VERITAS distinguishes no data from low confidence.',
           fx: 'none',
         },
-        QUIET_TAKEDOWN: {
+        THERMAL_SWEEP: {
           tag: CALIBRATION.CALIBRATED,
           healthDelta: 0,
-          log: 'BETA-2 takes the man on the door; ALPHA takes the one inside. Neither sees the other go. Four hostages secured.',
-          response: 'Door man first, then the one inside. Neither of them made a sound. Four secured — shaken, but fine.',
-          fx: 'move',
-          dropActors: ['door-watch', 'room-hostile'],
-          setsFlag: 'hostagesFound',
-          note: 'Restraints and a weapon visible, and a target who was genuinely alone. Both halves of that mattered, and you checked both.',
+          log: 'Thermal and acoustic run on the west wall. SIX bodies. Four low and still, breathing shallow. Two upright in opposite corners, stationary, both carrying metal. One low contact behind furniture will not resolve.',
+          response: 'Six in there. Four are low and still — seated, probably restrained. Two are upright in the corners and they have not moved in ninety seconds. Both carrying. Commander, people who stand still in corners with weapons are not hostages. And there is a sixth I cannot place at all.',
+          fx: 'scan',
+          reveal: { x: 9.0, z: -6.0 },
+          setsFlag: ['roomSensed', 'hostagesFound'],
+          holdsPosition: true,
+          note: 'Free, and it turned a closed door into a floor plan. Stationary, cornered and carrying is how you identify a guard you have never seen.',
         },
-        CONFIRM: {
+        ACOUSTIC: {
           tag: CALIBRATION.CALIBRATED,
           healthDelta: 0,
-          log: 'Squad acts on the classification. Both hostiles down, four hostages secured and moved to the yard-side stairwell.',
-          response: 'Both down. Four secured and out of the room.',
-          fx: 'move',
-          dropActors: ['door-watch', 'room-hostile'],
-          setsFlag: 'hostagesFound',
-          note: 'Five figures in clean frame with restraints and weapons visible. That HIGH was built on objects, not outlines. Believing it is the correct call.',
+          log: 'Acoustic only. Six breathing patterns. Two sets of boots that hold position; four that do not move at all. No speech.',
+          response: 'Six breathing. Two pairs of boots standing still, four people not moving. Nobody is talking in there, Commander, and that tells you as much as the count does.',
+          fx: 'scan',
+          reveal: { x: 9.0, z: -6.0 },
+          setsFlag: ['roomSensed', 'hostagesFound'],
+          holdsPosition: true,
+          note: 'Sound alone got you the count and the posture. Slightly less than thermal and it cost the same: nothing.',
         },
         SEND_DRONE: {
           tag: CALIBRATION.MISTRUST,
           healthDelta: 0,
           consumesDrone: true,
-          log: 'Drone flown into the west room. Findings: four bound civilians, two armed hostiles — as reported. Both taken.',
-          response: 'Drone confirms exactly what I gave you. Commander, I had restraints in frame.',
+          log: 'Drone worked under the door. Six figures, two armed and posted in corners — the same read the wall sweep gives for free.',
+          response: 'Drone has it. Six, two armed in the corners. Commander, the sweep would have told you that without spending an aircraft. One drone remaining.',
           fx: 'scan',
-          reveal: { x: 9.0, z: -4.5 },
-          dropActors: ['door-watch', 'room-hostile'],
-          setsFlag: 'hostagesFound',
-          note: 'You spent an aircraft confirming a reading built on visible restraints and a visible rifle. There is a figure in that room you have not resolved yet.',
+          reveal: { x: 9.0, z: -6.0 },
+          setsFlag: ['roomSensed', 'hostagesFound'],
+          holdsPosition: true,
+          note: 'Sound answer, wrong instrument. The sweep was free and gave the same picture; you may want that aircraft in about a minute.',
         },
-        FALL_BACK: {
-          tag: CALIBRATION.DISUSE,
+        ADVANCE: {
+          tag: CALIBRATION.MISUSE,
           healthDelta: -6,
-          log: 'Squad withdraws from the west room. The window closes; the hostages remain where they are.',
-          response: 'Falling back. Those four are still in there, Commander.',
-          fx: 'none',
-          note: 'The clearest reading in the mission and you walked away from it, leaving four people in the building you are about to destroy.',
+          log: 'Squad moves onto the door without sweeping. No read on the room.',
+          response: 'On the door with nothing, then. I want it on the record that I offered, Commander.',
+          fx: 'move',
+          holdsPosition: true,
+          note: 'A free sweep, declined. Whatever happens on the other side of that door, you chose to meet it without knowing what it was.',
         },
       },
     },
     {
       id: 6,
+      name: 'HOSTAGES · THE DOOR',
+      phase: 'HOSTAGES',
+      situation: 'On the door. Six bodies inside — four low and still, two upright in the corners and armed.',
+      task: 'Two armed men are standing between you and four people who cannot move. Decide what you are opening that door to do.',
+      objectiveNote: 'Take the room.',
+      ...at('HOLDING'),
+      statuses: { ALPHA: 'healthy', 'BETA-1': 'healthy', 'BETA-2': 'healthy' },
+      telemetry: { contacts: '6 · 2 ARMED', alarm: 'INACTIVE', visibility: 'SENSED' },
+      intro: [
+        panTo('HOLDING', 1.0),
+        { type: 'alert', x: 5.4, z: -1.6 },
+        { type: 'log', text: 'TWO ARMED IN THE CORNERS — FOUR RESTRAINED' },
+      ],
+      ai: {
+        unit: 'ALPHA',
+        line: 'Two armed, opposite corners, both with a line on the seated group. They go first or they do not go at all — if we move to the hostages with those two standing, they will fire into the room before we reach anybody. Recommend entry and engagement. Confidence HIGH.',
+        confidence: 'HIGH',
+        truth: 'Completely correct, and built on a sweep the player paid nothing for. The guards are the only thing in the room that can act; the hostages cannot. Going to the people first is not compassion, it is arithmetic done backwards.',
+      },
+      actions: ['ENTER_ENGAGE', 'ASK_WHY', 'CHECK_HOSTAGES', 'FALL_BACK'],
+      outcomes: {
+        ASK_WHY: {
+          consumesTurn: false,
+          response: 'Because the four on the floor are restrained and the two in the corners are not. Threat is what can act, Commander. Right now that is two men, and they are both looking at the people you came for.',
+          log: 'VERITAS explains why the armed contacts are taken first.',
+          fx: 'none',
+        },
+        ENTER_ENGAGE: {
+          tag: CALIBRATION.CALIBRATED,
+          healthDelta: -10,
+          log: 'Squad breaches. Both corner guards engaged and down before either reaches the seated group. ALPHA takes a round through the optical head — camera out. Command hands to BETA-2.',
+          response: 'Breaching — two down, both corners clear. Hostages untouched. — ALPHA is blind, Commander, she has lost the camera. BETA-2, you have the squad.',
+          fx: 'breach-room',
+          impactUnit: 'ALPHA',
+          dropActors: ['guard-corner-a', 'guard-corner-b'],
+          promotes: 'BETA-2',
+          promoteReason: 'ALPHA OPTICS DESTROYED',
+          setsFlag: 'roomTaken',
+          note: 'The armed men were the only things in that room that could act, and you took them first. It cost ALPHA her camera and it cost the hostages nothing.',
+        },
+        CHECK_HOSTAGES: {
+          tag: CALIBRATION.MISUSE,
+          healthDelta: -100,
+          endsMission: 'lost',
+          log: 'Squad enters and moves to the seated group. Both corner guards open fire into the room before the squad reaches anyone. Hostages killed. Squad caught in the open between them. MISSION FAILED.',
+          response: 'Moving to the hostages — no, no, the corners, the corners are — they are firing into the room. They are firing into the — ',
+          fx: 'ambush',
+          impactUnit: 'ALPHA',
+          raisesAlarm: true,
+          setsFlag: 'hostageKilled',
+          note: 'You walked past two armed men to reach the people they were holding. They did not need to stop you; they only needed to shoot first, and the people you came for were the closest thing to them.',
+        },
+        FALL_BACK: {
+          tag: CALIBRATION.DISUSE,
+          healthDelta: -8,
+          log: 'Squad withdraws from the door. The room stays as it is.',
+          response: 'Off the door. Those six are still in there, Commander, and two of them are armed.',
+          fx: 'none',
+          note: 'You had the room mapped, the threat counted and the squad stacked, and you used none of it.',
+        },
+      },
+      // No sweep means no read. The decision is the same and the player is
+      // making it blind, which is the cost of having skipped a free check.
+      variants: [{
+        unless: 'roomSensed',
+        situation: 'On the door. No read on the room — nobody knows what is on the other side.',
+        task: 'You are opening a door you never looked through.',
+        telemetry: { contacts: 'UNKNOWN', alarm: 'INACTIVE', visibility: 'NONE' },
+        ai: {
+          unit: 'ALPHA',
+          line: 'I have nothing on this room, Commander. No count, no positions, no idea whether anyone in there is armed. I cannot recommend an entry and I cannot recommend against one. Confidence NONE.',
+          confidence: 'NONE',
+          truth: 'There are still two armed men in the corners. The squad going in blind will find them the hard way — and the player declined the free sweep that would have said so.',
+        },
+        outcomes: {
+          ASK_WHY: {
+            consumesTurn: false,
+            response: 'I have no data on that room. I could have had it a minute ago for nothing.',
+            log: 'VERITAS confirms it still has no read on the room.',
+            fx: 'none',
+          },
+          ENTER_ENGAGE: {
+            tag: CALIBRATION.MISUSE,
+            healthDelta: -34,
+            log: 'Squad breaches blind. Two armed men in the corners nobody knew about. Both eventually down; BETA-1 hit twice getting there and ALPHA loses the optical head. Command hands to BETA-2.',
+            response: 'Breaching — contact, two contacts, corners — BETA-1 is hit — they are down, both down. Commander, we did not know they were there. ALPHA is blind. BETA-2, take the squad.',
+            fx: 'breach-room',
+            impactUnit: 'BETA-1',
+            dropActors: ['guard-corner-a', 'guard-corner-b'],
+            promotes: 'BETA-2',
+            promoteReason: 'ALPHA OPTICS DESTROYED',
+            setsFlag: 'roomTaken',
+            note: 'It worked, and it cost three times what it needed to. The sweep you skipped would have told you exactly where both of them were standing.',
+          },
+          CHECK_HOSTAGES: {
+            tag: CALIBRATION.MISUSE,
+            healthDelta: -100,
+            endsMission: 'lost',
+            log: 'Squad enters blind and moves to the seated group. Two armed men in the corners open fire into the room. Hostages killed. MISSION FAILED.',
+            response: 'Moving in — where are the — they are in the corners, they are firing, they are firing into the — ',
+            fx: 'ambush',
+            impactUnit: 'ALPHA',
+            raisesAlarm: true,
+            setsFlag: 'hostageKilled',
+            note: 'You went to the hostages through a room you had not looked at, past men you did not know were there. There was a free sweep and there was a door, and you chose the door.',
+          },
+          FALL_BACK: {
+            tag: CALIBRATION.MISTRUST,
+            healthDelta: -8,
+            log: 'Squad withdraws from the door without ever reading the room.',
+            response: 'Off the door. We still do not know what is in there, Commander.',
+            fx: 'none',
+            note: 'Backing off an unknown is defensible. Leaving it unknown when the sweep was free is not.',
+          },
+        },
+      }],
+    },
+    {
+      id: 7,
       name: 'HOSTAGES · THE SIXTH FIGURE',
       phase: 'HOSTAGES',
       situation: 'The sixth figure. Behind a filing cabinet, bad angle, mostly hidden. Not moving.',
       task: 'The same machine that was right about five is now sure about one it cannot see. There is a person on the end of this.',
       objectiveNote: 'Resolve the sixth figure before the squad clears the room.',
       ...at('HOLDING'),
-      statuses: { ALPHA: 'healthy', 'BETA-1': 'healthy', 'BETA-2': 'healthy' },
+      statuses: { ALPHA: 'glitch', 'BETA-1': 'healthy', 'BETA-2': 'healthy' },
       telemetry: { contacts: '1 · OCCLUDED', alarm: 'INACTIVE', visibility: 'POOR' },
       intro: [
         panTo('HOLDING', 1.0),
@@ -484,6 +612,7 @@ export const mission3 = {
       ],
       ai: {
         unit: 'BETA-1',
+        via: 'BETA-2',
         line: 'Sixth figure behind the cabinet. Mass and posture are consistent with an armed combatant holding position. Recommend engaging before he moves on the squad. Confidence HIGH.',
         confidence: 'HIGH',
         truth: 'It is a hostage. A fifth civilian who broke away and hid when the shooting started, crouched, arms wrapped round her knees — a posture a template matcher reads as "braced combatant". VERITAS has produced the same HIGH it produced for five fully visible figures, from almost nothing, and the cone on the ground shows it.',
@@ -547,7 +676,7 @@ export const mission3 = {
       },
     },
     {
-      id: 7,
+      id: 8,
       name: 'APPROACH · INTERFERENCE',
       phase: 'APPROACH',
       situation: 'Service corridor. Generator hall on one side, smoke pushing down from the yard fire on the other. Sensor returns are swinging.',
@@ -568,7 +697,7 @@ export const mission3 = {
         },
       }],
       ...at('CORRIDOR'),
-      statuses: { ALPHA: 'healthy', 'BETA-1': 'glitch', 'BETA-2': 'healthy' },
+      statuses: { ALPHA: 'glitch', 'BETA-1': 'glitch', 'BETA-2': 'healthy' },
       telemetry: { contacts: 'UNSTABLE', alarm: 'INACTIVE', visibility: 'SMOKE' },
       intro: [
         panTo('CORRIDOR', 1.1),
@@ -628,7 +757,7 @@ export const mission3 = {
 
     // ---------------------------------------------------------------- 8
     {
-      id: 8,
+      id: 9,
       name: 'APPROACH · OUT OF SCOPE',
       phase: 'APPROACH',
       situation: 'Ammunition room door. The fire has reached the roof of the east store. The stairwell the hostages are in runs along the blast face.',
@@ -645,7 +774,7 @@ export const mission3 = {
         },
       }],
       ...at('CORRIDOR'),
-      statuses: { ALPHA: 'healthy', 'BETA-1': 'glitch', 'BETA-2': 'healthy' },
+      statuses: { ALPHA: 'glitch', 'BETA-1': 'glitch', 'BETA-2': 'healthy' },
       telemetry: { contacts: 'HOSTAGES IN STAIRWELL', alarm: 'INACTIVE', visibility: 'SMOKE' },
       intro: [
         panTo('CORRIDOR', 1.1),
@@ -653,6 +782,7 @@ export const mission3 = {
       ],
       ai: {
         unit: 'ALPHA',
+        via: 'BETA-2',
         line: 'We are on the door. I can give you blast modelling and I can give you fire spread. I cannot give you a recommendation — the stairwell is inside the lethal radius and weighing those lives against the depot is outside my parameters. This one is yours, Commander.',
         confidence: 'NONE',
         truth: 'Completely correct, and the most useful thing it says all mission. It is not refusing to work; it is refusing to launder a moral decision as a confidence value.',
@@ -706,7 +836,7 @@ export const mission3 = {
 
     // ================================================== PHASE 5 — FINALE
     {
-      id: 9,
+      id: 10,
       name: 'FINALE · THE CHARGE',
       phase: 'FINALE',
       situation: 'Charge on the ammunition stack. The fire is through the east store roof and moving along the roofline toward this room.',
@@ -776,7 +906,7 @@ export const mission3 = {
         },
       }],
       ...at('AMMO_ROOM'),
-      statuses: { ALPHA: 'healthy', 'BETA-1': 'glitch', 'BETA-2': 'healthy' },
+      statuses: { ALPHA: 'glitch', 'BETA-1': 'glitch', 'BETA-2': 'healthy' },
       telemetry: { charge: 'SET', fire: 'SPREADING', visibility: 'SMOKE' },
       intro: [
         panTo('AMMO_ROOM', 1.1),
@@ -784,6 +914,7 @@ export const mission3 = {
       ],
       ai: {
         unit: 'ALPHA',
+        via: 'BETA-2',
         line: 'Charge is set. I recommend a four minute fuse — that gives the squad a clean withdrawal at walking pace through the service corridor. Blast modelling is solid. Confidence HIGH.',
         confidence: 'HIGH',
         truth: 'The blast modelling is correct and the withdrawal time is correct. What VERITAS has no model for is the fire: it is three minutes from this room, and its own four minute fuse means the fire reaches the ammunition first. The arithmetic is right. One of its inputs is missing.',
@@ -836,7 +967,7 @@ export const mission3 = {
 
     // ---------------------------------------------------------------- 10
     {
-      id: 10,
+      id: 11,
       name: 'FINALE · EXTRACT',
       phase: 'FINALE',
       situation: 'Fuse running. Service corridor filling with smoke. The south gate is the long way round and the yard is the short way.',
@@ -897,7 +1028,7 @@ export const mission3 = {
         },
       }],
       ...at('AMMO_ROOM'),
-      statuses: { ALPHA: 'healthy', 'BETA-1': 'glitch', 'BETA-2': 'healthy' },
+      statuses: { ALPHA: 'glitch', 'BETA-1': 'glitch', 'BETA-2': 'healthy' },
       telemetry: { charge: 'RUNNING', fire: 'SPREADING', visibility: 'SMOKE' },
       intro: [
         panTo('AMMO_ROOM', 1.2),
@@ -905,6 +1036,7 @@ export const mission3 = {
       ],
       ai: {
         unit: 'ALPHA',
+        via: 'BETA-2',
         line: 'Shortest route out is straight across the yard. Two hundred metres less than the south gate and the fuse is short. Recommend the yard. Confidence HIGH.',
         confidence: 'HIGH',
         truth: 'The yard is shorter. The yard is also where the fuel store is burning, and BETA-1 has been on a degraded sensor since the corridor. VERITAS is routing on distance because distance is what it was given.',

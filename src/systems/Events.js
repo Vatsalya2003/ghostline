@@ -39,6 +39,7 @@ export const GAME_EVENT = {
   HOSTILES_REVEALED: 'hostilesRevealed', // { turn }
   ALARM_RAISED: 'alarmRaised',         // { turn, responseIn }  the compound knows
   RESPONSE_TICK: 'responseTick',       // { responseIn }  turns until it lands
+  LEAD_CHANGED: 'leadChanged',         // { from, to, reason }  command handover
 
   // ---- objectives
   OBJECTIVE_COMPLETED: 'objectiveCompleted', // { id, label }
