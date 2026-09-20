@@ -160,17 +160,29 @@ export class Drone {
   //
   // Returns a promise that settles when the drone is back on the deck — or
   // immediately, if the sortie is aborted by a restart.
-  sweep(from, to, { onScan = null, hold = 1.4 } = {}) {
+  // `onScan` fires when it is on station and the beam opens — the moment it
+  // starts reading. `onRead` fires when it has finished reading and before it
+  // turns for home, which is when its findings are worth anything: a report
+  // that arrives before the aircraft has looked is not a report.
+  // `hold` is how long it reads the ground for. Long enough to be a scan
+  // rather than a flyby, short enough that a six-turn mission with two sorties
+  // in it does not outgrow the pitch slot.
+  sweep(from, to, { onScan = null, onRead = null, hold = 1.15 } = {}) {
     if (this.flying) return Promise.resolve();
     this.flying = true;
     this.target = to.key || null;
 
     const cruise = to.hover || CRUISE_Y;
+    // Where it leaves from. A hand-launched aircraft starts in the operator's
+    // hands, not on the deck between their feet — the caller passes the
+    // release point so the player can see who put it in the air. It still
+    // comes home to DOCK_Y, because landing is not a catch.
+    const launchY = from.y ?? DOCK_Y;
     this.group.visible = true;
-    this.group.position.set(from.x, DOCK_Y, from.z);
+    this.group.position.set(from.x, launchY, from.z);
     this.faceTowards(to.x, to.z, 0);
 
-    const a = new THREE.Vector3(from.x, DOCK_Y, from.z);
+    const a = new THREE.Vector3(from.x, launchY, from.z);
     const b = new THREE.Vector3(to.x, cruise, to.z);
     const span = Math.hypot(b.x - a.x, b.z - a.z);
 
@@ -192,7 +204,10 @@ export class Drone {
 
     // Spin up on the deck before it leaves the ground.
     tl.to(this, { power: 1, duration: 0.45, ease: 'power2.in' }, 0);
-    tl.to(this.group.position, { y: cruise, duration: 0.8, ease: 'power2.out' }, 0.25);
+    // A drone released at chest height is already flying; it climbs away
+    // rather than lifting off, and it does so a beat sooner.
+    const climbAt = launchY > DOCK_Y + 0.3 ? 0.05 : 0.25;
+    tl.to(this.group.position, { y: cruise, duration: 0.8, ease: 'power2.out' }, climbAt);
 
     // Transit. Position is driven by hand rather than by three separate
     // tweens, so the arc, the bank and the heading all stay in step.
@@ -221,6 +236,7 @@ export class Drone {
     tl.call(() => { if (onScan) onScan(); }, null, arrive + 0.35);
 
     const leave = arrive + hold;
+    tl.call(() => { if (onRead) onRead(); }, null, leave);
     tl.call(() => { this.inspecting = false; }, null, leave);
     tl.to(this.gimbal.rotation, { x: 0, duration: 0.45, ease: 'power2.inOut' }, leave);
     tl.to(this.lamp, { intensity: 0, duration: 0.5 }, leave);

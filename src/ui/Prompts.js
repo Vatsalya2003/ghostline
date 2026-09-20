@@ -19,6 +19,10 @@ export const BINDINGS = [
   { control: CONTROL.ROTATE_RIGHT, name: 'ROTATE VIEW',   pad: 'RB',     keys: ['e'],                 keyGlyph: 'E' },
   { control: CONTROL.INFO,      name: 'MISSION INFO',     pad: 'BACK',   keys: ['i'],                 keyGlyph: 'I' },
   { control: CONTROL.PAUSE,     name: 'PAUSE',            pad: 'START',  keys: ['p'],                 keyGlyph: 'P' },
+  // No default pad face: this build already spends all sixteen standard
+  // buttons, and L3/R3 are unit cycling. It is remappable (see REMAP_ORDER),
+  // and the minimap itself is clickable, so a mouse never needs the key.
+  { control: CONTROL.OPEN_MAP,  name: 'TACTICAL MAP',     pad: '—',      keys: ['m'],                 keyGlyph: 'M' },
   { control: CONTROL.NAV_UP,    name: 'NAVIGATE',         pad: 'D-PAD',  keys: ['ArrowUp'],           keyGlyph: 'ARROWS' },
   { control: CONTROL.NAV_DOWN,  name: 'NAVIGATE',         pad: 'D-PAD',  keys: ['ArrowDown'],         keyGlyph: 'ARROWS' },
   { control: CONTROL.NAV_LEFT,  name: 'NAVIGATE',         pad: 'D-PAD',  keys: ['ArrowLeft'],         keyGlyph: 'ARROWS' },

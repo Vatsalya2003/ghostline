@@ -32,6 +32,9 @@ export class GameState {
     this.drones = this.mission.drones;
     this.turnIndex = 0;
     this.statuses = { ALPHA: 'healthy', 'BETA-1': 'healthy', 'BETA-2': 'healthy' };
+    // Rounds carried. Decremented when the squad actually opens fire, so the
+    // AMMO readout on the squad panel is a fact rather than decoration.
+    this.ammo = { ALPHA: 8, 'BETA-1': 8, 'BETA-2': 8 };
     this.calibration = [];       // { turn, action, tag, note }
     this.log = [];
     // Was `this.relayOnline = false` and nothing else — mission 1's flag,
@@ -145,7 +148,18 @@ export class GameState {
     return this.health;
   }
 
+  // Everyone who is not DAMAGED shoots, which is exactly who the Director
+  // spawns tracers for — so the readout and the board agree.
+  spendAmmo(rounds = 2) {
+    for (const [id, status] of Object.entries(this.statuses)) {
+      if (status === 'damaged') continue;
+      this.ammo[id] = Math.max(0, (this.ammo[id] ?? 0) - rounds);
+    }
+    return this.ammo;
+  }
+
   record(turn, action, tag, note) {
+    if (action === 'FIRE') this.spendAmmo();
     if (!tag) return;
     this.calibration.push({ turn, action, tag, note });
   }

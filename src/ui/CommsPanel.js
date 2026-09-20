@@ -11,11 +11,20 @@ import { audio } from '../systems/Audio.js';
 // Speech if there is no clip), the CAPTION (always — it is the contract, and
 // the only one of the three that is never optional), and the INDICATOR (the
 // TX light in the panel header, live for exactly as long as the channel is).
+// ALPHA is 1, BETA-1 is 2, BETA-2 is 3 — the same numbers as the UNIT STATUS
+// chips and the markers on the board. Kept as a literal so the comms panel
+// does not have to reach into the render layer for it.
+const BADGE = { ALPHA: '1', 'BETA-1': '2', 'BETA-2': '3' };
+
 export class CommsPanel {
   constructor({ onType } = {}) {
     this.el = document.getElementById('comms');
     this.textEl = document.getElementById('comms-text');
     this.sourceEl = document.getElementById('comms-source');
+    // The speaking bot's portrait. Driven from the same call that sets the
+    // name, so the face can never be showing a different unit from the caption.
+    this.portraitEl = document.getElementById('comms-portrait');
+    this.badgeEl = this.portraitEl?.querySelector('.cp-badge') || null;
     this.relayEl = document.getElementById('comms-relay');
     this.confBox = document.getElementById('confidence');
     this.confLabel = document.getElementById('conf-label');
@@ -72,6 +81,23 @@ export class CommsPanel {
 
   // sourceStatus drives the glitch treatment on the speaker's name — the
   // visual tell that a confident number came out of a broken sensor.
+  // Point the portrait at whoever is speaking. `null` parks it.
+  setPortrait(unit, status = 'healthy') {
+    if (!this.portraitEl) return;
+    if (!unit) {
+      this.portraitEl.removeAttribute('data-unit');
+      this.portraitEl.classList.remove('talking', 'degraded');
+      if (this.badgeEl) this.badgeEl.textContent = '—';
+      return;
+    }
+    this.portraitEl.dataset.unit = unit;
+    this.portraitEl.classList.toggle('degraded', status !== 'healthy');
+    if (this.badgeEl) this.badgeEl.textContent = BADGE[unit] || unit.slice(0, 1);
+  }
+
+  // The eye only pulses while a line is actually being delivered.
+  setTalking(on) { this.portraitEl?.classList.toggle('talking', !!on); }
+
   async say(text, { source = 'ALPHA', via = null, confidence = null, sourceStatus = 'healthy', voice = true } = {}) {
     // Finish whatever was still typing before starting a new line. The turn
     // spine awaits each say() so this never fires in normal play — but two
@@ -82,6 +108,7 @@ export class CommsPanel {
     this.el.classList.add('speaking');
     this.sourceEl.textContent = source;
     this.sourceEl.classList.toggle('glitch', sourceStatus !== 'healthy');
+    this.setPortrait(source, sourceStatus);
     this.relayEl.textContent = via ? `RELAYED VIA ${via}` : '';
     if (confidence) this.setConfidence(confidence, { suspect: sourceStatus !== 'healthy' });
 
@@ -134,6 +161,7 @@ export class CommsPanel {
     this.textEl.textContent = '';
     this.sourceEl.textContent = '—';
     this.sourceEl.classList.remove('glitch');
+    this.setPortrait(null);
     this.relayEl.textContent = '';
     this.closeChannel();
     this.clearConfidence();

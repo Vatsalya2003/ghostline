@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { clone as cloneSkinned } from 'three/examples/jsm/utils/SkeletonUtils.js';
-import { retint } from './Materials.js';
+import { retint, cloneSurface } from './Materials.js';
 
 // GLB loading for the whole scene.
 //
@@ -148,7 +148,9 @@ export function spawn(url, {
         const next = mats.map((m) => {
           if (!m?.name?.startsWith('tint:')) return m;
           if (!own.has(m.name)) {
-            const copy = m.clone();
+            // cloneSurface, not clone: a plain clone drops the triplanar
+            // compile hook and the instance comes out untextured.
+            const copy = cloneSurface(m);
             own.set(m.name, copy);
             tinted[m.name.slice(5)] = copy;
           }

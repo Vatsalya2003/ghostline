@@ -134,7 +134,6 @@ html, body {
 #health-fill.crit { background: var(--red); box-shadow: 0 0 10px rgba(224, 82, 76, 0.55); }
 #health-value { font-size: 12px; letter-spacing: 0.1em; }
 
-#squad-box { flex: 1; }
 #squad-list { display: flex; gap: 8px; flex-wrap: wrap; }
 .unit-chip {
   border: 1px solid currentColor; padding: 3px 8px; font-size: 11px;
@@ -813,6 +812,154 @@ body.pad-active .cmd .key { opacity: 0.35; }   /* pad navigates, it does not typ
 
 #key-turn-line.alarm { color: #ff8d86; border-left: 2px solid var(--red); padding-left: 10px; }
 
+/* ============================================================ TACTICAL MAP */
+/* A sensor console, not a street map: same hairlines and uppercase labels as
+   every other panel, and the canvas does all the drawing.
+
+   It sits over the board rather than in the HUD column. A map panel in the
+   column is ~140px of height, and the column does not have 140px to give —
+   it pushed the situation text and the command bar off the bottom. */
+
+/* ---------------------------------------------------------------- squad
+   Where the minimap used to sit. The map is a keypress away ([M]); what the
+   player needs *continuously* is who is still standing and what they have
+   left to shoot with, so that is what holds the corner of the board now. */
+#squad-box {
+  position: absolute;
+  left: 12px;
+  /* Clear of the control-prompt strip along the bottom of the stage. */
+  bottom: 46px;
+  z-index: 30;
+  width: clamp(186px, 17vw, 236px);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 10px 9px;
+}
+
+#squad-box .label { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+#squad-hint { color: rgba(76, 224, 216, 0.55); letter-spacing: 0.14em; }
+
+#squad-list { display: flex; flex-direction: column; gap: 7px; }
+
+.unit-row {
+  display: grid;
+  grid-template-columns: 26px 1fr;
+  gap: 8px;
+  align-items: center;
+  color: var(--cyan);
+  border-left: 1px solid currentColor;
+  padding: 3px 0 3px 7px;
+  font-family: var(--mono);
+  transition: color 320ms linear, background 320ms linear;
+}
+.unit-row.healthy { color: var(--cyan); }
+.unit-row.glitch  { color: var(--amber); }
+.unit-row.damaged { color: var(--red); }
+.unit-row.selected { background: rgba(76, 224, 216, 0.10); box-shadow: inset 0 0 0 1px currentColor; }
+
+/* The portrait. A rounded chassis, a sensor eye and the unit's badge number —
+   the same hairline-and-glow language the panels are drawn in. */
+.unit-face {
+  position: relative;
+  width: 26px; height: 26px;
+  border: 1px solid currentColor;
+  border-radius: 7px 7px 4px 4px;
+  background: var(--bg);
+  box-shadow: 0 0 7px rgba(76, 224, 216, 0.16) inset;
+}
+.unit-face .eye {
+  position: absolute; left: 50%; top: 8px; transform: translateX(-50%);
+  width: 11px; height: 4px; border-radius: 2px;
+  background: currentColor; box-shadow: 0 0 7px currentColor;
+}
+.unit-face .badge {
+  position: absolute; left: 0; right: 0; bottom: 2px;
+  text-align: center; font-size: 9px; line-height: 1;
+  letter-spacing: 0.1em; color: currentColor; opacity: 0.85;
+}
+.unit-row.glitch .unit-face .eye { animation: chip-glitch 1.1s steps(2, end) infinite; }
+.unit-row.damaged .unit-face { opacity: 0.75; }
+.unit-row.damaged .unit-face .eye { background: var(--red); box-shadow: 0 0 9px var(--red); }
+
+.unit-meta { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.unit-name {
+  display: flex; justify-content: space-between; align-items: baseline; gap: 6px;
+  font-size: 10px; letter-spacing: 0.14em; white-space: nowrap;
+}
+.unit-name .unit-state { color: var(--dim); font-size: 8px; letter-spacing: 0.1em; }
+
+.unit-bar { height: 5px; border: 1px solid var(--hairline); background: var(--bg); }
+.unit-fill {
+  height: 100%; background: currentColor;
+  box-shadow: 0 0 8px currentColor;
+  transition: width 420ms ease-out;
+}
+
+.unit-ammo {
+  display: flex; justify-content: space-between; align-items: baseline; gap: 6px;
+  font-size: 9px; letter-spacing: 0.14em; color: var(--dim);
+}
+.unit-ammo .val { color: currentColor; }
+.unit-row.healthy .unit-ammo .val { color: var(--cyan); }
+.unit-row.glitch  .unit-ammo .val { color: var(--amber); }
+.unit-row.damaged .unit-ammo .val,
+.unit-ammo .val.dry { color: var(--red); }
+
+/* The overlay stays see-through: the board underneath is the thing the map is
+   describing, and losing sight of it while reading the map is disorienting. */
+#screen-map {
+  background: rgba(5, 8, 7, 0.72);
+  gap: 10px;
+  padding: 3vh 4vw;
+  justify-content: flex-start;
+}
+
+#map-head {
+  width: 100%;
+  max-width: 1100px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+#screen-map h2 { margin: 0; }
+
+#map-legend { display: flex; flex-wrap: wrap; gap: 14px; align-items: center; }
+
+#map-legend .key { margin-right: 4px; }
+#map-legend .key.unit  { color: var(--cyan); }
+#map-legend .key.obj   { color: var(--amber); }
+#map-legend .key.poss  { color: var(--amber); }
+#map-legend .key.host  { color: var(--red); }
+#map-legend .key.haz   { color: var(--red); }
+#map-legend .key.drone { color: var(--cyan); }
+#map-legend .key.brief { color: var(--dim); }
+
+#map-canvas {
+  display: block;
+  width: 100%;
+  max-width: 1100px;
+  flex: 1 1 auto;
+  min-height: 0;
+  border: 1px solid var(--hairline);
+  background: var(--bg);
+  cursor: grab;
+  touch-action: none;
+}
+
+#map-canvas:active { cursor: grabbing; }
+
+#map-readout {
+  width: 100%;
+  max-width: 1100px;
+  color: var(--cyan);
+  letter-spacing: 0.14em;
+}
+
+/* The map is not allowed to imply certainty the game does not have. When the
+   line on screen came from a degraded sensor, the readout says so. */
+#map-readout.degraded { color: var(--amber); }
 /* ---- command handover ---------------------------------------------------
    Centre screen for three seconds when the squad changes hands. Loud on
    purpose: the player is about to be talked to by a different robot, and
@@ -861,6 +1008,6 @@ body.pad-active .cmd .key { opacity: 0.35; }   /* pad navigates, it does not typ
   to   { opacity: 1; transform: translate(-50%, -50%) scale(1); }
 }
 
-/* The unit chip for whoever currently has the squad. */
-.unit-chip.lead { border-left: 2px solid var(--amber); padding-left: 6px; }
-.unit-chip.lead .badge { background: var(--amber); color: var(--bg); }
+/* The squad row for whoever currently has the squad. */
+.unit-row.lead { border-left: 2px solid var(--amber); padding-left: 6px; }
+.unit-row.lead .unit-face .badge { background: var(--amber); color: var(--bg); }

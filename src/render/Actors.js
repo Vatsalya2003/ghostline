@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import gsap from 'gsap';
 import { groundAt } from './Units.js';
+import { triplanarMaterial } from './Textures.js';
 
 // ============================================================================
 // THE PEOPLE
@@ -31,11 +32,14 @@ import { groundAt } from './Units.js';
 // drawn as a dashed outline with a question mark, not as a person — because
 // the whole point of turn 6 is that you do not know what it is yet.
 
+// Lifted well above the compound's own palette. These are the only meshes on
+// the board the player is asked to *identify*, and at tactical zoom under a
+// dusk key they were reading as silhouettes against silhouettes.
 const HOSTILE = {
-  cloth: 0x2f3338, trim: 0xb8433a, skin: 0x8a6a52, gear: 0x1d2024,
+  cloth: 0x5e666e, trim: 0xff5a4a, skin: 0xd2a684, gear: 0x434a53,
 };
 const CIVILIAN = {
-  cloth: 0xc8bda4, trim: 0x7f8f9a, skin: 0x9c7a5e, gear: 0x6b6357,
+  cloth: 0xf0e8d2, trim: 0xa9bcc8, skin: 0xe2b894, gear: 0x9a9184,
 };
 
 function box(w, h, d, mat, x, y, z, rotY = 0) {
@@ -52,10 +56,30 @@ function box(w, h, d, mat, x, y, z, rotY = 0) {
 // is a smudge with a higher triangle count.
 function figure(palette, { armed = false, pose = 'stand' } = {}) {
   const g = new THREE.Group();
-  const cloth = new THREE.MeshStandardMaterial({ color: palette.cloth, roughness: 0.92, flatShading: true });
-  const trim = new THREE.MeshStandardMaterial({ color: palette.trim, roughness: 0.85, flatShading: true });
+  // Surfaced, like everything else in the compound. These were the last
+  // flat-colour meshes on the board, which made the people read as diagrams
+  // standing in a textured room.
+  //
+  // Object space, not world: a world projection slides across a figure as it
+  // is placed, and these are the meshes the player is asked to look hardest
+  // at. Scale is in the figure's own units — a 1.7-unit person wants a few
+  // repeats across the torso, not a fraction of one.
+  //
+  // Cloth takes the coarse weave; webbing and rifle take painted metal. Skin
+  // is left untextured on purpose: a fabric normal on a face reads as damage.
+  const cloth = triplanarMaterial({
+    set: 'sandbag', color: palette.cloth, roughness: 0.92, metalness: 0.0,
+    scale: 3.4, space: 'object', normalScale: 0.6, albedoMix: 0.55,
+  });
+  const trim = triplanarMaterial({
+    set: 'sandbag', color: palette.trim, roughness: 0.85, metalness: 0.05,
+    scale: 4.0, space: 'object', normalScale: 0.5, albedoMix: 0.5,
+  });
   const skin = new THREE.MeshStandardMaterial({ color: palette.skin, roughness: 0.95, flatShading: true });
-  const gear = new THREE.MeshStandardMaterial({ color: palette.gear, roughness: 0.7, metalness: 0.3, flatShading: true });
+  const gear = triplanarMaterial({
+    set: 'metal-painted', color: palette.gear, roughness: 0.7, metalness: 0.3,
+    scale: 5.0, space: 'object', normalScale: 0.7, albedoMix: 0.6,
+  });
 
   const seated = pose === 'seated';
   const crouch = pose === 'crouch';
@@ -99,8 +123,24 @@ function figure(palette, { armed = false, pose = 'stand' } = {}) {
     rifle.rotation.set(0.12, -0.35, 0);
     g.add(rifle);
   } else {
-    // Bound wrists: one small band where the hands meet.
-    g.add(box(0.22, 0.08, 0.10, gear, 0, torsoY - 0.14, 0.40));
+    // BOUND WRISTS. This is the cue turns 5 to 7 are decided on, so it is
+    // drawn to be legible from across the room rather than to be subtle: a
+    // pale band at the wrists, and — for a seated figure — the tether running
+    // back to the conduit the mission says they are tied to. A player who can
+    // see the tie does not have to infer it from a sentence.
+    const bindMat = new THREE.MeshStandardMaterial({
+      color: 0xd8d2c4, roughness: 0.85, metalness: 0.05, flatShading: true,
+    });
+    const wrists = box(0.26, 0.10, 0.13, bindMat, 0, torsoY - 0.14, 0.41);
+    g.add(wrists);
+
+    if (seated) {
+      // Tether back to the wall run. Thin, slack-looking, and deliberately
+      // the same pale colour as the band so the two read as one restraint.
+      const tether = box(0.05, 0.05, 0.52, bindMat, 0, torsoY - 0.16, 0.14);
+      tether.rotation.x = 0.22;
+      g.add(tether);
+    }
   }
 
   return g;
@@ -110,10 +150,10 @@ function figure(palette, { armed = false, pose = 'stand' } = {}) {
 // tactical zoom, where a 1.7-unit figure is forty pixels tall.
 function marker(color, { dashed = false } = {}) {
   const ring = new THREE.Mesh(
-    new THREE.RingGeometry(0.42, dashed ? 0.50 : 0.52, dashed ? 16 : 28, 1,
+    new THREE.RingGeometry(0.42, dashed ? 0.50 : 0.68, dashed ? 16 : 28, 1,
       0, dashed ? Math.PI * 2 : Math.PI * 2),
     new THREE.MeshBasicMaterial({
-      color, transparent: true, opacity: dashed ? 0.55 : 0.8,
+      color, transparent: true, opacity: dashed ? 0.55 : 1.0,
       side: THREE.DoubleSide, depthWrite: false,
     })
   );
@@ -147,9 +187,39 @@ function unresolved() {
   return g;
 }
 
+// The overhead indicator. A ring on the floor tells you where someone is; it
+// does not survive a wall, a crate or a shallow camera. This does: a fat
+// emissive chevron floating above the head, drawn with depth testing off so it
+// stays legible through the compound, RED for armed and GREEN for a hostage.
+//
+// It is deliberately not amber — amber is the unresolved marker, and an
+// unresolved contact never gets one of these.
+function beacon(color) {
+  const g = new THREE.Group();
+  const mat = new THREE.MeshBasicMaterial({
+    color, transparent: true, opacity: 0.95,
+    depthTest: false, depthWrite: false, toneMapped: false,
+  });
+  // Tip down, pointing at the head it belongs to.
+  const cone = new THREE.Mesh(new THREE.ConeGeometry(0.30, 0.52, 4), mat);
+  cone.rotation.x = Math.PI;
+  cone.rotation.y = Math.PI / 4;
+  cone.position.y = 2.42;
+  g.add(cone);
+  // A bar over the cone widens the thing horizontally, which is the axis a
+  // tactical camera has the most of.
+  const bar = new THREE.Mesh(new THREE.BoxGeometry(0.62, 0.10, 0.10), mat);
+  bar.position.y = 2.82;
+  g.add(bar);
+  for (const m of g.children) m.renderOrder = 40;
+  g.userData.mat = mat;
+  g.userData.baseY = 0;
+  return g;
+}
+
 const KIND = {
-  hostile: { palette: HOSTILE, armed: true, ring: 0xe0524c },
-  civilian: { palette: CIVILIAN, armed: false, ring: 0xe0a84c },
+  hostile:  { palette: HOSTILE,  armed: true,  ring: 0xff3b30, beacon: 0xff3b30 },
+  civilian: { palette: CIVILIAN, armed: false, ring: 0x3cf07a, beacon: 0x3cf07a },
 };
 
 export class Actors {
@@ -173,13 +243,17 @@ export class Actors {
                           { dashed: spec.state === 'unresolved' });
       holder.add(ring);
 
+      // Unresolved contacts do not get one: you have not been told what it is.
+      let mark = null;
+      if (spec.state !== 'unresolved') { mark = beacon(kind.beacon); holder.add(mark); }
+
       holder.position.set(spec.at[0], groundAt(spec.at[0], spec.at[1]), spec.at[1]);
       holder.rotation.y = spec.face ?? 0;
       holder.visible = false;
       this.group.add(holder);
 
       this.byId.set(spec.id, {
-        spec, holder, body, ring,
+        spec, holder, body, ring, mark,
         kind: spec.kind, down: false, resolved: spec.state !== 'unresolved',
       });
     }
@@ -256,6 +330,9 @@ export class Actors {
     a.holder.remove(a.ring);
     a.ring = marker(k.ring);
     a.holder.add(a.ring);
+    if (a.mark) a.holder.remove(a.mark);
+    a.mark = beacon(k.beacon);
+    a.holder.add(a.mark);
     a.resolved = true;
     a.kind = kind;
     a.holder.scale.setScalar(0.85);
@@ -271,6 +348,7 @@ export class Actors {
     gsap.to(a.holder.rotation, { x: -Math.PI / 2 * 0.86, duration: 0.5, ease: 'power2.in' });
     gsap.to(a.holder.position, { y: a.holder.position.y + 0.12, duration: 0.5 });
     gsap.to(a.ring.material, { opacity: 0.25, duration: 0.5 });
+    if (a.mark) gsap.to(a.mark.userData.mat, { opacity: 0.22, duration: 0.5 });
   }
 
   // Everything a mission outcome can say about the people on the board.
@@ -302,6 +380,7 @@ export class Actors {
     for (const a of this.byId.values()) {
       if (a.down || a.kind !== 'hostile') continue;
       a.ring.material.color.setHex(0xff3b30);
+      a.mark?.userData.mat.color.setHex(0xff3b30);
       gsap.to(a.ring.material, { opacity: 1, duration: 0.4, yoyo: true, repeat: 5 });
     }
     this.alarmed = true;
@@ -316,7 +395,8 @@ export class Actors {
       a.holder.position.set(a.spec.at[0], groundAt(a.spec.at[0], a.spec.at[1]), a.spec.at[1]);
       a.holder.scale.setScalar(1);
       a.holder.visible = false;
-      a.ring.material.opacity = a.spec.state === 'unresolved' ? 0.55 : 0.8;
+      if (a.mark) a.mark.userData.mat.opacity = 0.95;
+      a.ring.material.opacity = a.spec.state === 'unresolved' ? 0.55 : 1.0;
     }
   }
 
@@ -324,7 +404,9 @@ export class Actors {
   // looking like a settled fact.
   update(t) {
     for (const a of this.byId.values()) {
-      if (a.resolved || !a.holder.visible) continue;
+      if (!a.holder.visible) continue;
+      if (a.mark && !a.down) a.mark.position.y = Math.sin(t * 2.4) * 0.09;
+      if (a.resolved) continue;
       const k = 0.65 + 0.35 * Math.sin(t * 3.2);
       for (const bar of a.body.children) bar.material.opacity = 0.35 + k * 0.5;
     }

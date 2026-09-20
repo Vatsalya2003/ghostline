@@ -2,12 +2,17 @@ import gsap from 'gsap';
 import { wait } from './Pause.js';
 import { panCamera, zoomCamera, shakeCamera, punchZoom, focusOn } from '../render/Camera.js';
 import { audio } from './Audio.js';
-import { reconTarget } from '../render/Level.js';
+import { resolveSite } from '../render/ReconSites.js';
 
 
 // Sequences a turn: plays the scripted intro beats from mission data, lets
 // the AI speak, then unlocks the command bar. Beat timing lives here; what
 // happens on each beat lives in the mission file.
+// Longest the turn will hold for an aircraft that should be arriving. A sortie
+// killed by a restart settles its promise on the way out, but a timeout here
+// means no imaginable failure can leave the command bar locked.
+const ARRIVAL_TIMEOUT = 6;
+
 export class Director {
   constructor({ camera, squad, fx, ui, turnManager, state, level, fog, screenFX, keyLight, markers, actors = null }) {
     this.camera = camera;
@@ -23,6 +28,9 @@ export class Director {
     this.markers = markers;
     this.actors = actors;
     this.busy = false;
+    // Bumped on every restart. A sortie still in the air when the player
+    // restarts belongs to a run that no longer exists.
+    this.runId = 0;
     this.baseLight = keyLight ? keyLight.intensity : 1.5;
   }
 
@@ -146,7 +154,7 @@ export class Director {
           }
           this.screenFX?.glitch(520);
           this.state.statuses[beat.unit] = beat.status;
-          this.ui.hud.setStatuses(this.state.statuses);
+          this.ui.hud.setStatuses(this.state.statuses, this.state.ammo);
           this.syncDegradedMood();
           await wait(0.8);
           break;
@@ -222,7 +230,7 @@ export class Director {
     this.ui.commandBar.setLocked(true);
     this.ui.commandBar.clear();
     this.ui.hud.setTurn(turn);
-    this.ui.hud.setStatuses(this.state.statuses);
+    this.ui.hud.setStatuses(this.state.statuses, this.state.ammo);
     this.ui.hud.setDrones(this.state.drones);
     this.ui.comms.setConfidence('NONE');
 
@@ -276,7 +284,14 @@ export class Director {
   // a grenade hurts you when it goes off, not when you throw it.
   weaponFX(resolution) {
     const { outcome, action } = resolution;
-    const target = reconTarget({ turnId: resolution.turn?.id, reveal: outcome.reveal });
+    // Same resolution the recon sortie uses, so a fallback aim point is on
+    // this compound's ground rather than on another map's coordinates.
+    const target = resolveSite({
+      mission: this.tm.mission,
+      turn: resolution.turn,
+      outcome,
+      level: this.level,
+    });
     // If the outcome names someone who goes down, that is what the squad is
     // shooting at. Without this the tracers went to a generic recon point and
     // the figure who actually fell was nowhere near the gunfire.
@@ -346,6 +361,12 @@ export class Director {
     // Muzzle flashes, tracers and thrown ordnance, if the player reached for a
     // weapon. Returns how long to hold the squad's own damage back for.
     const hurtDelay = this.weaponFX(resolution);
+
+    // Set by a recon sortie: everything the sweep *found* waits on this, so
+    // the findings land when the aircraft is over the ground rather than while
+    // it is still on the pad.
+    let arrival = null;
+    const run = this.runId;
 
     switch (outcome.fx) {
       case 'impact': case 'ambush': {
@@ -420,25 +441,53 @@ export class Director {
         const u = this.unit('ALPHA');
         audio.scan();
 
-        // Where this turn's sweep is actually going. Every SEND_DRONE beat in
-        // the mission describes a different piece of ground — the perimeter,
-        // the outbuilding, the entry hall, the divider — and the player is
-        // meant to be able to see that the aircraft went somewhere different
-        // each time. `reveal` wins when the mission names a place outright.
-        const place = reconTarget({
-          turnId: resolution.turn?.id,
-          reveal: outcome.reveal,
+        // Where this turn's sweep is actually going. Resolved from MISSION
+        // DATA — `outcome.site`, then `turn.recon`, then the mission's own
+        // gazetteer — rather than from the turn number, which is what used to
+        // fly Compound 14's aircraft to Dry Creek's coordinates. See
+        // src/render/ReconSites.js for the resolution order.
+        const place = resolveSite({
+          mission: this.tm.mission,
+          turn: resolution.turn,
+          outcome,
+          level: this.level,
         });
 
-        this.fx.droneSweep(
-          { x: u.position.x, z: u.position.z },
+        // DEPLOY — the drone is carried, not conjured. ALPHA turns onto the
+        // bearing and hand-launches it, and the aircraft leaves from the
+        // robot's hands rather than appearing at its feet. The sortie starts
+        // on the release, so what puts it in the air is something the player
+        // watched happen.
+        const bearing = Math.atan2(place.x - u.position.x, place.z - u.position.z);
+        const release = {
+          x: u.position.x + Math.sin(bearing) * 0.55,
+          z: u.position.z + Math.cos(bearing) * 0.55,
+          y: 1.25,
+        };
+        u?.faceTowards(place.x, place.z, 0.25);
+        u?.throwOrdnance(1.0);
+        audio.droneLaunch?.(u.position.x, u.position.z);
+        await wait(0.34);          // the release point of the launch
+
+        const sortie = this.fx.droneSweep(
+          release,
           place,
           {
+            tasking: resolution.turn?.zone || '',
             // Fog lifts where the drone looked, when it gets there — not
             // where it launched from, and not before it arrives.
-            onArrive: (p) => this.fog?.revealAt(p.x, p.z, 6),
+            onArrive: (p) => {
+              this.fog?.revealAt(p.x, p.z, 6);
+              // The camera settles onto the ground being read, so the scan is
+              // framed on the thing it is scanning.
+              panCamera(this.camera, p.x, p.z, 1.0);
+              this.screenFX?.flash('scan', 360);
+            },
           }
         );
+        // Everything after this beat waits for the aircraft to have read the
+        // ground — arrival is not a finding.
+        arrival = sortie.read;
         // The sortie leaves ground behind it: ripple through ALPHA's own cone,
         // and the launch point is committed to the explored map.
         u?.ping(1.1, 1);
@@ -582,6 +631,16 @@ export class Director {
       default: break;
     }
 
+    // RESULT — a sweep's findings belong to the aircraft that found them. Hold
+    // the contacts, the reveal and the log line until it is on station, so the
+    // player watches the drone paint them rather than reading about them while
+    // it is still climbing out. Raced against a timeout: no sortie, however it
+    // fails, can leave the command bar locked.
+    if (arrival) await Promise.race([arrival, wait(ARRIVAL_TIMEOUT)]);
+    // Restarted while the aircraft was out: its findings belong to a mission
+    // that is over.
+    if (run !== this.runId) return;
+
     if (outcome.revealHostiles && !this.hostilesShown) {
       this.hostilesShown = true;
       const contacts = [[4.2, -0.6], [1.6, -1.8]];
@@ -610,6 +669,8 @@ export class Director {
     }
 
     this.ui.log.push(outcome.log);
+    // The ground has been read, and the marker says so with the finding on it.
+    if (arrival) this.fx.reconResult('SURVEYED');
     this.ui.hud.setHealth(this.state.health);
     this.ui.hud.setDrones(this.state.drones);
 
@@ -684,6 +745,7 @@ export class Director {
   }
 
   reset() {
+    this.runId += 1;
     this.resetCharge();
     this.hostilesShown = false;
     this.fx.clearHostiles();

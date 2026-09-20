@@ -269,6 +269,56 @@ export class CombatFX {
 
     this.debris(p, { count: debris, spread: radius * 0.75 });
     this.sparks(p, { count: 10, color: 0xffd9a0, spread: radius * 0.5 });
+    // 5. What is left behind. The fireball is gone inside a second; a real
+    //    detonation leaves something standing in the air for a good deal
+    //    longer, and on a board lit this dark the plume is most of what sells
+    //    the scale of it.
+    this.smoke(p, { radius, count: Math.max(3, Math.round(radius * 1.6)) });
+  }
+
+  // A short-lived plume: a few soft puffs that rise, swell and thin out.
+  //
+  // Dark and NOT additive — this is the one thing in the file that has to
+  // occlude rather than glow, or it reads as more fire. Deterministic fan like
+  // everything else here, and it lifts and spreads as it ages so the column
+  // leans instead of hanging as a stack of spheres.
+  smoke(at, { radius = 3, count = 5, life = 2.4 } = {}) {
+    const p = at.isVector3 ? at.clone() : new THREE.Vector3(at.x, at.y ?? 0.3, at.z);
+
+    for (let i = 0; i < count; i++) {
+      const r = rand(i + 41);
+      const mat = new THREE.MeshBasicMaterial({
+        color: new THREE.Color(0x2a2420).lerp(new THREE.Color(0x6b6259), r),
+        transparent: true, opacity: 0, depthWrite: false,
+      });
+      const puff = new THREE.Mesh(SHARED.shell, mat);
+      const spread = radius * 0.34;
+      puff.position.set(
+        p.x + (r - 0.5) * spread,
+        p.y + 0.25 + r * 0.3,
+        p.z + (rand(i + 77) - 0.5) * spread,
+      );
+      puff.scale.setScalar(radius * (0.30 + r * 0.16));
+      puff.renderOrder = 10;
+
+      const delay = i * 0.055;
+      const hold = life + r * 0.6;
+      this.track(puff, hold + delay + 0.4, [mat]);
+
+      // Billow in, then thin out. Peak opacity stays low: the plume is meant
+      // to soften the board, not hide the room the player is reading.
+      gsap.to(mat, { opacity: 0.42 - r * 0.12, duration: 0.3, delay, ease: 'power2.out' });
+      gsap.to(mat, { opacity: 0, duration: hold * 0.8, delay: delay + 0.35, ease: 'power1.in' });
+      gsap.to(puff.scale, {
+        x: radius * (0.85 + r * 0.4), y: radius * (0.95 + r * 0.4), z: radius * (0.85 + r * 0.4),
+        duration: hold, delay, ease: 'power1.out',
+      });
+      gsap.to(puff.position, {
+        y: p.y + 1.5 + r * 1.5,
+        x: puff.position.x + (r - 0.5) * radius * 0.5,
+        duration: hold, delay, ease: 'power1.out',
+      });
+    }
   }
 
   // Thrown chunks with a bounce. Deterministic fan, not a random spray.
