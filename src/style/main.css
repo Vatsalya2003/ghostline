@@ -248,6 +248,36 @@ html, body {
 }
 .btn:hover, .btn.focused { background: var(--cyan); color: #04100e; }
 
+/* ---------- mission picker ----------
+   Rows on the title screen, one per entry in the MISSIONS registry. Same
+   hairline-and-cyan language as the command bar, so it reads as part of the
+   same console rather than as a launcher bolted on the front. */
+#mission-select {
+  display: flex; flex-direction: column; gap: 8px;
+  width: min(560px, 82vw); margin: 4px 0 22px; text-align: left;
+}
+.mission-row {
+  display: grid; grid-template-columns: 1fr auto; gap: 2px 12px;
+  font-family: var(--mono); padding: 11px 14px; cursor: pointer;
+  background: transparent; border: 1px solid var(--hairline); color: var(--dim);
+  transition: border-color 140ms linear, color 140ms linear, background 140ms linear;
+}
+.mission-row-name { font-size: 13px; letter-spacing: 0.22em; color: #9fc4bd; }
+.mission-row-dur { font-size: 10px; letter-spacing: 0.16em; color: var(--dim); align-self: center; }
+.mission-row-blurb {
+  grid-column: 1 / -1; font-size: 11px; line-height: 1.55;
+  color: var(--dim); letter-spacing: 0.02em;
+}
+.mission-row:hover, .mission-row.focused { border-color: var(--cyan); }
+.mission-row:hover .mission-row-name, .mission-row.focused .mission-row-name { color: var(--cyan); }
+/* The one that is actually loaded. A left rule rather than a fill, so the
+   picker does not out-shout the BEGIN MISSION button under it. */
+.mission-row.active {
+  border-color: rgba(76, 224, 216, 0.55);
+  box-shadow: inset 3px 0 0 var(--cyan);
+}
+.mission-row.active .mission-row-name { color: var(--cyan); }
+
 /* ---------- debrief ---------- */
 #debrief-grid {
   display: grid; grid-template-columns: repeat(2, minmax(260px, 340px)); gap: 14px;

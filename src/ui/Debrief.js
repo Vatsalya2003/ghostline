@@ -4,6 +4,11 @@ import { audio } from '../systems/Audio.js';
 
 // Two scores, reported separately and deliberately allowed to disagree:
 // you can bring the squad home and still be told your judgement was poor.
+//
+// These are Dry Creek's words and they are the fallback, not the rule. A
+// mission that declares `outcomeCopy` gets its own ending lines — otherwise
+// every mission signs off by telling the player about a relay, which is
+// nonsense on the seabed and nonsense in an ammunition depot.
 const OUTCOME_COPY = {
   complete: { title: 'MISSION COMPLETE', sub: 'Relay restored. Squad extracted.', cls: 'outcome-complete' },
   partial: { title: 'OBJECTIVE FAILED', sub: 'Squad extracted. The relay never came up.', cls: 'outcome-partial' },
@@ -38,7 +43,22 @@ export class Debrief {
   }
 
   show(summary) {
-    const copy = OUTCOME_COPY[summary.outcome] || OUTCOME_COPY.partial;
+    const base = OUTCOME_COPY[summary.outcome] || OUTCOME_COPY.partial;
+    // Mission copy overrides field by field, so a mission can retitle an
+    // ending without also having to restate its class.
+    //
+    // One engine outcome can also have several faces. The depot has two ways
+    // to come out partial that mean completely different things — the civilian
+    // you fired on, and the room you never opened — so an entry may be a list
+    // of `{ when: 'flag', … }` and the first flag that is up wins. Same rule
+    // as turn and outcome variants in TurnManager: conditions in the data,
+    // first match wins, a bare entry at the end as the default.
+    let own = (this.mission.outcomeCopy || {})[summary.outcome] || {};
+    if (Array.isArray(own)) {
+      const flags = summary.flags || {};
+      own = own.find((v) => (!v.when || flags[v.when]) && (!v.unless || !flags[v.unless])) || {};
+    }
+    const copy = { ...base, ...own };
     this.head.textContent = `DEBRIEF — SQUAD INTEGRITY ${summary.health}%`;
     this.result.textContent = copy.title;
     this.result.className = `verdict-line ${copy.cls}`;

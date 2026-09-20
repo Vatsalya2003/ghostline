@@ -196,7 +196,10 @@ export class TurnManager {
     // their own via `setsFlag`, and the mission's primary objective says
     // which flag decides a complete run.
     if (outcome.relayOnline) this.state.relayOnline = true;
-    if (outcome.setsFlag) this.state[outcome.setsFlag] = true;
+    if (outcome.setsFlag) {
+      this.state[outcome.setsFlag] = true;
+      this.state.flags[outcome.setsFlag] = true;
+    }
     if (outcome.revealHostiles) {
       this.state.hostilesRevealed = true;
       events.emit(GAME_EVENT.HOSTILES_REVEALED, { turn });

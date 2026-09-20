@@ -113,13 +113,18 @@
         <h2>DEFENSE TECH JAM · TRUST YOUR SYNTHETIC TEAMMATES</h2>
         <h1>GHOSTLINE</h1>
         <p id="title-sub">OPERATION DRY CREEK — RELAY STATION 7</p>
+        <!-- Filled from the MISSIONS registry in src/data/missions.js, which
+             stays the single source of truth for what missions exist. Picking
+             one just sets ?mission=<id>, the selector the harnesses already
+             use. -->
+        <div id="mission-select"></div>
         <button class="btn" id="btn-begin">BEGIN MISSION</button>
         <p class="label" id="title-hint">CONFIDENCE IS WHAT IT SAYS. THE CONE IS WHAT IT SEES.</p>
       </div>
 
       <div class="screen hidden" id="screen-briefing">
         <h2>MISSION BRIEFING</h2>
-        <h1 style="font-size: clamp(22px, 3.4vw, 38px)">RELAY STATION 7</h1>
+        <h1 style="font-size: clamp(22px, 3.4vw, 38px)" id="briefing-title">RELAY STATION 7</h1>
         <ul id="briefing-list"></ul>
         <button class="btn" id="btn-deploy">DEPLOY</button>
       </div>

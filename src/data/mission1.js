@@ -31,6 +31,11 @@ export const ACTION_LABELS = {
   REROUTE: 'REROUTE',
   TOW_RECOVERY: 'TOW RECOVERY',
   STAGED_ASCENT: 'STAGED ASCENT',
+  // Long Match's fork. The depot is the first mission where the order you do
+  // things in is the decision, so the two branches are verbs rather than one
+  // CONFIRM standing in for whichever way the AI happened to point.
+  PUSH_NORTH: 'PUSH NORTH',
+  PUSH_EAST: 'PUSH EAST',
 };
 
 export const CONFIDENCE = {

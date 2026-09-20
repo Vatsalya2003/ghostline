@@ -42,6 +42,11 @@ export class GameState {
     this.log = [];
     this.relayOnline = false;
     this.hostilesRevealed = false;
+    // Every flag a mission has raised via `setsFlag`, by name. The flags are
+    // also set as plain fields (that is what `test()` reads); this is the
+    // roll-up, so the debrief can ask which ending it is looking at without
+    // knowing any particular mission's vocabulary.
+    this.flags = {};
     this.missionOver = false;
     this.outcome = null;          // 'complete' | 'partial' | 'aborted' | 'lost'
     this.objectiveSeen = {};      // id -> last state announced
@@ -418,6 +423,7 @@ export class GameState {
       keyTurnLine: this.keyTurnFailure() ? this.mission.keyTurnVerdict : null,
       decisions: [...this.calibration],
       relayOnline: this.relayOnline,
+      flags: { ...this.flags },
       objectives: this.objectives(),
       // What is left of the squad, and of everything it was carrying. The
       // debrief is scored on the mission and on the trust calls separately;

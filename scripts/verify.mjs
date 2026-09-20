@@ -2,6 +2,7 @@
 // through the mission, exercises every probe, and asserts the invariants the
 // demo depends on. Pure logic — no DOM, no Three.js. Run:  node scripts/verify.mjs
 import { mission1, CALIBRATION, ACTION_LABELS, CONFIDENCE } from '../src/data/mission1.js';
+import { MISSIONS } from '../src/data/missions.js';
 import { GameState } from '../src/systems/GameState.js';
 import { TurnManager } from '../src/systems/TurnManager.js';
 import { events, GAME_EVENT } from '../src/systems/Events.js';
@@ -12,17 +13,24 @@ const ENDINGS = new Set(['complete', 'partial', 'aborted', 'lost']);
 
 let checks = 0;
 const failures = [];
+// Which mission a failing assertion belongs to. The data-shape pass runs over
+// every mission in the registry, so "turn 3 CONFIRM has a debrief note" has to
+// say which mission's turn 3 it means.
+let scope = '';
 function ok(cond, msg) {
   checks += 1;
-  if (!cond) failures.push(msg);
+  if (!cond) failures.push(scope ? `${scope} — ${msg}` : msg);
   return !!cond;
 }
 
 // ---------------------------------------------------------------- data shape
 // Content errors are the cheapest thing to catch and the most likely thing a
 // new mission introduces, so they are checked before any path is walked.
-function checkData() {
-  const m = mission1;
+//
+// Runs over EVERY mission in the registry rather than just the one the path
+// walk below exercises — the whole promise of the architecture is that a new
+// mission is a data file, and this is the pass that holds a data file to it.
+function checkData(m) {
   ok(m.turns.length > 0, 'mission has turns');
   ok(typeof m.objective === 'string' && m.objective, 'mission has an objective');
   ok(m.turns.some((t) => t.id === m.keyTurn), `keyTurn ${m.keyTurn} names a real turn`);
@@ -360,7 +368,11 @@ function enumerate(index, plan) {
 }
 
 // ---------------------------------------------------------------- run
-checkData();
+for (const entry of MISSIONS) {
+  scope = entry.name;
+  checkData(entry.mission);
+}
+scope = '';
 enumerate(0, []);
 
 const totalOutcomes = mission1.turns.reduce(

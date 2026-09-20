@@ -67,6 +67,9 @@ export const mission2 = {
     'BETA-1': { battery: 88, integrity: 100, role: 'Magnetometer · sidescan' },
     'BETA-2': { battery: 79, integrity: 96,  role: 'Optical · sampling arm' },
   },
+  // Spelled out rather than left to the engine default, which is this number.
+  // Every mission says what counts as a crippled vehicle in its own file.
+  criticalIntegrity: 25,
   commsWindows: 2,
 
   turns: [
@@ -508,6 +511,15 @@ export const mission2 = {
       },
     },
   ],
+
+  // Black Current is 280 metres down and has no relay in it. Without this the
+  // debrief signed the mission off with Dry Creek's words.
+  outcomeCopy: {
+    complete: { title: 'MISSION COMPLETE', sub: 'Anomaly explained. Fleet recovered.' },
+    partial: { title: 'OBJECTIVE FAILED', sub: 'Fleet surfaced. The anomaly is still unexplained.' },
+    aborted: { title: 'MISSION ABORTED', sub: 'You called it off at the channel.' },
+    lost: { title: 'FLEET LOST', sub: 'Integrity reached zero. No vehicles recovered.' },
+  },
 
   verdicts: {
     calibrated: 'You read the evidence, not the confidence. ANCHOR was useful all mission and you never once let it be the last word.',
