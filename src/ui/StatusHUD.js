@@ -99,6 +99,21 @@ export class StatusHUD {
     }
   }
 
+  // The response clock. Hidden until the compound knows; once it does, it is
+  // the first thing on the HUD and it does not go away.
+  setAlarm({ alarmed, responseIn }) {
+    if (!this.alarmBox) {
+      this.alarmBox = document.getElementById('alarm-box');
+      this.alarmCount = document.getElementById('alarm-count');
+    }
+    if (!this.alarmBox) return;
+    this.alarmBox.classList.toggle('hidden', !alarmed);
+    if (!alarmed) { this.alarmBox.classList.remove('critical'); return; }
+    const n = Math.max(0, responseIn ?? 0);
+    this.alarmCount.textContent = n === 1 ? '1 TURN' : `${n} TURNS`;
+    this.alarmBox.classList.toggle('critical', n <= 2);
+  }
+
   setDrones(n) {
     this.pips.innerHTML = '';
     for (let i = 0; i < this.mission.drones; i++) {

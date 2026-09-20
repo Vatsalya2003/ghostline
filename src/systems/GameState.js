@@ -8,6 +8,25 @@ export class GameState {
     this.reset();
   }
 
+  // Every state flag this mission can raise: the ones its objectives read,
+  // plus anything an outcome sets. Collected from the data so a replay clears
+  // the mission actually loaded rather than the one this file was written
+  // against. Computed once — the mission does not change under us.
+  missionFlags() {
+    if (this._flags) return this._flags;
+    const flags = new Set(['relayOnline', 'hostilesRevealed', 'alarmed']);
+    for (const o of this.mission.objectives || []) if (o.flag) flags.add(o.flag);
+    for (const turn of this.mission.turns || []) {
+      for (const outcome of Object.values(turn.outcomes || {})) {
+        for (const variant of [outcome, outcome.altIfHealthAbove, outcome.altIfHealthBelow]) {
+          if (variant?.setsFlag) for (const f of [].concat(variant.setsFlag)) flags.add(f);
+        }
+      }
+    }
+    this._flags = [...flags];
+    return this._flags;
+  }
+
   reset() {
     this.health = this.mission.startHealth;
     this.drones = this.mission.drones;
@@ -15,11 +34,39 @@ export class GameState {
     this.statuses = { ALPHA: 'healthy', 'BETA-1': 'healthy', 'BETA-2': 'healthy' };
     this.calibration = [];       // { turn, action, tag, note }
     this.log = [];
-    this.relayOnline = false;
-    this.hostilesRevealed = false;
+    // Was `this.relayOnline = false` and nothing else — mission 1's flag,
+    // hardcoded. Any other mission's objectives stayed raised across a
+    // replay, so RUN IT AGAIN opened with the previous run's objectives
+    // already ticked and its endings mis-scored.
+    for (const flag of this.missionFlags()) this[flag] = false;
     this.missionOver = false;
     this.outcome = null;          // 'complete' | 'partial' | 'aborted' | 'lost'
     this.objectiveSeen = {};      // id -> last state announced
+
+    // The compound knowing you are in it. Once raised this never clears for
+    // the rest of the run: the alarm is not a penalty you can pay off, it is
+    // a state the mission continues inside. See raiseAlarm().
+    this.alarmed = false;
+    this.alarmTurn = null;
+    this.responseIn = null;       // turns left before the response force lands
+  }
+
+  // Spotted. Everything after this is a reaction rather than a decision,
+  // which is the whole point — so it caps the ending at `partial` however
+  // well the rest of the run goes, and starts a clock that can lose it.
+  raiseAlarm(turnId, responseTurns) {
+    if (this.alarmed) return false;
+    this.alarmed = true;
+    this.alarmTurn = turnId;
+    this.responseIn = responseTurns;
+    return true;
+  }
+
+  // Called once per turn advance while the alarm is up.
+  tickResponse() {
+    if (!this.alarmed || this.responseIn === null) return null;
+    this.responseIn = Math.max(0, this.responseIn - 1);
+    return this.responseIn;
   }
 
   // ---------------------------------------------------------------- objectives
@@ -110,6 +157,8 @@ export class GameState {
       counts: this.counts(),
       dominant: this.dominantTag(),
       verdict: this.mission.verdicts[this.dominantTag()],
+      alarmed: this.alarmed,
+      alarmTurn: this.alarmTurn,
       keyTurnFailed: !!this.keyTurnFailure(),
       keyTurnLine: this.keyTurnFailure() ? this.mission.keyTurnVerdict : null,
       decisions: [...this.calibration],

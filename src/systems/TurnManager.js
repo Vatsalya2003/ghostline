@@ -154,6 +154,14 @@ export class TurnManager {
     if (outcome.setsFlag) {
       for (const flag of [].concat(outcome.setsFlag)) this.state[flag] = true;
     }
+
+    // Spotted. The compound now knows, and a clock starts.
+    if (outcome.raisesAlarm
+        && this.state.raiseAlarm(turn.id, this.mission.responseTurns ?? 5)) {
+      events.emit(GAME_EVENT.ALARM_RAISED, {
+        turn, responseIn: this.state.responseIn,
+      });
+    }
     if (outcome.revealHostiles) {
       this.state.hostilesRevealed = true;
       events.emit(GAME_EVENT.HOSTILES_REVEALED, { turn });
@@ -201,10 +209,27 @@ export class TurnManager {
   advanceTurn() {
     if (this.state.missionOver) return null;
     this.state.turnIndex += 1;
+
+    // The response force closing. Counted in turns rather than seconds
+    // because every other clock in this game is — a real-time timer under a
+    // turn-based decision would punish reading rather than judgement.
+    if (this.state.alarmed) {
+      const left = this.state.tickResponse();
+      events.emit(GAME_EVENT.RESPONSE_TICK, { responseIn: left });
+      if (left <= 0) return this.endMission('lost');
+    }
+
     if (this.state.turnIndex >= this.mission.turns.length) {
-      return this.endMission(this.primaryObjectiveMet() ? 'complete' : 'partial');
+      return this.endMission(this.missionSucceeded() ? 'complete' : 'partial');
     }
     return this.enterTurn();
+  }
+
+  // A clean run means never having been seen. Getting the objectives while
+  // the compound hunts you is a partial, not a win — judgement is cheap
+  // before contact and worthless after it, and the ending has to say so.
+  missionSucceeded() {
+    return !this.state.alarmed && this.primaryObjectiveMet();
   }
 
   // Objectives are derived from mission state rather than tracked separately,

@@ -37,6 +37,8 @@ export const GAME_EVENT = {
   UNIT_STATUS: 'unitStatus',           // { unit, status, previous }
   HEALTH_CHANGED: 'healthChanged',     // { health, delta, previous }
   HOSTILES_REVEALED: 'hostilesRevealed', // { turn }
+  ALARM_RAISED: 'alarmRaised',         // { turn, responseIn }  the compound knows
+  RESPONSE_TICK: 'responseTick',       // { responseIn }  turns until it lands
 
   // ---- objectives
   OBJECTIVE_COMPLETED: 'objectiveCompleted', // { id, label }

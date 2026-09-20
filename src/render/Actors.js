@@ -188,14 +188,22 @@ export class Actors {
     console.log(`[actors] ${this.byId.size} figures placed`);
   }
 
-  // Show exactly the set this turn declares. Anything not listed goes away,
-  // so a guard cannot linger into a room he was never in.
+  // Show exactly the set this turn declares, and walk anyone whose circuit
+  // moves them on.
+  //
+  // The walking is not decoration. A patrol that stands still while the squad
+  // crosses the yard makes a liar of the turn that says "crosses in the gap,
+  // no contact" — the board has to agree with the line, or the player is
+  // being told one thing and shown another.
   showForTurn(turnId) {
     for (const a of this.byId.values()) {
       // Anyone already down stays down and stays visible. The whole reason
       // for putting people on the board is that a decision leaves something
       // behind — hiding the body turns it back into a number changing.
       const on = a.down || (a.spec.turns || []).includes(turnId);
+
+      if (on && !a.down) this.walkTo(a, turnId);
+
       if (a.holder.visible === on) continue;
       a.holder.visible = on;
       if (on) {
@@ -203,6 +211,31 @@ export class Actors {
         gsap.to(a.holder.scale, { x: 1, y: 1, z: 1, duration: 0.35, ease: 'back.out(2)' });
       }
     }
+  }
+
+  // Move an actor to wherever its circuit puts it this turn. Walks if it is
+  // already on screen, snaps if it is arriving.
+  walkTo(a, turnId) {
+    const step = a.spec.move?.[turnId];
+    const at = step?.at || a.spec.at;
+    const face = step?.face ?? a.spec.face ?? 0;
+    const y = groundAt(at[0], at[1]);
+    if (Math.abs(a.holder.position.x - at[0]) < 0.01
+        && Math.abs(a.holder.position.z - at[1]) < 0.01) return;
+
+    if (!a.holder.visible) {
+      a.holder.position.set(at[0], y, at[1]);
+      a.holder.rotation.y = face;
+      return;
+    }
+    gsap.to(a.holder.position, { x: at[0], y, z: at[1], duration: 2.2, ease: 'none' });
+    gsap.to(a.holder.rotation, { y: face, duration: 0.6, ease: 'power2.out' });
+  }
+
+  // Where an actor is right now — the Director aims tracers at this.
+  positionOf(id) {
+    const a = this.byId.get(id);
+    return a ? a.holder.position : null;
   }
 
   // Turn 6: the figure behind the cabinet stands up and turns out to be a
@@ -242,7 +275,35 @@ export class Actors {
     }
   }
 
+  // The compound knows. Hostages get moved out of the room the AI described —
+  // which is the point: every reading the player was given about that room is
+  // now stale, and they were told so only by the alarm going off.
+  onAlarm() {
+    let moved = 0;
+    for (const a of this.byId.values()) {
+      if (a.down || a.kind !== 'civilian') continue;
+      // Herded toward the back of the building, away from the doorway.
+      const dx = -1.6 - moved * 0.5;
+      const dz = -2.2 - (moved % 2) * 0.8;
+      const x = a.holder.position.x + dx;
+      const z = a.holder.position.z + dz;
+      gsap.to(a.holder.position, {
+        x, y: groundAt(x, z), z, duration: 2.6, ease: 'power1.inOut',
+      });
+      moved += 1;
+    }
+    // Everyone still standing is now looking for you.
+    for (const a of this.byId.values()) {
+      if (a.down || a.kind !== 'hostile') continue;
+      a.ring.material.color.setHex(0xff3b30);
+      gsap.to(a.ring.material, { opacity: 1, duration: 0.4, yoyo: true, repeat: 5 });
+    }
+    this.alarmed = true;
+    return moved;
+  }
+
   reset() {
+    this.alarmed = false;
     for (const a of this.byId.values()) {
       a.down = false;
       a.holder.rotation.set(0, a.spec.face ?? 0, 0);

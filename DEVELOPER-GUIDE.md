@@ -30,13 +30,21 @@ poor is a designed outcome, not a bug.
 
 | | Environment | Turns | Registered |
 |---|---|---|---|
-| **DRY CREEK** | `day` — desert relay station | 6 | yes |
-| **AMMUNITION DEPOT** | `depot` — enemy compound, on fire | 10 | yes |
-| **BLACK CURRENT** | `undersea` — test range at 240 m | 6 | **no — held as the fallback** |
+| **AMMUNITION DEPOT** | `depot` — enemy compound, on fire | 10 | **yes — the only one** |
+| **DRY CREEK** | `day` — desert relay station | 6 | no — fallback |
+| **BLACK CURRENT** | `undersea` — test range at 240 m | 6 | no — fallback |
 
-Black Current is written, playable and on disk at `src/data/mission2.js`. It
-is deliberately left out of `src/data/missions.js` so the select screen shows
-two. Add a row back and it works again with no other change.
+The player-facing build ships **one** mission and has no select screen: title,
+briefing, mission. One fewer thing to get wrong in front of a judge.
+
+Dry Creek and Black Current are complete, playable and left on disk on
+purpose. Add a row to `src/data/missions.js` and either one works again with
+no other change — `Scene.js` still carries all three `environment` branches,
+and none of them were removed to get here. Only `'depot'` is reachable today.
+
+Everything downstream follows the registry: `verify` walks whatever is
+registered, `sim` runs the default, and `e2e` derives its turn count, drone
+count and key turn from the mission rather than hardcoding them.
 
 ---
 
@@ -532,7 +540,8 @@ polish.
 
 | If you want to… | Go to |
 |---|---|
-| Write dialogue or tune a mission | `src/data/mission*.js` — nothing else |
+| Write dialogue or tune the mission | `src/data/mission3.js` — nothing else |
+| Bring back Dry Creek or Black Current | One row in `src/data/missions.js` |
 | Add a mission | Copy a data file, add a registry row |
 | Work on a map | `Depot.js` / `Seabed.js` / `Terrain.js` + their Level files |
 | Improve the HUD | `src/ui/` and `src/style/main.css` |

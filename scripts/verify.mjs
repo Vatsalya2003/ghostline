@@ -254,7 +254,15 @@ function walk(mission, plan) {
     ok(flags[primary.flag],
       `${trail}: MISSION COMPLETE implies ${primary.id} (${primary.flag}) is set`);
   }
-  if (s.outcome === 'lost') ok(s.health === 0, `${trail}: SQUAD LOST implies zero integrity`);
+  // There are two ways to lose now: the squad is destroyed, or the response
+  // force arrives after the compound was alerted. Both are real losses and
+  // only one of them has anything to do with health.
+  if (s.outcome === 'lost') {
+    ok(s.health === 0 || s.alarmed,
+      `${trail}: MISSION LOST is either zero integrity or an alarm that ran out (hp=${s.health}, alarmed=${s.alarmed})`);
+  }
+  // Being seen caps the ending. A clean result has to mean never spotted.
+  if (s.alarmed) ok(s.outcome !== 'complete', `${trail}: an alerted compound cannot yield MISSION COMPLETE`);
 
   // ------------------------------------------------------------ objectives
   const objectives = Object.fromEntries(s.objectives.map((o) => [o.id, o.state]));
@@ -269,8 +277,11 @@ function walk(mission, plan) {
   if (survivor) ok(objectives[survivor.id] === (s.outcome === 'lost' ? 'failed' : 'done'),
     `${trail}: "${survivor.id}" matches the ending (${objectives[survivor.id]}, outcome=${s.outcome})`);
   ok(s.objectives.every((o) => o.state !== 'pending'), `${trail}: no objective is left pending`);
-  // MISSION COMPLETE must mean every objective met, and nothing less.
-  ok((s.outcome === 'complete') === s.objectives.every((o) => o.state === 'done'),
+  // MISSION COMPLETE must mean every objective met AND never having been
+  // seen. Meeting the objectives while the compound hunts you is a partial:
+  // that is the mission's central claim, so the check has to carry it.
+  ok((s.outcome === 'complete')
+     === (s.objectives.every((o) => o.state === 'done') && !s.alarmed),
     `${trail}: MISSION COMPLETE agrees with the objective board`);
 
   // ------------------------------------------------------------ hooks
@@ -386,4 +397,4 @@ if (failures.length) {
   if (new Set(failures).size > shown.length) console.error(`  · …and ${new Set(failures).size - shown.length} more`);
   process.exit(1);
 }
-console.log(`\nPASS — ${checks} assertions across ${MISSIONS.length} missions, no failures.\n`);
+console.log(`\nPASS — ${checks} assertions across ${MISSIONS.length} mission${MISSIONS.length === 1 ? '' : 's'}, no failures.\n`);

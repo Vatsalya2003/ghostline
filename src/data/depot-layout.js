@@ -38,7 +38,7 @@ export const ZONES = {
   YARD: {
     id: 'YARD',
     label: 'THE YARD',
-    anchor: { x: 0, z: 2 },
+    anchor: { x: 4, z: 3 },
     zoom: 18,
     bounds: { minX: -9, maxX: 8, minZ: -4, maxZ: 13 },
     interior: false,
@@ -138,13 +138,16 @@ export const OUTBUILDINGS = [
 // live run. Every point here was placed by hand to clear a doorway.
 export const PATHS = {
   'OVERWATCH>PERIMETER': [[-18, 14], [-14, 12], [-11, 9.5], [-9.6, 7.5]],
-  'PERIMETER>YARD': [[-9.6, 7.5], [-6.5, 7.2], [-3, 5], [-0.5, 3]],
-  'YARD>HOLDING': [[-0.5, 3], [3.5, 2], [7.3, 1.2], [7.3, -1.6], [8.6, -4]],
+  // Crosses the SOUTH of the yard. The patrol works the north end, which is
+  // where the forty-second gap is — so "crosses in the gap, no contact" has
+  // to be a route that visibly stays away from them.
+  'PERIMETER>YARD': [[-9.6, 7.5], [-6.5, 6.6], [-2.5, 4.0], [1.0, 2.2], [3.5, 1.5]],
+  'YARD>HOLDING': [[3.5, 1.5], [6.2, 1.6], [7.3, 0.8], [7.3, -1.6], [8.6, -4]],
   'HOLDING>CORRIDOR': [[8.6, -4], [11.5, -6], [13.8, -7.5], [16.6, -7.5]],
   'CORRIDOR>AMMO_ROOM': [[16.6, -7.5], [20.5, -7.5], [23.2, -8.4], [25.5, -11.5]],
   // The way out, on the fuse. Back through the building and across the yard.
   'AMMO_ROOM>OVERWATCH': [[25.5, -11.5], [20.5, -7.5], [13.8, -7.5], [7.3, -1.6],
-                          [0, 3], [-6.5, 7.2], [-12, 10], [-18, 14]],
+                          [3.5, 1.5], [-2.5, 4.0], [-9.6, 7.5], [-14, 11], [-18, 14]],
 };
 
 export function pathBetween(fromZone, toZone) {
@@ -165,7 +168,7 @@ export const FORMATION = {
 export const ZONE_STAND = {
   OVERWATCH: [-18, 14],
   PERIMETER: [-9.6, 7.5],
-  YARD: [-0.5, 3],
+  YARD: [3.5, 1.5],
   HOLDING: [8.6, -4],
   CORRIDOR: [16.6, -7.5],
   AMMO_ROOM: [25.5, -11.5],
@@ -195,13 +198,20 @@ export const SMOKE_STAGES = [
 // the player resolves it — drawing a person there would answer the question
 // the turn is asking.
 export const ACTORS = [
-  // --- the yard patrol, turn 3. Both in the open: that is what makes
-  // VERITAS's HIGH on turn 3 an earned one.
-  { id: 'guard-a', kind: 'hostile', at: [1.5, 6.2], face: 2.3, turns: [3, 4] },
-  { id: 'guard-b', kind: 'hostile', at: [-2.4, 4.0], face: 0.7, turns: [3, 4] },
+  // --- the yard patrol. They work the NORTH end of the yard; the squad
+  // crosses the south. `move` walks them on between turns, which is what
+  // makes them read as a patrol being avoided rather than two men standing
+  // still while a squad strolls past their elbow.
+  { id: 'guard-a', kind: 'hostile', at: [-2.0, 10.5], face: 1.6, turns: [3, 4],
+    move: { 4: { at: [4.5, 11.5], face: 1.4 } } },
+  { id: 'guard-b', kind: 'hostile', at: [3.5, 8.8], face: 2.9, turns: [3, 4],
+    move: { 4: { at: [8.0, 10.0], face: 1.2 } } },
 
-  // --- turn 4: the contact at the east corner, half behind the crates.
-  { id: 'guard-cover', kind: 'hostile', at: [4.4, 0.9], face: 3.6, turns: [4] },
+  // --- turn 4: the contact at the east corner, half behind the crate stack.
+  // Far enough off that the player is deciding about someone they can see
+  // rather than someone already on top of them.
+  { id: 'guard-cover', kind: 'civilian', state: 'unresolved', pose: 'crouch',
+    at: [8.6, 3.4], face: 3.9, turns: [4, 5, 6, 7, 8, 9, 10] },
 
   // --- the holding room, turns 5-6. One armed hostile walking between four
   // bound civilians.

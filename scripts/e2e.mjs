@@ -5,6 +5,28 @@
 import { execFileSync } from 'node:child_process';
 import { Browser } from './cdp.mjs';
 import { serve } from './serve.mjs';
+import { DEFAULT_MISSION } from '../src/data/missions.js';
+
+// Everything mission-shaped comes from the registry, so this file does not go
+// stale the next time the shipped mission changes. It used to hardcode six
+// turns, two drones and a relay objective, all of which were mission 1's.
+const M = DEFAULT_MISSION.mission;
+const TURNS = M.turns.length;
+const DRONES = M.drones;
+const KEY_TURN = M.keyTurn;
+const FLAGGED = (M.objectives || []).filter((o) => o.flag);
+const PRIMARY = FLAGGED[0];
+const SURVIVOR = (M.objectives || []).find((o) => o.survive);
+
+// The routes this harness drives. Named by intent rather than by action, so
+// swapping the mission means swapping these and nothing else.
+const PLANS = {
+  careful: ['CONFIRM', 'SEND_DRONE', 'BREACH_QUIET', 'MARK_TARGET', 'CONFIRM',
+            'HOLD_FIRE', 'CROSS_CHECK', 'EVAC_HOSTAGES', 'SHORT_FUSE', 'OVERRIDE'],
+  trusting: Array(TURNS).fill('CONFIRM'),
+  abort: ['CONFIRM', 'SEND_DRONE', 'BREACH_QUIET', 'MARK_TARGET', 'CONFIRM',
+          'HOLD_FIRE', 'CROSS_CHECK', 'ABORT'],
+};
 
 // Default to a freshly built dist/ on a private port. Pointing this at the dev
 // server instead works, but HMR will reload the page mid-mission whenever
@@ -36,7 +58,12 @@ const snapshot = () => {
   }));
   return {
     turnIndex: s.turnIndex, health: s.health, drones: s.drones,
-    statuses: { ...s.statuses }, relayOnline: s.relayOnline, missionOver: s.missionOver,
+    statuses: { ...s.statuses }, missionOver: s.missionOver,
+    // Just the objective flags. Spreading the whole GameState here would
+    // structured-clone the entire mission — every turn, every line — across
+    // the debug protocol on every single snapshot.
+    flags: Object.fromEntries((s.mission.objectives || [])
+      .filter((o) => o.flag).map((o) => [o.flag, !!s[o.flag]])),
     turnCount: document.getElementById('turn-count').textContent,
     turnName: document.getElementById('turn-name').textContent,
     objectives: [...document.querySelectorAll('#objective .obj')]
@@ -113,12 +140,14 @@ async function run(page, plan, label) {
   let prev = await page.eval(snapshot);
   ok(prev.turnIndex === 0, `${label}: mission starts on turn 1`);
   ok(prev.health === 100, `${label}: starts at full integrity`);
-  ok(/TURN 1 \/ 6/.test(prev.turnCount), `${label}: turn counter reads "TURN 1 / 6" (got "${prev.turnCount}")`);
+  ok(new RegExp(`TURN 1 / ${TURNS}`).test(prev.turnCount),
+    `${label}: turn counter reads "TURN 1 / ${TURNS}" (got "${prev.turnCount}")`);
   ok(prev.comms.length > 5, `${label}: AI spoke on turn 1`);
   ok(prev.confidence === 'HIGH', `${label}: turn 1 confidence is HIGH (got "${prev.confidence}")`);
   ok(prev.confLit === 3, `${label}: HIGH lights all three confidence segments (got ${prev.confLit})`);
-  ok(prev.objectives.length === 2, `${label}: both objectives are on screen during play (got ${prev.objectives.length})`);
-  ok(prev.objectives.every((o) => o.state === 'pending'), `${label}: both objectives start pending`);
+  ok(prev.objectives.length === M.objectives.length,
+    `${label}: all ${M.objectives.length} objectives are on screen during play (got ${prev.objectives.length})`);
+  ok(prev.objectives.every((o) => o.state === 'pending'), `${label}: objectives all start pending`);
   ok(prev.turnMarks.length === 1 && /TURN 1/.test(prev.turnMarks[0]),
     `${label}: the log opens with a turn 1 rule (got ${JSON.stringify(prev.turnMarks)})`);
 
@@ -153,7 +182,7 @@ async function run(page, plan, label) {
     } else if (!now.missionOver) {
       ok(now.turnIndex === before.turnIndex + 1,
         `${label}: "${action}" advanced exactly one turn (${before.turnIndex} → ${now.turnIndex})`);
-      ok(/TURN \d \/ 6/.test(now.turnCount), `${label}: turn counter stays well-formed`);
+      ok(new RegExp(`TURN \\d+ / ${TURNS}`).test(now.turnCount), `${label}: turn counter stays well-formed`);
       ok(now.turnName !== 'STANDBY', `${label}: turn ${now.turnIndex + 1} has a name`);
       ok(now.comms.length > 5, `${label}: AI made a recommendation on turn ${now.turnIndex + 1}`);
       ok(now.situation.length > 5 && now.task.length > 5,
@@ -163,9 +192,11 @@ async function run(page, plan, label) {
       ok(now.turnMarks.length === now.turnIndex + 1,
         `${label}: one turn rule per turn in the log (${now.turnMarks.length} for turn ${now.turnIndex + 1})`);
       // The objective board has to agree with the mission, live.
-      const relayRow = now.objectives.find((o) => o.id === 'relay');
-      ok(relayRow?.state === (now.relayOnline ? 'done' : 'pending'),
-        `${label}: relay objective reads "${relayRow?.state}" with relayOnline=${now.relayOnline}`);
+      for (const o of FLAGGED) {
+        const row = now.objectives.find((r) => r.id === o.id);
+        ok(row?.state === (now.flags[o.flag] ? 'done' : 'pending'),
+          `${label}: objective "${o.id}" reads "${row?.state}" with ${o.flag}=${!!now.flags[o.flag]}`);
+      }
     }
 
     ok(now.health >= 0 && now.health <= 100, `${label}: integrity stays in range (${now.health})`);
@@ -197,16 +228,18 @@ try {
   page = await browser.open(`${URL_BASE}/?skip=1`);
 
   // ---- run A: the calibrated run. Should complete with the relay live.
-  const a = await run(page, ['CONFIRM', 'SEND_DRONE', 'SEND_DRONE', 'CONFIRM', 'OVERRIDE', 'FALL_BACK'], 'careful run');
+  const a = await run(page, PLANS.careful, 'careful run');
 
-  const t3 = a.seen[2];
-  ok(t3.before.source === 'BETA-1', `turn 3: the recommendation comes from BETA-1 (got "${t3.before.source}")`);
-  ok(/ALPHA/.test(t3.before.relay), `turn 3: the line is shown as relayed via ALPHA (got "${t3.before.relay}")`);
-  ok(t3.before.confidence === 'HIGH', `turn 3: stated confidence is HIGH`);
-  ok(t3.before.unitStatus['BETA-1'] === 'glitch', `turn 3: BETA-1's sensor is visibly degraded before the player chooses`);
-  ok(t3.before.suspect, `turn 3: the confidence meter is flagged suspect`);
-  ok(/DEGRADED/.test(t3.before.confNote), `turn 3: "SOURCE DEGRADED" is on the meter (got "${t3.before.confNote}")`);
-  ok(t3.before.statuses['BETA-1'] === 'glitch', `turn 3: the HUD carries BETA-1's glitch too`);
+  // The key turn, whichever one the mission says that is. This is the beat the
+  // whole mission is built around, so the player must be able to see the
+  // machine's confidence before they commit to it.
+  const key = a.seen[KEY_TURN - 1];
+  if (key) {
+    ok(key.before.confidence === 'HIGH', `turn ${KEY_TURN}: stated confidence is HIGH`);
+    ok(key.before.source.length > 1, `turn ${KEY_TURN}: the recommendation names its source (got "${key.before.source}")`);
+    ok(key.before.comms.length > 5, `turn ${KEY_TURN}: the AI has actually said something before the player chooses`);
+    ok(key.before.buttons.some((b) => !b.disabled), `turn ${KEY_TURN}: there is a pressable alternative to CONFIRM`);
+  }
 
   const moved = a.seen.some((s) => JSON.stringify(s.before.unitPos) !== JSON.stringify(s.now.unitPos));
   ok(moved, `units physically execute the orders they are given`);
@@ -227,20 +260,21 @@ try {
     decisions: document.querySelectorAll('#decision-list .d').length,
     head: document.getElementById('debrief-head').textContent,
     outcome: window.OP.state.outcome,
-    relayOnline: window.OP.state.relayOnline,
+    flags: Object.fromEntries((window.OP.state.mission.objectives || [])
+      .filter((o) => o.flag).map((o) => [o.flag, !!window.OP.state[o.flag]])),
     objectives: [...document.querySelectorAll('#objective .obj')]
       .map((o) => ({ id: o.dataset.objective, state: o.className.replace('obj ', '').split(' ')[0] })),
   }));
   ok(dbA.outcome === 'complete', `careful run: MISSION COMPLETE (got "${dbA.outcome}")`);
-  ok(dbA.relayOnline, `careful run: the relay is live`);
+  ok(dbA.flags[PRIMARY.flag], `careful run: ${PRIMARY.id} (${PRIMARY.flag}) is set`);
   ok(/MISSION COMPLETE/.test(dbA.result), `careful run: debrief headline reads MISSION COMPLETE`);
-  ok(dbA.decisions === 6, `careful run: debrief lists all six decisions (got ${dbA.decisions})`);
+  ok(dbA.decisions === TURNS, `careful run: debrief lists all ${TURNS} decisions (got ${dbA.decisions})`);
   ok(dbA.objectives.every((o) => o.state === 'done'),
-    `careful run: both objectives read as met (${JSON.stringify(dbA.objectives)})`);
-  ok(dbA.keyLine === '', `careful run: no turn-3 callout, because turn 3 was handled`);
+    `careful run: every objective read as met (${JSON.stringify(dbA.objectives)})`);
+  ok(dbA.keyLine === '', `careful run: no turn-${KEY_TURN} callout, because turn ${KEY_TURN} was handled`);
   ok(dbA.verdict.length > 10, `careful run: a verdict line is written`);
   const totalA = dbA.rows.reduce((n, r) => n + r.n, 0);
-  ok(totalA === 6, `careful run: calibration counts total six (got ${totalA})`);
+  ok(totalA === TURNS, `careful run: calibration counts total ${TURNS} (got ${totalA})`);
   console.log(`   outcome ${dbA.outcome} · ${dbA.head}`);
   console.log(`   verdict "${dbA.verdict.slice(0, 78)}…"`);
 
@@ -257,15 +291,15 @@ try {
   }));
   ok(leftovers.hostiles === 0, `replay: no hostile markers left over (found ${leftovers.hostiles})`);
 
-  const b = await run(page, ['CONFIRM', 'CONFIRM', 'CONFIRM', 'CONFIRM', 'CONFIRM', 'CONFIRM'], 'all-CONFIRM run');
+  const b = await run(page, PLANS.trusting, 'all-CONFIRM run');
 
   const fresh = b.seen[0].before;
   ok(fresh.health === 100, `replay: integrity reset to 100 (got ${fresh.health})`);
-  ok(fresh.drones === 2, `replay: drone rack refilled (got ${fresh.drones})`);
+  ok(fresh.drones === DRONES, `replay: drone rack refilled (got ${fresh.drones})`);
   ok(fresh.turnMarks.length === 1, `replay: mission log cleared (got ${fresh.turnMarks.length} turn rules)`);
   ok(fresh.objectives.every((o) => o.state === 'pending'), `replay: objective board reset to pending`);
   ok(Object.values(fresh.unitStatus).every((s) => s === 'healthy'), `replay: all sensors back to nominal`);
-  ok(!fresh.relayOnline, `replay: relay is dark again`);
+  ok(FLAGGED.every((o) => !fresh.flags[o.flag]), `replay: objective flags all cleared`);
 
   await page.waitFor(() => !document.getElementById('screen-debrief').classList.contains('hidden'),
     { tries: 160, what: 'second debrief' });
@@ -277,16 +311,16 @@ try {
     keyLine: document.getElementById('key-turn-line').textContent,
     objectives: [...document.querySelectorAll('#objective .obj')]
       .map((o) => ({ id: o.dataset.objective, state: o.className.replace('obj ', '').split(' ')[0] })),
-    turn6situation: window.OP.turnManager.mission.turns[5].situation,
   }));
-  ok(dbB.objectives.find((o) => o.id === 'relay')?.state === 'failed',
-    `all-CONFIRM run: relay objective reads as failed`);
-  ok(dbB.objectives.find((o) => o.id === 'extract')?.state === 'done',
-    `all-CONFIRM run: the squad still got home — the two scores disagree, as designed`);
-  ok(dbB.outcome === 'partial', `all-CONFIRM run: OBJECTIVE FAILED (got "${dbB.outcome}")`);
-  ok(dbB.health > 0 && dbB.health < 100, `all-CONFIRM run: survives, but hurt (got ${dbB.health}%)`);
-  ok(dbB.keyLine.length > 10, `all-CONFIRM run: turn 3 is called out by name`);
-  ok(/never asked where it came from|confidence value/i.test(dbB.verdict),
+  // Trusting everything must never be rewarded. Which way it fails depends on
+  // the mission — mission 1 survives and is graded down, the depot runs the
+  // squad to zero — so this asserts the thing that is true of both.
+  ok(dbB.outcome !== 'complete',
+    `all-CONFIRM run: does not earn MISSION COMPLETE (got "${dbB.outcome}")`);
+  ok(dbB.objectives.find((o) => o.id === PRIMARY.id)?.state === 'failed',
+    `all-CONFIRM run: "${PRIMARY.id}" reads as failed`);
+  ok(dbB.keyLine.length > 10, `all-CONFIRM run: turn ${KEY_TURN} is called out by name`);
+  ok(/never asked where it came from|confidence value|face value/i.test(dbB.verdict),
     `all-CONFIRM run: verdict names complacency (got "${dbB.verdict.slice(0, 60)}…")`);
   console.log(`   outcome ${dbB.outcome} · ${dbB.health}% integrity`);
   console.log(`   key turn "${dbB.keyLine.slice(0, 78)}…"`);
@@ -297,9 +331,11 @@ try {
   await page.eval(() => document.getElementById('btn-replay').click());
   await page.waitFor(() => window.OP.state.turnIndex === 0 && !window.OP.state.missionOver,
     { tries: 60, what: 'mission restart for the abort run' });
-  const c = await run(page, ['CONFIRM', 'SEND_DRONE', 'SEND_DRONE', 'CONFIRM', 'ABORT'], 'abort run');
-  ok(c.last.missionOver, `abort run: ABORT ended the mission at turn 5`);
-  ok(c.last.turnIndex === 4, `abort run: stopped on turn 5, never reached extraction (index ${c.last.turnIndex})`);
+  const c = await run(page, PLANS.abort, 'abort run');
+  const abortTurn = PLANS.abort.length;
+  ok(c.last.missionOver, `abort run: ABORT ended the mission at turn ${abortTurn}`);
+  ok(c.last.turnIndex === abortTurn - 1,
+    `abort run: stopped on turn ${abortTurn}, never reached the finale (index ${c.last.turnIndex})`);
 
   await page.waitFor(() => !document.getElementById('screen-debrief').classList.contains('hidden'),
     { tries: 160, what: 'abort debrief' });
@@ -312,10 +348,11 @@ try {
   }));
   ok(dbC.outcome === 'aborted', `abort run: outcome is "aborted" (got "${dbC.outcome}")`);
   ok(/ABORT/.test(dbC.result), `abort run: debrief headline reads MISSION ABORTED (got "${dbC.result}")`);
-  ok(dbC.decisions === 5, `abort run: five decisions graded, not six (got ${dbC.decisions})`);
-  ok(dbC.objectives.find((o) => o.id === 'relay')?.state === 'failed',
-    `abort run: relay objective failed`);
-  ok(dbC.objectives.find((o) => o.id === 'extract')?.state === 'done',
+  ok(dbC.decisions === abortTurn,
+    `abort run: ${abortTurn} decisions graded, not ${TURNS} (got ${dbC.decisions})`);
+  ok(dbC.objectives.find((o) => o.id === PRIMARY.id)?.state === 'failed',
+    `abort run: "${PRIMARY.id}" failed`);
+  ok(dbC.objectives.find((o) => o.id === SURVIVOR.id)?.state === 'done',
     `abort run: the squad still came home`);
   console.log(`   outcome ${dbC.outcome} · ${dbC.decisions} decisions graded`);
 
@@ -340,7 +377,7 @@ try {
   const afterRestart = await page.eval(snapshot);
   ok(afterRestart.turnIndex === 0, `restart-mid-beat: new mission is on turn 1 (got ${afterRestart.turnIndex + 1})`);
   ok(afterRestart.health === 100, `restart-mid-beat: integrity reset (got ${afterRestart.health})`);
-  ok(afterRestart.drones === 2, `restart-mid-beat: drone rack refilled (got ${afterRestart.drones})`);
+  ok(afterRestart.drones === DRONES, `restart-mid-beat: drone rack refilled (got ${afterRestart.drones})`);
 
   // The real check: give the stranded beat time to land and confirm it does not
   // silently advance the new mission past turn 1.

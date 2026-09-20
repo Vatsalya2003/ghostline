@@ -21,7 +21,7 @@ const ORDER = [
 ];
 
 export class Debrief {
-  constructor(mission, onReplay, onSelect) {
+  constructor(mission, onReplay) {
     this.mission = mission;
     this.screen = document.getElementById('screen-debrief');
     this.head = document.getElementById('debrief-head');
@@ -33,10 +33,8 @@ export class Debrief {
     this.decisions = document.getElementById('decision-list');
     this.replayBtn = document.getElementById('btn-replay');
     this.replayBtn.addEventListener('click', onReplay);
-    this.selectBtn = document.getElementById('btn-select');
-    this.selectBtn.addEventListener('click', () => onSelect?.());
     this.ring = new FocusRing({ onFocus: () => audio.hover() });
-    this.ring.setItems([this.replayBtn, this.selectBtn]);
+    this.ring.setItems([this.replayBtn]);
   }
 
   show(summary) {
@@ -58,7 +56,14 @@ export class Debrief {
       this.rows.appendChild(row);
     }
 
-    this.keyTurnLine.textContent = summary.keyTurnLine || '';
+    // Being seen outranks everything else the debrief has to say. If the
+    // compound knew you were in it, that is the sentence the player needs
+    // first — the turn-by-turn grading is a footnote to it.
+    const alarmLine = summary.alarmed && this.mission.alarmVerdict
+      ? this.mission.alarmVerdict.replace('{TURN}', summary.alarmTurn ?? '—')
+      : '';
+    this.keyTurnLine.textContent = alarmLine || summary.keyTurnLine || '';
+    this.keyTurnLine.classList.toggle('alarm', !!alarmLine);
     this.verdict.textContent = summary.verdict;
 
     this.decisions.innerHTML = '';

@@ -9,7 +9,7 @@ import { reconTarget } from '../render/Level.js';
 // the AI speak, then unlocks the command bar. Beat timing lives here; what
 // happens on each beat lives in the mission file.
 export class Director {
-  constructor({ camera, squad, fx, ui, turnManager, state, level, fog, screenFX, keyLight, markers }) {
+  constructor({ camera, squad, fx, ui, turnManager, state, level, fog, screenFX, keyLight, markers, actors = null }) {
     this.camera = camera;
     this.squad = squad;
     this.fx = fx;
@@ -21,6 +21,7 @@ export class Director {
     this.screenFX = screenFX;
     this.keyLight = keyLight;
     this.markers = markers;
+    this.actors = actors;
     this.busy = false;
     this.baseLight = keyLight ? keyLight.intensity : 1.5;
   }
@@ -253,7 +254,13 @@ export class Director {
   weaponFX(resolution) {
     const { outcome, action } = resolution;
     const target = reconTarget({ turnId: resolution.turn?.id, reveal: outcome.reveal });
-    const aim = this.hostilesShown ? this.aimPoint() : { x: target.x, z: target.z };
+    // If the outcome names someone who goes down, that is what the squad is
+    // shooting at. Without this the tracers went to a generic recon point and
+    // the figure who actually fell was nowhere near the gunfire.
+    const victim = [].concat(outcome.dropActors || [])[0];
+    const victimPos = victim && this.actors?.positionOf(victim);
+    const aim = victimPos ? { x: victimPos.x, z: victimPos.z }
+      : this.hostilesShown ? this.aimPoint() : { x: target.x, z: target.z };
 
     if (action === 'FIRE') {
       // The squad engages. Every unit that still has a working sensor fires;

@@ -104,6 +104,35 @@ export class Browser {
     await page.send('Log.enable');
     await page.send('Page.enable');
     await page.send('Network.enable');
+
+    // Silence the machine before it can speak.
+    //
+    // `--mute-audio` does NOT cover speechSynthesis: on macOS the AI's voice
+    // goes through the OS speech engine, not Chrome's audio pipeline. So a
+    // headless run — which has no window and no obvious owner — talks out
+    // loud through the speakers for the whole mission. Four missions of that
+    // came out of one `npm run e2e`, in a room where nobody was playing.
+    //
+    // Stubbed on the document rather than cancelled after the fact, because
+    // the first line is spoken before any test code gets a chance to run.
+    await page.send('Page.addScriptToEvaluateOnNewDocument', {
+      source: `
+        try {
+          window.speechSynthesis.cancel();
+          const noop = () => {};
+          Object.defineProperty(window, 'speechSynthesis', {
+            configurable: true,
+            value: {
+              speak: noop, cancel: noop, pause: noop, resume: noop,
+              getVoices: () => [],
+              addEventListener: noop, removeEventListener: noop,
+              speaking: false, pending: false, paused: false,
+            },
+          });
+        } catch { /* nothing to silence */ }
+      `,
+    });
+
     await page.send('Page.navigate', { url });
     return page;
   }

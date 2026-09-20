@@ -7,27 +7,27 @@ through their sensors. Each turn the squad AI tells you what it recommends and
 how confident it is — but sensors break, and a broken sensor still sounds
 confident.
 
-**Two missions, chosen at the start.** Run `npm run dev`, open
-`http://localhost:5173`, press BEGIN and pick one.
+**One mission: AMMUNITION DEPOT.** Run `npm run dev`, open
+`http://localhost:5173`, press BEGIN. There is no menu — title, briefing,
+mission.
 
-| | **DRY CREEK** | **AMMUNITION DEPOT** |
-|---|---|---|
-| Where | Relay Station 7, a desert compound | Compound 14, an enemy depot with a fire in it |
-| Turns | 6 | 10 (five phases of two) |
-| The failure you learn | A sensor breaks and keeps reporting | The same HIGH confidence, built from almost nothing |
-| Length | ~4 min | ~7 min |
+| | **AMMUNITION DEPOT** |
+|---|---|
+| Where | Compound 14, an enemy depot with a fire in it |
+| Turns | 10, in five phases of two |
+| Length | ~7 min |
+| The failure you learn | The same HIGH confidence, built from almost nothing |
 
-> A third mission, **BLACK CURRENT** (undersea, 6 turns), is written and on
-> disk at `src/data/mission2.js` but **deliberately not registered** — it is
-> the fallback if one of the other two goes wrong. Add a row back to
-> `src/data/missions.js` and it is playable again.
+It puts a person on the end of the answer. The machine has to sort a room into
+hostages and hostiles, and on turn 6 it gives you the same HIGH it earned on
+turn 5 — for a figure it cannot actually see.
 
-Dry Creek is the ninety-second demo: you *watch* a sensor break, then you're
-asked to believe it. Black Current is a machine reading a working instrument
-correctly and still being wrong. Ammunition Depot puts a person on the end of
-the answer — the machine has to sort a room into hostages and hostiles, and on
-turn 6 it gives you the same HIGH it earned on turn 5 for a figure it cannot
-actually see.
+> **Two more missions are on disk, unregistered.** `mission1.js` (DRY CREEK,
+> desert, 6 turns) and `mission2.js` (BLACK CURRENT, undersea, 6 turns) are
+> complete and playable; they are held back as the fallback if the depot
+> breaks before the demo. Add a row to `src/data/missions.js` and either one
+> works again with no other change. `Scene.js` still carries all three
+> environments for the same reason — nothing was ripped out to get here.
 
 ## Which document do you want?
 
@@ -247,37 +247,6 @@ Then hit **RUN IT AGAIN** and play it badly on purpose — CONFIRM everything.
 You'll survive and the debrief will tell you your judgement was poor. Seeing
 both endings is how you understand what we're building.
 
-## Mission 2 — BLACK CURRENT
-
-`http://localhost:5173/?mission=black-current`
-
-Three AUVs return to a decommissioned undersea test range to explain an anomaly
-the last autonomous survey logged at grid K-14 and classified as seabed
-structure, at 91% confidence. The range was signed off clear. It wasn't.
-
-**The truth you're uncovering** *(the game never tells you this outright)*: a
-moored sensor package slipped its anchor in a storm eighteen months ago and has
-been dragging across the seabed on the tide ever since, browning out whenever
-the current slackens. That one fact explains everything — it *is* structure, it
-*does* move, it transmits *sometimes*, and it has ploughed a furrow across the
-bottom for anyone who goes and looks.
-
-**The previous AI was not wrong. It was right about the object and wrong about
-the world.** Every recommendation in this mission is technically defensible and
-none of them are complete.
-
-| # | Turn | Where the AI falls short | Calibrated play |
-|---|---|---|---|
-| 1 | **BASELINE** | Nothing. It is right. | `CONFIRM` — trusting a verified system is correct |
-| 2 | **FIRST CONTACT** | Matched an 18-month-old chart to a thing that moved | `COMPARE LOGS` |
-| 3 | **SENSOR CONFLICT** | One confidence number averaged over two sensors that disagree | `INSPECT` the drag scar |
-| 4 | **BLACK CURRENT** | Models the current at the wrong depth | `REROUTE` |
-| 5 | **THE SOURCE** | Reads transmission as intent; it's a battery on a tide | `HOLD & OBSERVE` one cycle |
-| 6 | **RECOVERY** | Averages battery across three vehicles; one can't make it | Depends on your own fleet state |
-
-Turn 1 *rewards* trust, so the mission can't be beaten by reflexive suspicion.
-Question everything and you run out of inspections by turn 4 and arrive blind.
-
 ### Rotating the board
 
 `Q` and `E` snap the camera a quarter turn around whatever it is looking at.
@@ -298,9 +267,7 @@ place.** A player who looks at the ground can read the answer before the AI
 concedes the point. Follow the trunk cable and the chain — they'll take you
 there.
 
-## Mission 3 — AMMUNITION DEPOT
-
-`http://localhost:5173/?mission=ammo-depot`
+## The mission, phase by phase
 
 Ten turns in five phases, two turns each. **The pattern inside every phase is
 the same and it is deliberate:** the first turn is a clean reading the AI gets
@@ -341,21 +308,16 @@ has no model for how fast it moves, because nothing gave it one.
 | URL | What it does |
 |---|---|
 | `http://localhost:5173/?skip=1` | Straight into turn 1, no title or briefing |
-| `http://localhost:5173/?auto=CONFIRM,SEND_DRONE` | Plays those two turns automatically, hands control back at **turn 3** |
-| `http://localhost:5173/?auto=CONFIRM,CONFIRM,CONFIRM,CONFIRM,CONFIRM,CONFIRM` | Plays a full bad run to the debrief |
-| `?mission=black-current&skip=1` | Straight into Black Current turn 1 |
-| `?mission=black-current&auto=CONFIRM,COMPARE_LOGS,INSPECT_SEABED,REROUTE` | Plays the calibrated path up to turn 5 |
-| `?mission=ammo-depot&skip=1` | Straight into Ammunition Depot turn 1 |
-| `?mission=ammo-depot&auto=CONFIRM,SEND_DRONE,BREACH_QUIET,MARK_TARGET,CONFIRM` | Plays phases 1–3 and hands you **turn 6** |
+| `?deploy=1` | Straight to the briefing, skipping the title |
+| `?auto=CONFIRM,SEND_DRONE,BREACH_QUIET,MARK_TARGET,CONFIRM` | Plays phases 1–3 and hands you **turn 6** |
+| `?auto=CONFIRM,CONFIRM,CONFIRM,CONFIRM,CONFIRM,CONFIRM,CONFIRM,CONFIRM,CONFIRM,CONFIRM` | A full trust-everything run to the debrief |
 
-`?mission=` accepts `dry-creek` / `black-current` / `ammo-depot`, or `1`/`2`/`3`.
+`?mission=` still parses but with one mission registered it can only resolve
+to that one. It is kept so bookmarked URLs and the test harnesses keep working.
 
-> ⚠ `npm run verify` currently only walks **mission 1**. Missions 2 and 3 are
-> checked by a schema lint and by playing them. Extending `verify.mjs` to loop
-> the registry is the highest-value test job outstanding.
-
-**This is also the judge demo:** `?auto=CONFIRM,SEND_DRONE` puts turn 3 on
-screen with the breach already played out.
+**This is the judge demo:**
+`?auto=CONFIRM,SEND_DRONE,BREACH_QUIET,MARK_TARGET,CONFIRM` puts **turn 6** on
+screen — the hostage call — with everything before it already played out.
 
 ## Check the scoring without opening a browser
 
@@ -369,16 +331,16 @@ to check a content change didn't break the grading.
 For a real check rather than a spot check:
 
 ```bash
-npm run verify   # ~2s  — walks all 1344 paths through the mission
-npm run e2e      # ~2m  — plays full missions in a real browser
+npm run verify   # ~4s  — walks the registered mission exhaustively
+npm run e2e      # ~3m  — plays the mission in a real browser
 ```
 
 `verify` asserts the things the demo rests on: every outcome reachable, all four
 endings reachable, drones never negative, debrief counts matching the decisions
 you made, praise only ever for a clean run, the key turn named when you fail it,
 and the objective board agreeing with the ending. **Run it after any edit to a
-mission file** — it catches a broken grade in two seconds. It currently walks
-133,441 assertions across both missions.
+mission file** — it catches a broken grade in seconds. It currently walks
+about 6.5 million assertions over the registered mission.
 
 > **Taking headless screenshots?** Software WebGL runs this at ~2 fps, so the
 > 1.6 s mission-start curtain takes ~16 s of wall clock and the fog of war is
@@ -424,8 +386,8 @@ git push
 ## Writing and tuning — no code needed
 
 **Everything the player reads or is graded on lives in `src/data/`:**
-`mission1.js` (Dry Creek), `mission2.js` (Black Current), and `missions.js`,
-which is just the registry and the `?mission=` switch.
+`mission3.js` (Ammunition Depot) is the shipped one; `mission1.js` and
+`mission2.js` are the unregistered fallbacks; `missions.js` is the registry.
 
 Dialogue, confidence values, what each action does, how much damage it costs,
 the grade it earns, the debrief copy. Open it, change a string, save — the page
