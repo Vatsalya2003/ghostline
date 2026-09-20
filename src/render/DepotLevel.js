@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { spawnProp } from './AssetLoader.js';
 import { triplanarMaterial } from './Textures.js';
+import { cloneSurface } from './Materials.js';
 import { depotHeight } from './Depot.js';
 import {
   WIRE, GATE, WALLS, ROOMS, OUTBUILDINGS, ZONES, FIRE_SOURCE,
@@ -83,6 +84,28 @@ const MAT = {
   // Swept hardstanding underfoot, finer than the wall aggregate.
   floor: fadeMat(0x968e80, 0.97, 0.02, { set: 'concrete', scale: 0.42, albedoMix: 0.45, normalScale: 0.7 }),
 };
+
+// Everything in the yard has been standing in the same dust.
+//
+// This has to go through a COPY. surfaceMaterial() hands out one shared
+// material per surface, so tinting a prop's material in place walks the tint
+// into every other mesh that asked for the same surface — the squad's own
+// chassis and weapon housing included, which is how three grey robots ended
+// up the colour of the ground they were standing on. Worse, it compounds: each
+// prop lerped the shared material a further 22% toward dust.
+//
+// One dusted copy per source material, cached, so the compound still draws
+// with a handful of programs rather than one per mesh.
+const dustCache = new Map();
+function dusted(source) {
+  const hit = dustCache.get(source);
+  if (hit) return hit;
+  const copy = cloneSurface(source);
+  copy.color.lerp(new THREE.Color(0xb3a68c), 0.22);
+  copy.roughness = Math.min(1, (copy.roughness ?? 0.7) + 0.18);
+  dustCache.set(source, copy);
+  return copy;
+}
 
 function box(w, h, d, mat, x, y, z, rotY = 0) {
   const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
@@ -429,10 +452,7 @@ function placeProps(group, table) {
         if (!child.isMesh) return;
         child.castShadow = true;
         child.receiveShadow = true;
-        if (child.material && child.material.color) {
-          child.material.color.lerp(new THREE.Color(0xb3a68c), 0.22);
-          child.material.roughness = Math.min(1, (child.material.roughness ?? 0.7) + 0.18);
-        }
+        if (child.material && child.material.color) child.material = dusted(child.material);
       });
     });
     group.add(holder);

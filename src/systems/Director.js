@@ -453,8 +453,24 @@ export class Director {
           level: this.level,
         });
 
+        // DEPLOY — the drone is carried, not conjured. ALPHA turns onto the
+        // bearing and hand-launches it, and the aircraft leaves from the
+        // robot's hands rather than appearing at its feet. The sortie starts
+        // on the release, so what puts it in the air is something the player
+        // watched happen.
+        const bearing = Math.atan2(place.x - u.position.x, place.z - u.position.z);
+        const release = {
+          x: u.position.x + Math.sin(bearing) * 0.55,
+          z: u.position.z + Math.cos(bearing) * 0.55,
+          y: 1.25,
+        };
+        u?.faceTowards(place.x, place.z, 0.25);
+        u?.throwOrdnance(1.0);
+        audio.droneLaunch?.(u.position.x, u.position.z);
+        await wait(0.34);          // the release point of the launch
+
         const sortie = this.fx.droneSweep(
-          { x: u.position.x, z: u.position.z },
+          release,
           place,
           {
             tasking: resolution.turn?.zone || '',

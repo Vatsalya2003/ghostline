@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import gsap from 'gsap';
 import { groundAt } from './Units.js';
+import { triplanarMaterial } from './Textures.js';
 
 // ============================================================================
 // THE PEOPLE
@@ -52,10 +53,30 @@ function box(w, h, d, mat, x, y, z, rotY = 0) {
 // is a smudge with a higher triangle count.
 function figure(palette, { armed = false, pose = 'stand' } = {}) {
   const g = new THREE.Group();
-  const cloth = new THREE.MeshStandardMaterial({ color: palette.cloth, roughness: 0.92, flatShading: true });
-  const trim = new THREE.MeshStandardMaterial({ color: palette.trim, roughness: 0.85, flatShading: true });
+  // Surfaced, like everything else in the compound. These were the last
+  // flat-colour meshes on the board, which made the people read as diagrams
+  // standing in a textured room.
+  //
+  // Object space, not world: a world projection slides across a figure as it
+  // is placed, and these are the meshes the player is asked to look hardest
+  // at. Scale is in the figure's own units — a 1.7-unit person wants a few
+  // repeats across the torso, not a fraction of one.
+  //
+  // Cloth takes the coarse weave; webbing and rifle take painted metal. Skin
+  // is left untextured on purpose: a fabric normal on a face reads as damage.
+  const cloth = triplanarMaterial({
+    set: 'sandbag', color: palette.cloth, roughness: 0.92, metalness: 0.0,
+    scale: 3.4, space: 'object', normalScale: 0.6, albedoMix: 0.55,
+  });
+  const trim = triplanarMaterial({
+    set: 'sandbag', color: palette.trim, roughness: 0.85, metalness: 0.05,
+    scale: 4.0, space: 'object', normalScale: 0.5, albedoMix: 0.5,
+  });
   const skin = new THREE.MeshStandardMaterial({ color: palette.skin, roughness: 0.95, flatShading: true });
-  const gear = new THREE.MeshStandardMaterial({ color: palette.gear, roughness: 0.7, metalness: 0.3, flatShading: true });
+  const gear = triplanarMaterial({
+    set: 'metal-painted', color: palette.gear, roughness: 0.7, metalness: 0.3,
+    scale: 5.0, space: 'object', normalScale: 0.7, albedoMix: 0.6,
+  });
 
   const seated = pose === 'seated';
   const crouch = pose === 'crouch';
@@ -99,8 +120,24 @@ function figure(palette, { armed = false, pose = 'stand' } = {}) {
     rifle.rotation.set(0.12, -0.35, 0);
     g.add(rifle);
   } else {
-    // Bound wrists: one small band where the hands meet.
-    g.add(box(0.22, 0.08, 0.10, gear, 0, torsoY - 0.14, 0.40));
+    // BOUND WRISTS. This is the cue turns 5 to 7 are decided on, so it is
+    // drawn to be legible from across the room rather than to be subtle: a
+    // pale band at the wrists, and — for a seated figure — the tether running
+    // back to the conduit the mission says they are tied to. A player who can
+    // see the tie does not have to infer it from a sentence.
+    const bindMat = new THREE.MeshStandardMaterial({
+      color: 0xd8d2c4, roughness: 0.85, metalness: 0.05, flatShading: true,
+    });
+    const wrists = box(0.26, 0.10, 0.13, bindMat, 0, torsoY - 0.14, 0.41);
+    g.add(wrists);
+
+    if (seated) {
+      // Tether back to the wall run. Thin, slack-looking, and deliberately
+      // the same pale colour as the band so the two read as one restraint.
+      const tether = box(0.05, 0.05, 0.52, bindMat, 0, torsoY - 0.16, 0.14);
+      tether.rotation.x = 0.22;
+      g.add(tether);
+    }
   }
 
   return g;
