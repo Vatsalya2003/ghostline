@@ -198,18 +198,20 @@ export const SMOKE_STAGES = [
 // the player resolves it — drawing a person there would answer the question
 // the turn is asking.
 export const ACTORS = [
-  // --- the north-wall sentry. Turn 2's dialogue has talked about this man
-  // since the mission was written — "one sentry posted, and a service door
-  // with a LIVE alarm contact" — and he has never been on the board. He is
-  // the reason ADVANCE on turn 2 alerts the compound, so the player should
-  // be able to see him once the drone has found him.
-  { id: 'north-sentry', kind: 'hostile', at: [1.2, 10.8], face: 3.1, turns: [2, 3] },
+  // No north-wall sentry on the board. Turn 2's drone still reports one
+  // behind the storage block and ADVANCE still walks into him — but he stays
+  // a report rather than a figure, because putting him on screen made three
+  // enemies visible on the approach where the mission wants two.
 
   // --- the man on the holding room door. He is watching the hostages, he is
   // out of sight of the one inside, and each of them is therefore alone —
   // which is what makes a quiet takedown possible on turn 5 and impossible
   // on turn 3, where the patrol is a pair who can see each other.
-  { id: 'door-watch', kind: 'hostile', at: [7.8, -1.4], face: 3.4, turns: [4, 5] },
+  // Turn 5 only. He is discovered when the squad reaches the room, which is
+  // when VERITAS first mentions him — showing him out in the yard on turn 4
+  // put a third enemy on the approach and gave away a man the squad has not
+  // seen yet.
+  { id: 'door-watch', kind: 'hostile', at: [7.8, -1.4], face: 3.4, turns: [5] },
 
   // --- the yard patrol, at their original posts. Kept here by request.
   //
