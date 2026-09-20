@@ -361,10 +361,10 @@ const PROPS = [
   ['container', -6.2, -1.2, { size: 2.6, rot: 0.05 }],
   // The east-corner crate stack. The turn-4 contact stands behind THIS, so
   // it has to be at his shoulder rather than somewhere else in the yard.
-  ['supply-crate', 3.6, 1.7, { height: 1.2, rot: 0.15 }],
-  ['supply-crate', 4.9, 1.9, { height: 1.0, rot: 0.5 }],
-  ['supply-crate', 3.9, 2.7, { height: 0.9, rot: 0.3 }],
-  ['barrel', 5.4, 0.4, { height: 0.95, rot: 0.4 }],
+  ['supply-crate', 7.6, 4.2, { height: 1.2, rot: 0.15 }],
+  ['supply-crate', 8.8, 4.6, { height: 1.0, rot: 0.5 }],
+  ['supply-crate', 7.9, 5.4, { height: 0.9, rot: 0.3 }],
+  ['barrel', 6.6, 3.6, { height: 0.95, rot: 0.4 }],
   ['barrel', 2.6, 6.6, { height: 0.95, rot: 0.9 }],
   ['drum', -2.0, 3.6, { height: 1.0, rot: 0.2 }],
   ['sign-hazard', 4.2, 7.2, { size: 1.1, rot: 0.4 }],

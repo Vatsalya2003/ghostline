@@ -222,11 +222,14 @@ export const ACTORS = [
   { id: 'guard-b', kind: 'hostile', at: [-2.4, 4.0], face: 0.7, turns: [3, 4] },
 
   // --- turn 4: the contact at the east corner, half behind the crate stack.
-  // Position as originally placed. Still an UNRESOLVED civilian rather than a
-  // guard — that is the design brief, not a placement: he is a maintenance
-  // worker, and drawing him as either thing answers the question turn 4 asks.
+  // Out at the corner rather than at the squad's elbow: at 1.1 m the line
+  // "a third figure at the east corner" and the picture disagreed, and a
+  // contact you need a drone to identify cannot be standing next to you.
+  // Still an UNRESOLVED civilian rather than a guard — that is the design
+  // brief, not a placement: he is a maintenance worker, and drawing him as
+  // either thing answers the question turn 4 asks.
   { id: 'guard-cover', kind: 'civilian', state: 'unresolved', pose: 'crouch',
-    at: [4.4, 0.9], face: 3.6, turns: [4, 5, 6, 7, 8, 9, 10] },
+    at: [8.6, 3.4], face: 3.9, turns: [4, 5, 6, 7, 8, 9, 10] },
 
   // --- the holding room, turns 5-6. One armed hostile walking between four
   // bound civilians.
