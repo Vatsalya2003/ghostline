@@ -8,7 +8,10 @@
 //
 //   node scripts/record.mjs out.mp4
 //
-// PLAN drives the mission through a complete run: every objective met. The
+// PLAN drives the mission from the title card to the debrief. It is not a
+// clean sweep: turn 3 is scored MISUSE and the run ends OBJECTIVE FAILED at
+// 28% integrity. Every entry is a legal action for its turn, which is what
+// this script is for — a showcase of the whole arc, not a winning line. The
 // camera work and the map are scripted at the beats where they say something.
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
@@ -19,7 +22,7 @@ const out = process.argv[2] || 'ghostline.mp4';
 const dir = '/tmp/claude-1000/-home-nikhil-tech-jam-hackathon/4a87a044-f9ac-4266-849a-f71cb010b7e1/scratchpad/frames';
 const FPS = Number(process.env.FPS || 14);
 
-// A full mission that meets all three objectives.
+// All 11 turns. Legal choices throughout; the outcome is a partial failure.
 const PLAN = ['CONFIRM', 'SEND_DRONE', 'QUIET_TAKEDOWN', 'THERMAL_SWEEP', 'THERMAL_SWEEP',
               'ENTER_ENGAGE', 'HOLD_FIRE', 'CROSS_CHECK', 'EVAC_HOSTAGES', 'SHORT_FUSE', 'CONFIRM'];
 
