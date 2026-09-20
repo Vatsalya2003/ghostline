@@ -13,6 +13,20 @@
     <div id="app">
       <div id="stage">
         <canvas id="scene"></canvas>
+
+        <!-- Over the board rather than in the column: the HUD panels need that
+             height for the situation, the comms captions and the commands. -->
+        <div class="panel" id="map-box">
+          <div class="label">Tactical map <span id="map-hint">[M] EXPAND</span></div>
+          <canvas id="minimap"></canvas>
+          <ul id="map-keys">
+            <li><span class="key unit">&#9632;</span>SQUAD</li>
+            <li><span class="key obj">&#9670;</span>OBJECTIVE</li>
+            <li><span class="key brief">&#9633;</span>BRIEFED</li>
+            <li><span class="key host">&#10005;</span>HOSTILE</li>
+            <li><span class="key haz">&#9650;</span>HAZARD</li>
+          </ul>
+        </div>
       </div>
 
       <div id="ui">
@@ -114,9 +128,26 @@
 
       <div class="screen hidden" id="screen-briefing">
         <h2>MISSION BRIEFING</h2>
-        <h1 style="font-size: clamp(22px, 3.4vw, 38px)">RELAY STATION 7</h1>
+        <h1 style="font-size: clamp(22px, 3.4vw, 38px)" id="briefing-title">RELAY STATION 7</h1>
         <ul id="briefing-list"></ul>
         <button class="btn" id="btn-deploy">DEPLOY</button>
+      </div>
+
+      <div class="screen hidden" id="screen-map">
+        <div id="map-head">
+          <h2>TACTICAL MAP</h2>
+          <div class="label" id="map-legend">
+            <span class="key unit">&#9632;</span> SQUAD
+            <span class="key obj">&#9670;</span> OBJECTIVE
+            <span class="key poss">&#9650;</span> POSSIBLE
+            <span class="key host">&#10005;</span> HOSTILE
+            <span class="key haz">&#9650;</span> HAZARD
+            <span class="key drone">&#9670;</span> DRONE
+            <span class="key brief">&#9633;</span> BRIEFED, NOT OBSERVED
+          </div>
+        </div>
+        <canvas id="map-canvas"></canvas>
+        <div class="label" id="map-readout">SELECT A MARKER</div>
       </div>
 
       <div class="screen hidden" id="screen-pause">

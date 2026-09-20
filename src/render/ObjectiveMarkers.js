@@ -45,20 +45,26 @@ function flatRing(geo, color, opacity, renderOrder) {
 }
 
 // Which place each mission objective sits on. Mission data names objectives by
-// id; Level names the ground by key. This is the one line that joins them.
-const OBJECTIVE_PLACE = {
+// id; the world names the ground by key. This is the one line that joins them.
+//
+// Dry Creek's join, and the default. A mission set anywhere else declares its
+// own `objectiveSites` alongside its `sites` gazetteer — without that, an
+// objective id that happens to collide with one of these keys puts a marker on
+// another map's coordinates, which is exactly what put Compound 14's EXTRACT
+// ring on Relay Station 7's extraction point.
+export const OBJECTIVE_PLACE = {
   relay: 'relay',
   extract: 'extraction',
 };
 
 export class ObjectiveMarkers {
-  constructor(scene, objectives = []) {
+  constructor(scene, objectives = [], { places = PLACES, join = OBJECTIVE_PLACE } = {}) {
     this.scene = scene;
     this.markers = new Map();
 
     for (const obj of objectives) {
-      const placeKey = OBJECTIVE_PLACE[obj.id];
-      const place = placeKey && PLACES[placeKey];
+      const placeKey = join[obj.id];
+      const place = placeKey && places[placeKey];
       if (!place) continue;      // an objective with nowhere to stand is HUD-only
 
       const group = new THREE.Group();

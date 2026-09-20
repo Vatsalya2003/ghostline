@@ -27,7 +27,7 @@ const KEY_ROTATE = { q: -1, e: 1 };
 export class Input {
   constructor({
     commandBar, comms, camera, squad, hud, prompts,
-    onAction, onSkip, onPause, isBusy = () => false,
+    onAction, onSkip, onPause, onMap, isBusy = () => false,
   }) {
     this.commandBar = commandBar;
     this.comms = comms;
@@ -38,6 +38,7 @@ export class Input {
     this.onAction = onAction;
     this.onSkip = onSkip;
     this.onPause = onPause;
+    this.onMap = onMap;
     this.isBusy = isBusy;
 
     this.pad = new PadReader();
@@ -332,6 +333,7 @@ export class Input {
           case CONTROL.ROTATE_RIGHT: self.rotateBoard(1); return true;
           case CONTROL.PAUSE: self.onPause?.('menu'); return true;
           case CONTROL.INFO: self.onPause?.('intel'); return true;
+          case CONTROL.OPEN_MAP: self.onMap?.(); return true;
           default: return false;
         }
       },
@@ -341,6 +343,7 @@ export class Input {
           return [
             { control: CONTROL.CANCEL, label: 'SKIP' },
             { glyph: CAMERA_BINDING, label: 'CAMERA' },
+          { control: CONTROL.OPEN_MAP, label: 'MAP' },
             { control: CONTROL.PAUSE, label: 'PAUSE' },
           ];
         }

@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { spawnProp } from './AssetLoader.js';
+import { triplanarMaterial } from './Textures.js';
 import { depotHeight } from './Depot.js';
 import {
   WIRE, GATE, WALLS, ROOMS, OUTBUILDINGS, ZONES, FIRE_SOURCE,
@@ -48,22 +49,39 @@ function onGround(object, x, z, { sink = 0, rotY = 0, tiltToSlope = true } = {})
 // ---------------------------------------------------------------- materials
 
 // Transparent from birth, opacity 1. See the note at the top.
-const fadeMat = (color, roughness = 0.94, metalness = 0.02) =>
-  new THREE.MeshStandardMaterial({
-    color, roughness, metalness, transparent: true, opacity: 1,
-    depthWrite: true,
-  });
+//
+// `tex` names a CC0 PBR set (see src/render/Textures.js) projected triplanar.
+// The compound's walls are extruded boxes with no UVs, so a projection is the
+// only way to get aggregate into concrete and corrugation into a roof — and it
+// keeps the fade contract intact, because the result is still one
+// MeshStandardMaterial the occlusion system can drive `opacity` on.
+//
+// Base colours are lifted above the old flat values: the detail albedo
+// multiplies into them, so the pre-texture colour would come out a stop dark.
+const fadeMat = (color, roughness = 0.94, metalness = 0.02, tex = null) => {
+  const mat = tex
+    ? triplanarMaterial({ color, roughness, metalness, ...tex })
+    : new THREE.MeshStandardMaterial({ color, roughness, metalness, flatShading: true });
+  mat.transparent = true;
+  mat.opacity = 1;
+  mat.depthWrite = true;
+  return mat;
+};
 
 const MAT = {
-  wall: fadeMat(0xbcae95),
-  wallInner: fadeMat(0xa89c86),
-  concrete: fadeMat(0xa79d8c, 0.95),
-  concreteDark: fadeMat(0x7e7668, 0.96),
-  roof: fadeMat(0x6b6459, 0.88, 0.12),
-  metal: fadeMat(0x8b8578, 0.6, 0.55),
-  rust: fadeMat(0x9a6038, 0.92, 0.15),
+  wall: fadeMat(0xc6b89e, 0.94, 0.02, { set: 'concrete', scale: 0.3, albedoMix: 0.45, normalScale: 0.9 }),
+  wallInner: fadeMat(0xb1a58d, 0.94, 0.02, { set: 'concrete', scale: 0.34, albedoMix: 0.45, normalScale: 0.8 }),
+  concrete: fadeMat(0xb0a695, 0.95, 0.02, { set: 'concrete', scale: 0.32, albedoMix: 0.45, normalScale: 0.9 }),
+  concreteDark: fadeMat(0x857e70, 0.96, 0.02, { set: 'concrete', scale: 0.3, albedoMix: 0.45, normalScale: 0.9 }),
+  // Corrugated sheet over the magazines, not poured concrete.
+  roof: fadeMat(0x716a5e, 0.88, 0.12, { set: 'metal-plate', scale: 0.6, albedoMix: 0.45, normalScale: 0.9 }),
+  metal: fadeMat(0x938d7f, 0.60, 0.55, { set: 'metal-plate', scale: 0.75, albedoMix: 0.5 }),
+  rust: fadeMat(0xa2663b, 0.92, 0.15, { set: 'metal-rust', scale: 1.0, albedoMix: 0.5 }),
+  // Rubber and shadowed trim. Deliberately untextured: at this value the
+  // detail map is invisible and the extra fetches are not worth a black edge.
   dark: fadeMat(0x3a3833, 0.9, 0.2),
-  floor: fadeMat(0x8d8577, 0.97),
+  // Swept hardstanding underfoot, finer than the wall aggregate.
+  floor: fadeMat(0x968e80, 0.97, 0.02, { set: 'concrete', scale: 0.42, albedoMix: 0.45, normalScale: 0.7 }),
 };
 
 function box(w, h, d, mat, x, y, z, rotY = 0) {

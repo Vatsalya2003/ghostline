@@ -3,6 +3,7 @@ import { createSky } from './Sky.js';
 import { createTerrain } from './Terrain.js';
 import { createSeabed } from './Seabed.js';
 import { createDepotGround } from './Depot.js';
+import { detectTier, renderTier, preloadTextures, triplanarMaterial } from './Textures.js';
 
 // 'day'   — late evening at a semi-arid installation: low sun, long shadows,
 //            warm key against a cool sky, practical lights doing real work.
@@ -125,6 +126,14 @@ export function createRenderer(canvas) {
   // Set again by createScene() once the environment is known — undersea runs
   // darker than anything on the surface.
   renderer.userData = { ...(renderer.userData || {}), baseExposure: renderer.toneMappingExposure };
+
+  // Has to happen before any material is built: the surface tier decides
+  // whether triplanar sampling compiles in at all.
+  detectTier(renderer);
+  preloadTextures([
+    'ground-dirt', 'ground-gravel', 'concrete', 'sandbag',
+    'metal-plate', 'metal-rust', 'metal-painted', 'wood-planks', 'rock',
+  ]);
   return renderer;
 }
 
@@ -164,17 +173,27 @@ export function createScene({ environment = ENVIRONMENT, renderer = null } = {})
   // to be a 30-unit slab — four times the footprint of the building — which
   // read as a giant flat plate with a hard diamond edge, and was the single
   // most artificial thing in the frame. Outside the wire is now soil.
-  const PAD = 15;
-  const ground = new THREE.Mesh(
-    new THREE.PlaneGeometry(PAD, PAD),
-    new THREE.MeshStandardMaterial({
-      map: makeGroundTexture(),
-      // Worn concrete, not fresh screed. Bright pads read as unused.
-      color: ENVIRONMENT === 'day' ? 0x9c917f : 0xa8b4ae,
-      roughness: 0.97,
-      metalness: 0.02,
-    })
-  );
+  // Sized to the compound it belongs to. At 15 it overhung the walls by two
+  // and a half metres on every side, and a pale slab with a hard diamond edge
+  // sitting proud of the building is the most artificial thing a flat-lit
+  // scene can contain.
+  const PAD = 12.4;
+  // Same two-scale idea as the terrain: the canvas map carries this slab's own
+  // history (wear patches, blast staining, expansion joints, the survey
+  // overlay) and never repeats, while the concrete set underneath carries the
+  // aggregate and the relief that makes it take light like a poured surface.
+  const padMaterial = triplanarMaterial({
+    set: 'concrete',
+    // Worn concrete, not fresh screed. Bright pads read as unused.
+    color: ENVIRONMENT === 'day' ? 0xcfc5b2 : 0xd8e2dc,
+    roughness: 0.97,
+    metalness: 0.02,
+    scale: 0.38,
+    normalScale: 0.8,
+    albedoMix: 0.5,      // the canvas map is the colour; see Terrain.js
+  });
+  padMaterial.map = makeGroundTexture();
+  const ground = new THREE.Mesh(new THREE.PlaneGeometry(PAD, PAD), padMaterial);
   ground.rotation.x = -Math.PI / 2;
   ground.position.set(3, 0, -3);   // centred on the compound, not the origin
   ground.receiveShadow = true;
@@ -201,7 +220,13 @@ export function createScene({ environment = ENVIRONMENT, renderer = null } = {})
                    undersea ? 56 : depot ? 44 : day ? 9 : 14,
                    undersea ? 32 : depot ? 38 : day ? 15 : 6);
   key.castShadow = true;
-  key.shadow.mapSize.set(day ? 3072 : 2048, day ? 3072 : 2048);
+  // A 3072 shadow map is re-rendered every frame with every caster in the
+  // compound in it. On a real GPU that is free; on a software rasteriser it is
+  // most of the frame, and it is the single biggest reason a headless run
+  // crawls. The low tier takes a quarter of the resolution — visibly softer
+  // up close, invisible at a tactical zoom, and several times the frame rate.
+  const shadowRes = renderTier() === 'low' ? 1024 : (day ? 3072 : 2048);
+  key.shadow.mapSize.set(shadowRes, shadowRes);
   key.shadow.camera.near = undersea ? 10 : 1;
   // The shadow frustum has to enclose everything the camera can see, or the
   // ground outside it samples the clamped edge of the shadow map and goes

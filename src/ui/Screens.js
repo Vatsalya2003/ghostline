@@ -16,6 +16,13 @@ export class Screens {
     this.seenBriefing = false;
 
     document.getElementById('title-sub').textContent = mission.subtitle;
+    // The briefing headline is the place, which is the tail of the subtitle:
+    // "OPERATION AMMUNITION DEPOT — COMPOUND 14". It used to be typed into the
+    // markup, so the depot briefed you to Relay Station 7.
+    const briefingTitle = document.getElementById('briefing-title');
+    if (briefingTitle) {
+      briefingTitle.textContent = mission.subtitle.split('—').pop().trim() || mission.subtitle;
+    }
     const list = document.getElementById('briefing-list');
     list.innerHTML = '';
     for (const line of mission.briefing) {
