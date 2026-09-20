@@ -7,15 +7,20 @@ through their sensors. Each turn the squad AI tells you what it recommends and
 how confident it is — but sensors break, and a broken sensor still sounds
 confident.
 
-**There are three missions on one engine.**
+**Two missions, chosen at the start.** Run `npm run dev`, open
+`http://localhost:5173`, press BEGIN and pick one.
 
-| | **DRY CREEK** | **BLACK CURRENT** | **AMMUNITION DEPOT** |
-|---|---|---|---|
-| Where | A desert relay station | An undersea test range at 240 m | An enemy compound, with a fire in it |
-| Turns | 6 | 6 | 10 (five phases of two) |
-| The failure you learn | A sensor breaks and keeps reporting | Every reading is true **and** misleading | The same HIGH confidence, built from almost nothing |
-| Length | ~6 min | ~8 min | ~7 min |
-| Run it | `http://localhost:5173/` | `?mission=black-current` | `?mission=ammo-depot` |
+| | **DRY CREEK** | **AMMUNITION DEPOT** |
+|---|---|---|
+| Where | Relay Station 7, a desert compound | Compound 14, an enemy depot with a fire in it |
+| Turns | 6 | 10 (five phases of two) |
+| The failure you learn | A sensor breaks and keeps reporting | The same HIGH confidence, built from almost nothing |
+| Length | ~4 min | ~7 min |
+
+> A third mission, **BLACK CURRENT** (undersea, 6 turns), is written and on
+> disk at `src/data/mission2.js` but **deliberately not registered** — it is
+> the fallback if one of the other two goes wrong. Add a row back to
+> `src/data/missions.js` and it is playable again.
 
 Dry Creek is the ninety-second demo: you *watch* a sensor break, then you're
 asked to believe it. Black Current is a machine reading a working instrument
@@ -181,12 +186,13 @@ touch a different device. The same list is in the game under **PAUSE ▸ CONTROL
 | Action | Keyboard | Controller |
 |---|---|---|
 | Pick a command | `1`–`9`, or arrows to move + `ENTER` | D-pad / left stick, then **A** |
+| **Rotate the view** | `Q` / `E` | **LB** / **RB** |
 | Confirm / select | `ENTER` or `SPACE` | **A** |
 | Cancel · skip the AI's line · back | `ESC` | **B** |
 | Ask why (always available) | `X` | **X** |
 | Tactical view (hold to widen) | `V` | **Y** |
-| Frame previous / next unit | `SHIFT+TAB` / `TAB` | **LB** / **RB** |
-| Zoom out / in | `Q` / `E` | **LT** / **RT** |
+| Frame previous / next unit | `SHIFT+TAB` / `TAB` | **L3** / **R3** (stick click) |
+| Zoom out / in | `-` / `+` | **LT** / **RT** |
 | Move camera | `W A S D` | right stick |
 | Mission info | `I` | **BACK** |
 | Pause | `P` | **START** |
@@ -271,6 +277,18 @@ none of them are complete.
 
 Turn 1 *rewards* trust, so the mission can't be beaten by reflexive suspicion.
 Question everything and you run out of inspections by turn 4 and arrive blind.
+
+### Rotating the board
+
+`Q` and `E` snap the camera a quarter turn around whatever it is looking at.
+The projection stays orthographic and the elevation stays at 45° — only the
+azimuth moves. That is deliberate: the tactical read depends on the board
+being drawn the same way every time, and free rotation lets a player put
+themselves in a view where the game is unreadable.
+
+Inside a building the roof lifts automatically and any wall between the camera
+and a unit fades out. **Turn 6 of Ammunition Depot is decided on what you can
+see in one room**, so this is the difference between a decision and a guess.
 
 ### Read the seabed, not just the panel
 

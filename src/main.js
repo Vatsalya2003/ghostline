@@ -496,4 +496,4 @@ function tick() {
 tick();
 
 // Console handles for tuning and for the plan's step-5 check.
-window.OP = { occlusion, screens, state, turnManager, director, squad, camera, scene, fog, fx, screenFX, input, pauseMenu, audio, soundscape, mission: mission1, startMission };
+window.OP = { occlusion, screens, ui, state, turnManager, director, squad, camera, scene, fog, fx, screenFX, input, pauseMenu, audio, soundscape, mission: mission1, startMission };

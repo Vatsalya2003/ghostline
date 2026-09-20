@@ -10,12 +10,29 @@ let voice = null;
 let voicesReady = false;
 
 // Chrome populates voices asynchronously — ask twice and listen for the event.
+// Ranked by name, not by whatever order the OS happens to return. Mission 1's
+// clips are baked from LJSpeech — a clear, level, female US voice — so the
+// live fallback is ranked to land as close to that as each platform allows.
+// Relying on Array.find over an unordered list meant the AI could sound like a
+// different character on a different machine, which is exactly the kind of
+// thing that only shows up in front of a judge.
+const VOICE_RANK = [
+  /^Samantha$/i,                    // macOS — closest to LJSpeech
+  /^Google US English$/i,           // Chrome, any OS
+  /^Microsoft Zira/i,               // Windows
+  /^Karen$/i, /^Moira$/i,           // other macOS en voices
+];
+
 export function initVoices() {
   if (!('speechSynthesis' in window)) return;
   const pick = () => {
     const all = window.speechSynthesis.getVoices();
     if (!all.length) return;
-    voice = all.find((v) => /en[-_]US/i.test(v.lang) && /google|samantha|alex|daniel/i.test(v.name))
+    for (const want of VOICE_RANK) {
+      const hit = all.find((v) => want.test(v.name));
+      if (hit) { voice = hit; voicesReady = true; return; }
+    }
+    voice = all.find((v) => /en[-_]US/i.test(v.lang))
       || all.find((v) => /^en/i.test(v.lang))
       || all[0];
     voicesReady = true;
@@ -23,6 +40,12 @@ export function initVoices() {
   pick();
   window.speechSynthesis.addEventListener('voiceschanged', pick);
 }
+
+// Mission 1 bakes two voices — LJSpeech for ALPHA, Joe for BETA-1. Web Speech
+// gives us one, so the second speaker is separated by pitch instead. Small
+// enough to read as a different unit on the same radio, not as a joke.
+const UNIT_PITCH = { ALPHA: 0, 'BETA-1': -0.12, 'BETA-2': 0.1 };
+export const pitchFor = (unit) => 0.35 + (UNIT_PITCH[unit] ?? 0);
 
 export function speak(text, { pitch = 0.35, rate = 1.02, volume = 0.9 } = {}) {
   if (!('speechSynthesis' in window)) return null;

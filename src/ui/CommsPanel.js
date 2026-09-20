@@ -1,5 +1,5 @@
 import { CONFIDENCE } from '../data/mission1.js';
-import { typewrite, speak, stopSpeaking } from '../systems/Dialogue.js';
+import { typewrite, speak, stopSpeaking, pitchFor } from '../systems/Dialogue.js';
 import { voiceBank } from '../systems/Voice.js';
 import { audio } from '../systems/Audio.js';
 
@@ -73,6 +73,12 @@ export class CommsPanel {
   // sourceStatus drives the glitch treatment on the speaker's name — the
   // visual tell that a confident number came out of a broken sensor.
   async say(text, { source = 'ALPHA', via = null, confidence = null, sourceStatus = 'healthy', voice = true } = {}) {
+    // Finish whatever was still typing before starting a new line. The turn
+    // spine awaits each say() so this never fires in normal play — but two
+    // typewriters on one element both write to it, and the result is two
+    // lines interleaved character by character. Cheap insurance against a
+    // hot reload, a skip race, or a future caller that forgets to await.
+    this.active?.skip();
     this.el.classList.add('speaking');
     this.sourceEl.textContent = source;
     this.sourceEl.classList.toggle('glitch', sourceStatus !== 'healthy');
@@ -88,8 +94,20 @@ export class CommsPanel {
     let charMs;
     if (voice) {
       const seconds = await voiceBank.play(text);
-      if (seconds) charMs = Math.max(12, (seconds * 1000) / Math.max(1, text.length));
-      else speak(text);          // no clip for this line — Web Speech covers it
+      if (seconds) {
+        charMs = Math.max(12, (seconds * 1000) / Math.max(1, text.length));
+      } else {
+        // No baked clip — Web Speech covers the line. It will not tell us how
+        // long it is going to take, so the caption is paced off an estimate
+        // instead: speech runs at roughly 13 characters a second at rate 1.
+        // Without this the caption uses a fixed 28ms/char, finishes less than
+        // halfway through a spoken line, and the panel sits reading DONE while
+        // the voice is still talking.
+        const RATE = 1.02;
+        const estimate = (text.length / 13) / RATE;
+        speak(text, { pitch: pitchFor(source) });
+        charMs = Math.min(46, Math.max(14, (estimate * 1000) / Math.max(1, text.length)));
+      }
     }
 
     this.active = typewrite(this.textEl, text, { charMs, onChar: this.onType });

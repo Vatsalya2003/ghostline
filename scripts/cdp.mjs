@@ -10,6 +10,12 @@ const CANDIDATES = [
   '/usr/bin/google-chrome',
   '/usr/bin/chromium',
   '/usr/bin/chromium-browser',
+  // macOS. Without these every script in this folder needs GHOSTLINE_CHROME
+  // exported by hand, which is a papercut that turns into "the audio check
+  // does not work on my machine".
+  '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+  '/Applications/Chromium.app/Contents/MacOS/Chromium',
+  `${process.env.HOME}/Applications/Google Chrome.app/Contents/MacOS/Google Chrome`,
 ].filter(Boolean);
 
 export function findChrome() {
