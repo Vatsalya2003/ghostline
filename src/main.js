@@ -3,7 +3,7 @@ import gsap from 'gsap';
 import { createRenderer, createScene } from './render/Scene.js';
 import { createCamera, resizeCamera, updateCamera, cutCamera, zoomCamera } from './render/Camera.js';
 import { createFogOfWar } from './render/FogOfWar.js';
-import { createLevel } from './render/Level.js';
+import { createLevel, PLACES } from './render/Level.js';
 import { createSeabedLevel } from './render/SeabedLevel.js';
 import { createDepotLevel } from './render/DepotLevel.js';
 import { attachSurveyLights } from './render/Seabed.js';
@@ -13,7 +13,7 @@ import { FIRE_SOURCE, SMOKE_STAGES, ACTORS } from './data/depot-layout.js';
 import { createSquad, setGroundSampler } from './render/Units.js';
 import { FX } from './render/FX.js';
 import { UnitMarkers } from './render/UnitMarkers.js';
-import { ObjectiveMarkers } from './render/ObjectiveMarkers.js';
+import { ObjectiveMarkers, OBJECTIVE_PLACE } from './render/ObjectiveMarkers.js';
 import { selectedMission } from './data/missions.js';
 
 // Which mission this session is running. Everything downstream takes the
@@ -37,6 +37,7 @@ import { Screens } from './ui/Screens.js';
 import { ScreenFX } from './ui/ScreenFX.js';
 import { Prompts } from './ui/Prompts.js';
 import { PauseMenu } from './ui/PauseMenu.js';
+import { TacticalMap } from './ui/TacticalMap.js';
 
 // Beat timing is driven by timers, so tweens must keep real time even after a
 // frame hitch. With lag smoothing on, GSAP freezes tween time across a long
@@ -80,8 +81,18 @@ const actors = mission1.environment === 'depot' ? createActors(scene, ACTORS) : 
 
 const fx = new FX(scene);
 const markers = new UnitMarkers(scene, squad.all);
+// The gazetteer for the world actually being played. A mission that declares
+// its own `sites` owns its ground outright (Compound 14 derives them from the
+// depot layout); Dry Creek falls back to the level's PLACES. The seabed has no
+// ground gazetteer at all, so it gets nothing rather than another map's.
+const places = mission1.sites
+  || (mission1.environment === 'undersea' ? {} : PLACES);
+const objectiveJoin = mission1.objectiveSites || OBJECTIVE_PLACE;
+
 // Objectives as places on the board, not just rows in the corner.
-const objectiveMarkers = new ObjectiveMarkers(scene, mission1.objectives);
+const objectiveMarkers = new ObjectiveMarkers(scene, mission1.objectives, {
+  places, join: objectiveJoin,
+});
 // The key light is the one thing events borrow to make the world react.
 // Looked up rather than returned, so Scene.js stays untouched.
 const keyLight = scene.children.find((o) => o.isDirectionalLight && o.castShadow)
@@ -118,6 +129,21 @@ const ui = {
   log: new MissionLog(),
 };
 const screenFX = new ScreenFX();
+
+// The tactical map reads the live game — squad, drone, the level's own fire
+// and the fog's memory — rather than being told about it. Its gazetteer is
+// passed in, so it draws the world that is actually loaded and cannot inherit
+// another mission's coordinates.
+const tacticalMap = new TacticalMap({
+  squad,
+  fx,
+  fog,
+  state,
+  level,
+  places,
+  objectivePlaces: objectiveJoin,
+  mission: mission1,
+});
 
 const director = new Director({ camera, squad, fx, ui, turnManager, state, level, fog, screenFX, keyLight, markers, actors });
 // Ambient beds, footsteps and stereo placement. Subscribes to Events on its
@@ -387,6 +413,7 @@ const input = new Input({
   },
   onSkip: () => ui.comms.skip(),
   onPause: (pane) => pauseMenu?.toggle(pane),
+  onMap: () => tacticalMap.toggle(),
 });
 
 pauseMenu = new PauseMenu({
@@ -421,6 +448,18 @@ input.addContext({
   },
   prompts: () => pauseMenu.prompts(),
 });
+// Below the pause menu — pausing over an open map should still show the menu —
+// and above the mission, so pan and zoom drive the map rather than the camera
+// while it is up.
+input.addContext({
+  name: 'map',
+  priority: 80,
+  allowCamera: false,
+  isActive: () => tacticalMap.open,
+  handle: (control) => tacticalMap.handle(control),
+  pick: () => false,
+  prompts: () => tacticalMap.prompts(),
+});
 input.addContext(input.screenContext({
   name: 'debrief', priority: 60,
   el: document.getElementById('screen-debrief'),
@@ -444,7 +483,7 @@ initVoices();
 ui.hud.setTurn(null);
 ui.hud.setHealth(100);
 ui.hud.setDrones(mission1.drones);
-ui.hud.setStatuses(state.statuses);
+ui.hud.setStatuses(state.statuses, state.ammo);
 
 window.addEventListener('resize', () => resizeCamera(camera, renderer));
 document.addEventListener('pointerdown', () => audio.unlock(), { once: true });
@@ -521,6 +560,7 @@ function tick() {
   fog.update(squad.all, dt, t);
   markers.update(dt, t);
   objectiveMarkers.update(dt, t);
+  tacticalMap.update(dt);
   soundscape.update(dt);
   terrain?.dust.update(dt, t);
   updateFire(dt, t);
@@ -534,4 +574,4 @@ function tick() {
 tick();
 
 // Console handles for tuning and for the plan's step-5 check.
-window.OP = { occlusion, actors, screens, ui, state, turnManager, director, squad, camera, scene, fog, fx, screenFX, input, pauseMenu, audio, soundscape, mission: mission1, startMission };
+window.OP = { occlusion, actors, screens, map: tacticalMap, ui, state, turnManager, director, squad, camera, scene, fog, fx, screenFX, input, pauseMenu, audio, soundscape, mission: mission1, startMission };

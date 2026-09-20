@@ -3,6 +3,7 @@ import gsap from 'gsap';
 import { PALETTE } from './Scene.js';
 import { Drone } from './Drone.js';
 import { CombatFX } from './CombatFX.js';
+import { ReconMarker } from './ReconSites.js';
 import { spawnModel, preload } from './AssetLoader.js';
 import { groundAt } from './Units.js';
 
@@ -18,6 +19,8 @@ export class FX {
     // because all of it is positional and none of it is about a unit's own
     // materials, which is what the methods below deal in.
     this.combat = new CombatFX(scene);
+    // Where the next sortie is going, painted on the ground before it leaves.
+    this.recon = new ReconMarker(scene);
     // Hostiles are not revealed until the ambush, five turns in. Fetching a
     // 695 KB rig at that exact moment would stall the beat the mission turns
     // on, so it is warmed now while the title card is still up.
@@ -35,14 +38,35 @@ export class FX {
   // not when the order is given: that is the moment the sweep's consequences
   // (fog lifting, contacts painting) should land, so what the player sees is
   // caused by the aircraft rather than coincident with it.
-  droneSweep(from, to, { color = PALETTE.cyan, radius = 7, onArrive = null } = {}) {
+  // Returns both halves of the sortie, because the turn cares about them
+  // separately: `read` settles when the aircraft has finished looking and its
+  // findings are allowed to land, `home` when it is back on the deck. A report
+  // that arrives while the drone is still on the pad is not a report, and it
+  // was the reason the one tool the player has for buying certainty read as
+  // decoration.
+  droneSweep(from, to, { color = PALETTE.cyan, radius = 7, onArrive = null, tasking = '' } = {}) {
     this.drone.setColor(color);
-    return this.drone.sweep(from, to, {
+    this.recon.task(to, tasking);
+
+    let settle = null;
+    const read = new Promise((resolve) => { settle = resolve; });
+
+    const home = this.drone.sweep(from, to, {
+      // On station: the ground lights up and the marker says it is being read.
       onScan: () => {
+        this.recon.setState('scanning');
         this.ring(to.x, to.z, { color, radius, duration: 1.1 });
         if (onArrive) onArrive(to);
       },
+      // Finished reading: only now is there anything to report.
+      onRead: () => settle(to),
     });
+    // A sortie killed by a restart never reaches either callback. Settling on
+    // the way home as well means nothing can be left awaiting an aircraft that
+    // no longer exists.
+    home.then(() => settle(null));
+
+    return { read, home };
   }
 
   // A sensor sweep laid over ground rather than flown to it. THERMAL_SWEEP
@@ -133,6 +157,9 @@ export class FX {
       },
     });
   }
+
+  // The sortie's findings have landed. Marks the ground as read.
+  reconResult(caption = null) { this.recon.complete({ linger: 2.6, caption }); }
 
   // ---- combat, forwarded so callers only need the one fx handle ----------
   gunfire(from, to, opts) { this.combat.gunfire(from, to, opts); }
@@ -255,6 +282,7 @@ export class FX {
   resetDrone() {
     this.drone.reset();
     this.combat.clear();
+    this.recon.clear();
   }
 
   clearHostiles() {
@@ -276,6 +304,7 @@ export class FX {
     this.clock += dt;
     this.drone.update(dt, this.clock);
     this.combat.update(dt);
+    this.recon.update(dt, this.clock);
 
     for (let i = this.active.length - 1; i >= 0; i--) {
       const p = this.active[i];

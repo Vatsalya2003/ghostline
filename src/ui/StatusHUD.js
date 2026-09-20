@@ -20,6 +20,8 @@ export class StatusHUD {
     this.objectiveEl = document.getElementById('objective');
     this.objectiveEl.textContent = mission.objective;
     this.selected = null;
+    this.lastStatuses = { ALPHA: 'healthy', 'BETA-1': 'healthy', 'BETA-2': 'healthy' };
+    this.lastAmmo = null;
     this.lead = mission.lead || null;
   }
 
@@ -79,19 +81,45 @@ export class StatusHUD {
     this.fill.classList.toggle('warn', health <= 60 && health > 30);
     this.fill.classList.toggle('crit', health <= 30);
     this.value.textContent = `${health}%`;
+    this.renderSquad();
   }
 
-  setStatuses(statuses) {
+  // Per-unit condition, derived honestly and cheaply: the squad carries one
+  // integrity number, and a unit's own status scales its share of it. A
+  // DAMAGED unit is not at the squad average and should not be drawn there.
+  static UNIT_FACTOR = { healthy: 1, glitch: 0.78, damaged: 0.42 };
+
+  setStatuses(statuses, ammo) {
+    if (statuses) this.lastStatuses = statuses;
+    if (ammo) this.lastAmmo = ammo;
+    this.renderSquad();
+  }
+
+  renderSquad() {
+    const statuses = this.lastStatuses;
+    if (!statuses || !this.squad) return;
     this.squad.innerHTML = '';
     for (const [id, status] of Object.entries(statuses)) {
-      const chip = document.createElement('div');
-      chip.className = `unit-chip ${status}`
+      const row = document.createElement('div');
+      row.className = `unit-row ${status}`
         + (id === this.selected ? ' selected' : '')
         + (id === this.lead ? ' lead' : '');
-      chip.dataset.unit = id;
-      chip.innerHTML = `<span class="badge">${UNIT_BADGE[id] || '?'}</span>${id}` +
-        `<span class="state">${STATE_LABEL[status]}</span>`;
-      this.squad.appendChild(chip);
+      row.dataset.unit = id;
+      const hp = Math.round(this.lastHealth * (StatusHUD.UNIT_FACTOR[status] ?? 1));
+      // No per-unit magazine in the mission data, so this is the squad's
+      // shared ammunition pool — real, and it goes down when they shoot.
+      const rounds = this.lastAmmo?.[id];
+      const ammoText = rounds == null ? '——' : String(rounds).padStart(2, '0');
+      row.innerHTML =
+        `<div class="unit-face"><span class="eye"></span>` +
+        `<span class="badge">${UNIT_BADGE[id] || '?'}</span></div>` +
+        `<div class="unit-meta">` +
+          `<div class="unit-name">${id}<span class="unit-state">${STATE_LABEL[status]}</span></div>` +
+          `<div class="unit-bar"><div class="unit-fill" style="width:${hp}%"></div></div>` +
+          `<div class="unit-ammo"><span class="lbl">AMMO</span>` +
+            `<span class="val${rounds === 0 ? ' dry' : ''}">${ammoText}</span></div>` +
+        `</div>`;
+      this.squad.appendChild(row);
     }
   }
 

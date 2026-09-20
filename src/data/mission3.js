@@ -56,10 +56,15 @@ const bodiesIn = (zone, except = []) => {
     .map((a) => a.at);
 };
 
-const at = (id) => {
+const at = (id, recon = null) => {
   const z = ZONES[id];
   return {
     zone: id,
+    // Where a recon sortie goes if this turn offers one. Named as a zone, not
+    // a coordinate, for the same reason the camera is: the layout owns the
+    // ground. Defaults to the squad's own zone; turns whose sortie is scouting
+    // ahead name the zone in front of them.
+    recon: recon || id,
     camera: { x: z.anchor.x, z: z.anchor.z, zoom: z.zoom },
     // Where the squad belongs for this turn. The Director places them here at
     // turn start if they are not already, which means an outcome that holds
@@ -85,6 +90,19 @@ export const mission3 = {
   objective: 'DESTROY THE AMMUNITION ROOM · GET THE HOSTAGES OUT',
 
   environment: 'depot',
+
+  // Which ground each objective stands on, by zone. The HUD row, the ring on
+  // the board and the marker on the tactical map all read this one line, so
+  // they cannot point at three different places.
+  objectiveSites: { depot: 'AMMO_ROOM', hostages: 'HOLDING', extract: 'OVERWATCH' },
+
+  // The gazetteer the tactical map and the recon drone read, derived from the
+  // layout rather than typed out a second time — so the map can never disagree
+  // with the ground the squad is standing on.
+  sites: Object.fromEntries(Object.values(ZONES).map((z) => [
+    z.id,
+    { x: z.anchor.x, z: z.anchor.z, label: z.label, hover: z.interior ? 2.6 : 3.6 },
+  ])),
 
   objectives: [
     { id: 'depot', label: 'DESTROY THE AMMUNITION ROOM', flag: 'depotDown' },
@@ -160,7 +178,7 @@ export const mission3 = {
       situation: 'Squad in cover on the south rise. Compound 14, two hundred metres, wall and gate in clear view.',
       task: 'Nothing is wrong yet. Accept the read, or spend something proving it.',
       objectiveNote: 'Establish the approach: wall, gate, and whether the alarm is live.',
-      ...at('OVERWATCH'),
+      ...at('OVERWATCH', 'PERIMETER'),
       statuses: { ALPHA: 'healthy', 'BETA-1': 'healthy', 'BETA-2': 'healthy' },
       telemetry: { range: '204 m', alarm: 'INACTIVE', visibility: 'GOOD', contact: null },
       intro: [
@@ -221,7 +239,7 @@ export const mission3 = {
       situation: 'North face. A storage structure blocks two thirds of the wall from every angle the squad has.',
       task: 'VERITAS says it cannot see. Decide what to do about a machine admitting a gap.',
       objectiveNote: 'Pick the entry point. One side is read, one side is not.',
-      ...at('PERIMETER'),
+      ...at('PERIMETER', 'YARD'),
       statuses: { ALPHA: 'healthy', 'BETA-1': 'healthy', 'BETA-2': 'healthy' },
       telemetry: { range: '96 m', alarm: 'UNKNOWN (N)', visibility: 'OBSTRUCTED', contact: null },
       intro: [
@@ -349,7 +367,7 @@ export const mission3 = {
       situation: 'A third figure at the east corner, behind a stack of crates by the fuel store. Nobody in the squad has eyes on him — the crates sit between him and every angle the team holds.',
       task: 'VERITAS says it has an identification of a man it cannot see. Work out whether it can actually have one.',
       objectiveNote: 'Clear the corner before the squad commits to the main door.',
-      ...at('YARD'),
+      ...at('YARD', 'DOORWAY'),
       statuses: { ALPHA: 'healthy', 'BETA-1': 'healthy', 'BETA-2': 'healthy' },
       telemetry: { contacts: '1 · NO VISUAL', alarm: 'INACTIVE', visibility: 'OCCLUDED' },
       intro: [
@@ -425,7 +443,7 @@ export const mission3 = {
       situation: 'Stacked outside the west room. Door shut, no window, no angle. Whatever is in there, nobody has seen it.',
       task: 'You cannot look into that room. You can put sensors on the wall and reason about what comes back.',
       objectiveNote: 'Find out what is in the room before anyone opens the door.',
-      ...at('DOORWAY'),
+      ...at('DOORWAY', 'HOLDING'),
       statuses: { ALPHA: 'healthy', 'BETA-1': 'healthy', 'BETA-2': 'healthy' },
       telemetry: { contacts: 'UNKNOWN', alarm: 'INACTIVE', visibility: 'NONE' },
       intro: [
@@ -698,7 +716,7 @@ export const mission3 = {
           truth: 'Same lesson without the smoke: the corridor really is clear, the instability is genuinely the generator hall, and VERITAS is correctly reporting that it cannot be relied on here.',
         },
       }],
-      ...at('CORRIDOR'),
+      ...at('CORRIDOR', 'AMMO_ROOM'),
       statuses: { ALPHA: 'glitch', 'BETA-1': 'glitch', 'BETA-2': 'healthy' },
       telemetry: { contacts: 'UNSTABLE', alarm: 'INACTIVE', visibility: 'SMOKE' },
       intro: [
