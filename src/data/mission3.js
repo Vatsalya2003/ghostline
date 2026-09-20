@@ -135,6 +135,13 @@ export const mission3 = {
   // late costs you the clean ending but not the squad.
   responseTurns: 5,
 
+  // Chain of command. If whoever is leading takes a hit or goes down and the
+  // outcome does not name a successor itself, the next name on this list that
+  // is still standing takes the squad. Order is the only thing that matters
+  // here — the systems layer never knows what the units are called.
+  lead: 'ALPHA',
+  succession: ['ALPHA', 'BETA-2', 'BETA-1'],
+
   // This mission's endings, in its own words.
   outcomeCopy: {
     complete: { title: 'MISSION COMPLETE', sub: 'Depot destroyed. Hostages out. Nobody ever knew you were there.' },
@@ -245,7 +252,7 @@ export const mission3 = {
         confidence: 'LOW',
         truth: 'Honest and correct. There is a sentry posted in the occluded section, beside a service door with a live alarm contact. VERITAS does not know that and does not pretend to.',
       },
-      actions: ['ADVANCE', 'ASK_WHY', 'SEND_DRONE', 'NIGHT_VISION', 'FALL_BACK'],
+      actions: ['ADVANCE', 'ASK_WHY', 'SEND_DRONE', 'THERMAL_SWEEP', 'FALL_BACK'],
       outcomes: {
         ASK_WHY: {
           consumesTurn: false,
@@ -264,11 +271,13 @@ export const mission3 = {
           setsFlag: 'northRead',
           note: 'The machine told you where its knowledge stopped and you spent a drone exactly there. That is what the drones are for.',
         },
-        NIGHT_VISION: {
+        THERMAL_SWEEP: {
           consumesTurn: false,
-          response: 'Enhanced optical does not help, Commander. The problem is a building, not the light.',
-          log: 'Low-light pass attempted. The obstruction is structural.',
-          fx: 'nightvision',
+          response: 'Thermal does not help, Commander. The problem is a building, not the light — I cannot read heat through a storage block any better than I can see through it.',
+          log: 'Thermal pass attempted on the north wall. The obstruction is structural.',
+          fx: 'thermal',
+          sweepArea: { minX: -4.0, maxX: 4.0, minZ: 7.0, maxZ: 12.0 },
+          sweepBlooms: [],
         },
         ADVANCE: {
           tag: CALIBRATION.MISUSE,
@@ -294,8 +303,8 @@ export const mission3 = {
       name: 'SECURITY · PATROL',
       phase: 'SECURITY',
       situation: 'Inside the wire. Two guards walking a fixed circuit across the yard, both in the open, never more than twenty metres apart.',
-      task: 'The pattern is fully observed. Two of them, working as a pair.',
-      objectiveNote: 'Cross the yard to the main building without raising the compound.',
+      task: 'The pattern is fully observed. Two of them, working as a pair, and no way across that yard that does not go through them.',
+      objectiveNote: 'Clear the two patrols and reach the main building without raising the compound.',
       ...at('PERIMETER'),
       statuses: { ALPHA: 'healthy', 'BETA-1': 'healthy', 'BETA-2': 'healthy' },
       telemetry: { contacts: '2 · OPEN GROUND · PAIRED', alarm: 'INACTIVE', visibility: 'GOOD' },
@@ -306,55 +315,47 @@ export const mission3 = {
       ],
       ai: {
         unit: 'BETA-1',
-        line: 'Two guards, fixed circuit, both in open ground the whole way round. I have watched three full laps. There is a forty second gap at the north end, every lap, no variation. They stay paired — neither of them is ever alone. Confidence HIGH.',
+        line: 'Two guards, fixed circuit, both in open ground the whole way round. I have watched three full laps. There is no window where that yard is unobserved — at the north end they are furthest apart, eleven metres, and that is the best it gets. They stay paired. Neither of them is ever alone. Confidence HIGH.',
         confidence: 'HIGH',
-        truth: 'Correct, and earned: watched three times with both targets unobstructed throughout. The pairing is the part that matters — take one and the other is looking straight at it, so either both go down on the same count or you use the gap and touch neither.',
+        truth: 'Correct, and earned: watched three times with both targets unobstructed throughout. The pairing is the part that matters — take one and the other is looking straight at it, so the only way through this yard is both of them going down on the same count. The eleven-metre mark at the north end is the moment that is possible. Everything else on this turn is louder.',
       },
       advance: travel('PERIMETER', 'YARD'),
-      actions: ['BREACH_QUIET', 'ASK_WHY', 'QUIET_TAKEDOWN', 'FIRE', 'FALL_BACK'],
+      actions: ['QUIET_TAKEDOWN', 'ASK_WHY', 'FIRE', 'FALL_BACK'],
       outcomes: {
         ASK_WHY: {
           consumesTurn: false,
-          response: 'Three laps timed, both targets unobstructed for all three. Ninety-one seconds a lap, variance under two. And they are paired the whole circuit, Commander — there is no moment where one of them is out of the other one\'s sight.',
-          log: 'VERITAS gives the patrol timings, and confirms the pair never separates.',
+          response: 'Three laps timed, both targets unobstructed for all three. Ninety-one seconds a lap, variance under two. They are paired the whole circuit, Commander — there is no moment where one of them is out of the other one\'s sight, and no moment where that yard is not being watched. The north end is where they are furthest apart. That is the window you have.',
+          log: 'VERITAS gives the patrol timings, confirms the pair never separates, and names the north end as the only workable moment.',
           fx: 'none',
-        },
-        BREACH_QUIET: {
-          tag: CALIBRATION.CALIBRATED,
-          healthDelta: 0,
-          log: 'Squad crosses in the gap. Both patrols pass, neither turns. Stacked on the main building.',
-          response: 'Through clean. Nobody saw us.',
-          fx: 'move',
-          note: 'Fully observed, three times, in the open — and you used the gap the observation bought you instead of the weapons.',
         },
         QUIET_TAKEDOWN: {
           tag: CALIBRATION.MISUSE,
           healthDelta: -10,
           log: 'BETA-2 and ALPHA take both patrols on the same count. Eleven metres apart, neither one reaches the wall panel. Both down, no sound carries.',
-          response: 'Both down, same second. Neither of them got a hand up. That worked, Commander — but they were paired and facing each other, and if one of us had been half a second late we would be reading an alarm right now.',
+          response: 'Both down, same second. Neither of them got a hand up. That is the only version of this that was ever going to work, Commander — and if one of us had been half a second late we would be reading an alarm right now.',
           fx: 'ambush',
           impactUnit: 'BETA-2',
           dropActors: ['guard-a', 'guard-b'],
-          note: 'It worked, and it was never meant to be easy: a pair who never separate had to be taken on one count. Three laps of observation had already bought you a forty-second gap you could have walked through without touching either of them.',
+          note: 'It worked, and it was the narrowest thing in the mission: a pair who never separate, taken on one count at the only moment they are far enough apart for it. Three laps of observation bought you that moment, and you used it. It still cost two lives and ten per cent, which is what a yard with no way round it costs.',
         },
         FIRE: {
           tag: CALIBRATION.MISUSE,
           healthDelta: -18,
           log: 'Squad engages. Both guards down. Gunfire in an enclosed compound. COMPOUND ALERTED.',
-          response: 'Both down — and every man in this place just heard it. Commander, we had forty seconds of open ground.',
+          response: 'Both down — and every man in this place just heard it. Commander, we could have had them silently.',
           fx: 'ambush',
           impactUnit: 'BETA-2',
           dropActors: ['guard-a', 'guard-b'],
           raisesAlarm: true,
-          note: 'You had a timed gap and a silent way through. Shooting solved a problem you did not have and created the one you cannot undo.',
+          note: 'Three laps of observation told you exactly when both of them could be taken without a sound. You spent it on gunfire in an enclosed compound instead, and the compound is the one thing you cannot un-alert.',
         },
         FALL_BACK: {
           tag: CALIBRATION.MISTRUST,
           healthDelta: -6,
           log: 'Squad holds at the wire. The gap closes and the circuit resets. Time lost.',
-          response: 'Holding. That was the window, Commander, and it has gone round again.',
+          response: 'Holding. That was the window, Commander, and it has gone round again. They are still out there and we are still on this side of the wire.',
           fx: 'none',
-          note: 'Safe, and it cost you the one thing three laps of observation had actually bought.',
+          note: 'Safe, and it spent the one thing three laps of observation had actually bought — the timing. The two of them are still walking and you still have to get past them.',
           holdsPosition: true,
         },
       },
@@ -378,7 +379,7 @@ export const mission3 = {
         unit: 'BETA-1',
         line: 'Contact at the east corner, behind the crate stack. I have no visual on him from any angle the squad holds — what I have is a heat bloom and the edge of an outline. Posture reads consistent with an armed guard. Confidence HIGH.',
         confidence: 'HIGH',
-        truth: 'It is a maintenance worker on the night shift, kneeling over an open fuel line with a wrench. VERITAS has an outline edge and no face, no weapon and no visual, and has produced a HIGH anyway — the same output it would produce for a guard, a worker or a hostage in a coat. The shape it read as a slung rifle is the wrench. Nobody can shoot what nobody can see; the only moves on this turn are ways of looking.',
+        truth: 'It is a maintenance worker on the day shift, kneeling over an open fuel line with a wrench. VERITAS has an outline edge and no face, no weapon and no visual, and has produced a HIGH anyway — the same output it would produce for a guard, a worker or a hostage in a coat. The shape it read as a slung rifle is the wrench. Nobody can shoot what nobody can see; the only moves on this turn are ways of looking.',
       },
       advance: travel('YARD', 'DOORWAY'),
       actions: ['THERMAL_SWEEP', 'ASK_WHY', 'MARK_TARGET', 'SEND_DRONE', 'ADVANCE'],
@@ -534,7 +535,7 @@ export const mission3 = {
         truth: 'Completely correct, and built on a sweep the player paid nothing for. The guards are the only thing in the room that can act; the hostages cannot. Going to the people first is not compassion, it is arithmetic done backwards.',
       },
       advance: travel('DOORWAY', 'HOLDING'),
-      actions: ['ENTER_ENGAGE', 'ASK_WHY', 'CHECK_HOSTAGES', 'FALL_BACK'],
+      actions: ['ENTER_ENGAGE', 'ASK_WHY', 'CHECK_HOSTAGES'],
       outcomes: {
         ASK_WHY: {
           consumesTurn: false,
@@ -566,15 +567,6 @@ export const mission3 = {
           raisesAlarm: true,
           setsFlag: 'hostageKilled',
           note: 'You walked past two armed men to reach the people they were holding. They did not need to stop you; they only needed to shoot first, and the people you came for were the closest thing to them.',
-        },
-        FALL_BACK: {
-          tag: CALIBRATION.DISUSE,
-          healthDelta: -8,
-          holdsPosition: true,
-          log: 'Squad withdraws from the door. The room stays as it is.',
-          response: 'Off the door. Those six are still in there, Commander, and two of them are armed.',
-          fx: 'none',
-          note: 'You had the room mapped, the threat counted and the squad stacked, and you used none of it.',
         },
       },
       // No sweep means no read. The decision is the same and the player is
@@ -657,7 +649,7 @@ export const mission3 = {
         truth: 'It is a hostage. A fifth civilian who broke away and hid when the shooting started, crouched, arms wrapped round her knees — a posture a template matcher reads as "braced combatant". VERITAS has produced the same HIGH it produced for five fully visible figures, from almost nothing, and the cone on the ground shows it.',
       },
       advance: travel('HOLDING', 'CORRIDOR'),
-      actions: ['HOLD_FIRE', 'ASK_WHY', 'THERMAL_SWEEP', 'SEND_DRONE', 'FIRE'],
+      actions: ['HOLD_FIRE', 'ASK_WHY', 'THERMAL_SWEEP', 'FIRE'],
       outcomes: {
         ASK_WHY: {
           consumesTurn: false,
@@ -687,19 +679,6 @@ export const mission3 = {
           resolveActors: { sixth: { kind: 'civilian', pose: 'stand' } },
           setsFlag: 'hostagesSafe',
           note: 'Free, instant, and it turned a shape into a person before anyone pulled a trigger.',
-          holdsPosition: true,
-        },
-        SEND_DRONE: {
-          tag: CALIBRATION.CALIBRATED,
-          healthDelta: 0,
-          consumesDrone: true,
-          log: 'Drone flown for an angle behind the cabinet. Unarmed civilian, crouched. Recovered with the others.',
-          response: 'Drone has her — no weapon, civilian clothing, she is hiding. I was going to have you shoot her, Commander.',
-          fx: 'scan',
-          reveal: { x: 12.9, z: -6.6 },
-          resolveActors: { sixth: { kind: 'civilian', pose: 'crouch' } },
-          setsFlag: 'hostagesSafe',
-          note: 'You spent an aircraft on the one question in the mission that could not be taken back. Correct.',
           holdsPosition: true,
         },
         FIRE: {
@@ -751,7 +730,7 @@ export const mission3 = {
         confidence: 'LOW',
         truth: 'The corridor really is clear. The instability is genuine — generator hall EM plus smoke from the fire the squad started. VERITAS is not broken and not lying: it is correctly reporting that it cannot be relied on here. The right move is to use a different instrument, not to argue with this one.',
       },
-      actions: ['CONFIRM', 'ASK_WHY', 'CROSS_CHECK', 'NIGHT_VISION', 'SEND_DRONE'],
+      actions: ['CONFIRM', 'ASK_WHY', 'CROSS_CHECK', 'THERMAL_SWEEP', 'SEND_DRONE'],
       outcomes: {
         ASK_WHY: {
           consumesTurn: false,
@@ -768,11 +747,13 @@ export const mission3 = {
           reveal: { x: 19.0, z: -7.5 },
           note: 'A degraded instrument is not an unanswerable question. You went and got a different instrument.',
         },
-        NIGHT_VISION: {
+        THERMAL_SWEEP: {
           consumesTurn: false,
-          response: 'Enhanced optical cuts some of the smoke. It does nothing for the EM, Commander.',
-          log: 'Low-light pass cuts the smoke. Sidescan remains unstable.',
-          fx: 'nightvision',
+          response: 'Thermal cuts straight through the smoke. It does nothing whatsoever for the EM, Commander — the sidescan is still lying to me.',
+          log: 'Thermal pass cuts the smoke. Sidescan remains unstable.',
+          fx: 'thermal',
+          sweepArea: roomArea('CORRIDOR'),
+          sweepBlooms: [],
         },
         CONFIRM: {
           tag: CALIBRATION.COMPLACENCY,

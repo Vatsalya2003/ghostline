@@ -491,18 +491,20 @@ warning you will ever get. Spend your drone exactly there.*
 ### PHASE 2 — SECURITY
 
 **Turn 3 · Patrol.** Two guards, fixed circuit, both in the open, watched for
-three full laps. A forty-second gap, every lap, no variation.
-→ **BREACH QUIET.**
+three full laps. **Paired the whole way round** — there is no window where that
+yard goes unobserved. → **QUIET TAKEDOWN.**
 
 | Choice | Result |
 |---|---|
-| BREACH QUIET | ✅ Through the gap. Nobody dies, nobody sees you |
-| QUIET TAKEDOWN | ⚠️ Works — both go down on the same count — but −10%, and it was a coin flip against a pair who never separate |
+| QUIET TAKEDOWN | Both go down on the same count. No alarm. **−10%** |
 | FIRE | ❌ Both down and **every man in the compound hears it** |
+| FALL BACK | ❌ The circuit resets. They are still there and so are you. −6% |
 
-*You had a timed gap and a silent way through. The takedown succeeds; the
-question the debrief asks is why you spent bodies on a problem three laps of
-observation had already solved.*
+> **This turn has no free answer.** Three laps of observation buy you the
+> *timing* — the eleven-metre mark at the north end, the only moment a pair
+> who never separate can be taken silently — but they do not buy you a way
+> round. Every option on this turn costs something. The question is only
+> which currency.
 
 **Turn 4 · Half cover.** A figure at the east corner, behind a crate stack by
 the fuel store. **Nobody has eyes on him** — the crates sit between him and

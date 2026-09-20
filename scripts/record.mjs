@@ -20,7 +20,7 @@ const dir = '/tmp/claude-1000/-home-nikhil-tech-jam-hackathon/4a87a044-f9ac-4266
 const FPS = Number(process.env.FPS || 14);
 
 // A full mission that meets all three objectives.
-const PLAN = ['CONFIRM', 'SEND_DRONE', 'BREACH_QUIET', 'THERMAL_SWEEP', 'THERMAL_SWEEP',
+const PLAN = ['CONFIRM', 'SEND_DRONE', 'QUIET_TAKEDOWN', 'THERMAL_SWEEP', 'THERMAL_SWEEP',
               'ENTER_ENGAGE', 'HOLD_FIRE', 'CROSS_CHECK', 'EVAC_HOSTAGES', 'SHORT_FUSE', 'CONFIRM'];
 
 rmSync(dir, { recursive: true, force: true });

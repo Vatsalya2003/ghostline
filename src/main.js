@@ -208,12 +208,27 @@ events.on(GAME_EVENT.ALARM_RAISED, ({ responseIn }) => {
   actors?.onAlarm();
 });
 
+// Command changing hands. Loud and immediate: a banner centre screen for
+// three seconds, because the next voice the player hears belongs to a
+// different robot and finding that out from a name in the comms panel is too
+// quiet a way to learn it.
+let handoverTimer = null;
 events.on(GAME_EVENT.LEAD_CHANGED, ({ from, to, reason }) => {
   ui.log.push(`COMMAND HANDOVER — ${from} → ${to}${reason ? ` · ${reason}` : ''}`);
   ui.hud.setLead?.(to);
   markers?.flare?.(to);
   director.focusUnit?.(to);
   audio.alert?.();
+
+  const box = document.getElementById('handover');
+  if (box) {
+    document.getElementById('handover-why').textContent =
+      reason || `${from} can no longer command.`;
+    document.getElementById('handover-to').textContent = `${to} HAS THE SQUAD`;
+    box.classList.remove('hidden');
+    clearTimeout(handoverTimer);
+    handoverTimer = setTimeout(() => box.classList.add('hidden'), 3000);
+  }
 });
 
 events.on(GAME_EVENT.RESPONSE_TICK, ({ responseIn }) => {

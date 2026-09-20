@@ -57,6 +57,24 @@ export class GameState {
     // and then whoever the mission promotes. Held as state rather than
     // hardcoded so renaming the squad is a change in one data file.
     this.lead = this.mission.lead || 'ALPHA';
+
+    // Units that can no longer be handed the squad: destroyed, or relieved
+    // because something happened to them. Command never walks backwards into
+    // one of these — handing the squad back to the robot whose camera was
+    // shot out two turns ago is worse than not handing it over at all.
+    this.unfit = new Set();
+  }
+
+  // Who takes over when the current lead can no longer command. Walks the
+  // mission's chain of command and returns the first name still standing.
+  // Returns null if there is nobody left, which is not a handover — it is a
+  // different ending, and the caller decides that.
+  nextInCommand() {
+    const chain = this.mission.succession || [];
+    for (const id of chain) {
+      if (id !== this.lead && !this.unfit.has(id)) return id;
+    }
+    return null;
   }
 
   // Spotted. Everything after this is a reaction rather than a decision,
@@ -75,6 +93,10 @@ export class GameState {
   promote(unitId) {
     if (!unitId || unitId === this.lead) return null;
     const previous = this.lead;
+    // Whoever is being replaced is out of the chain for good. Without this,
+    // succession walks back up the list and returns the squad to a unit that
+    // was relieved for cause.
+    this.unfit.add(previous);
     this.lead = unitId;
     return previous;
   }

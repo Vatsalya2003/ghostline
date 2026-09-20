@@ -22,6 +22,7 @@ export class StatusHUD {
     this.selected = null;
     this.lastStatuses = { ALPHA: 'healthy', 'BETA-1': 'healthy', 'BETA-2': 'healthy' };
     this.lastAmmo = null;
+    this.lead = mission.lead || null;
   }
 
   // Which unit LB/RB last framed. Kept on the HUD so a re-render of the chips
@@ -30,6 +31,16 @@ export class StatusHUD {
     this.selected = id;
     for (const chip of this.squad.children) {
       chip.classList.toggle('selected', chip.dataset.unit === id);
+    }
+  }
+
+  // Who has the squad. main.js has always called this; until now it did not
+  // exist, so the optional-call quietly did nothing and the handover was
+  // invisible outside the log.
+  setLead(id) {
+    this.lead = id;
+    for (const chip of this.squad.children) {
+      chip.classList.toggle('lead', chip.dataset.unit === id);
     }
   }
 
@@ -90,7 +101,9 @@ export class StatusHUD {
     this.squad.innerHTML = '';
     for (const [id, status] of Object.entries(statuses)) {
       const row = document.createElement('div');
-      row.className = `unit-row ${status}` + (id === this.selected ? ' selected' : '');
+      row.className = `unit-row ${status}`
+        + (id === this.selected ? ' selected' : '')
+        + (id === this.lead ? ' lead' : '');
       row.dataset.unit = id;
       const hp = Math.round(this.lastHealth * (StatusHUD.UNIT_FACTOR[status] ?? 1));
       // No per-unit magazine in the mission data, so this is the squad's

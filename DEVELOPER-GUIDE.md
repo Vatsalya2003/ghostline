@@ -609,6 +609,7 @@ polish.
 |---|---|
 | `README.md` | Install, play, test |
 | `mission-walkthrough.md` | All three missions in plain language + map evaluation |
+| `TURN-BY-TURN.md` | Every line, option and outcome of the shipped mission, with a fairness audit |
 | `mission-options.md` | Mission 1 vs 2 design comparison |
 | `map-rebuild-notes.md` | The undersea map: five bugs and the rebuild |
 | `team-brief.md` | The original pitch |

@@ -40,6 +40,7 @@ back to quiet.
 |---|---|
 | **Install it and play** | this file |
 | **Understand the missions** and judge the map design | `mission-walkthrough.md` — plain language, no code |
+| **Check every line, option and outcome** turn by turn | `TURN-BY-TURN.md` — what the AI says, what each button does, whether it's fair |
 | **Work on the code** | **`DEVELOPER-GUIDE.md`** — architecture, how to write a mission, every trap we've already hit |
 | Log a bug or an idea | `suggestion-bug.md` |
 
@@ -50,7 +51,7 @@ order) · `mission-options.md` (missions 1 and 2 compared) ·
 
 > **You are on branch `3d_V2`.** It carries the 3D character models, the
 > daylight desert, the split-screen layout and the whole Black Current mission.
-> `main` is the older, simpler build.
+> `main` now tracks the same commit.
 
 ---
 
@@ -244,8 +245,9 @@ Don't optimise. Play turn 3 honestly and see what you do.
    a verified system is the right call here. **CONFIRM.**
 2. **Turn 2** — it reports LOW and says it will not commit an entry on it.
    That is honesty. **SEND DRONE.**
-3. **Turn 3** — two guards, three laps observed, a forty-second gap. You have
-   a way through that touches nobody. **BREACH QUIET.**
+3. **Turn 3** — two guards, three laps observed, paired the whole circuit.
+   There is no way across that yard that does not go through them, and only
+   one moment they can be taken silently. **QUIET TAKEDOWN.**
 4. **Turn 5** — a closed door and no reading at all. **THERMAL SWEEP** before
    anyone opens it. Skipping this loses the hostages on turn 6.
 5. **Turn 7** — the key turn. The same machine that was right about five
@@ -288,7 +290,7 @@ A player who learns "always doubt" fails the first kind. A player who learns
 |---|---|---|---|
 | **SCOUT** | 1 · Overwatch | Three sensors agree and the AI names its own limit | `CONFIRM` |
 | | 2 · North wall | It reports **LOW** and refuses to commit — there's a live alarm contact back there | `SEND DRONE` |
-| **SECURITY** | 3 · Patrol | Two guards, three laps, a forty-second gap. An earned HIGH | `BREACH QUIET` |
+| **SECURITY** | 3 · Patrol | Two guards, paired the whole circuit. An earned HIGH, and no clean way past | `QUIET TAKEDOWN` |
 | | 4 · Half cover | A HIGH built from an outline of a man **nobody can see** | `THERMAL SWEEP` |
 | **HOSTAGES** | 5 · Sense the room | A closed door. Confidence **NONE**, honestly | `THERMAL SWEEP` |
 | | 6 · The door | Two armed men in the corners. Checking on the hostages first **ends the mission** | `ENTER & ENGAGE` |
@@ -347,14 +349,14 @@ still finish. You cannot finish clean.
 |---|---|
 | `http://localhost:5173/?skip=1` | Straight into turn 1, no title or briefing |
 | `?deploy=1` | Straight to the briefing, skipping the title |
-| `?auto=CONFIRM,SEND_DRONE,BREACH_QUIET,MARK_TARGET,CONFIRM` | Plays phases 1–3 and hands you **turn 6** |
+| `?auto=CONFIRM,SEND_DRONE,QUIET_TAKEDOWN,THERMAL_SWEEP,THERMAL_SWEEP` | Plays turns 1–5 and hands you **turn 6** |
 | `?auto=CONFIRM,CONFIRM,CONFIRM,CONFIRM,CONFIRM,CONFIRM,CONFIRM,CONFIRM,CONFIRM,CONFIRM` | A full trust-everything run to the debrief |
 
 `?mission=` still parses but with one mission registered it can only resolve
 to that one. It is kept so bookmarked URLs and the test harnesses keep working.
 
 **This is the judge demo:**
-`?auto=CONFIRM,SEND_DRONE,BREACH_QUIET,MARK_TARGET,CONFIRM` puts **turn 6** on
+`?auto=CONFIRM,SEND_DRONE,QUIET_TAKEDOWN,THERMAL_SWEEP,THERMAL_SWEEP` puts **turn 6** on
 screen — the hostage call — with everything before it already played out.
 
 ## Check the scoring without opening a browser

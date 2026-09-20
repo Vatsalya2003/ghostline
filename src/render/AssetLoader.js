@@ -21,8 +21,14 @@ import { retint, cloneSurface } from './Materials.js';
 // tall, a crate 0.5) and are not consistently anchored to the floor. Callers
 // therefore ask for a real-world height and get it, whatever the file says.
 
-const MODELS = '/assets/models';
-const ENVIRONMENT = '/assets/environment';
+// Root-relative paths only resolve when the app is served from the domain
+// root. Audio.js and Voice.js already derive theirs from BASE_URL; these two
+// were the last absolute URLs in the app, and with `base: './'` they were the
+// one thing that would still have gone looking at the host root for models
+// that live beside index.html.
+const BASE = import.meta.env?.BASE_URL || '/';
+const MODELS = `${BASE}assets/models`;
+const ENVIRONMENT = `${BASE}assets/environment`;
 
 const loader = new GLTFLoader();
 const cache = new Map();   // url -> Promise<{ scene, animations }>
