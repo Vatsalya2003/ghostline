@@ -288,6 +288,7 @@ function startMission() {
   fog.clear();
   fog.lift(1.6);
   occlusion?.reset();
+  director.resetCharge?.();
   actors?.reset();
   screenFX.reset();
   screenFX.deploySweep();

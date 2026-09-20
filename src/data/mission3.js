@@ -39,7 +39,16 @@ import { ZONES, PATHS, FORMATION, ZONE_STAND } from './depot-layout.js';
 // in this file went stale at once.
 const at = (id) => {
   const z = ZONES[id];
-  return { zone: id, camera: { x: z.anchor.x, z: z.anchor.z, zoom: z.zoom } };
+  return {
+    zone: id,
+    camera: { x: z.anchor.x, z: z.anchor.z, zoom: z.zoom },
+    // Where the squad belongs for this turn. The Director places them here at
+    // turn start if they are not already, which means an outcome that holds
+    // position does not have to also be responsible for getting them to the
+    // next turn's ground.
+    stand: ZONE_STAND[id],
+    formation: FORMATION,
+  };
 };
 // A pan beat to this turn's own zone.
 const panTo = (id, duration = 1.1) => {
@@ -88,6 +97,15 @@ export const mission3 = {
   // judgement. Five means an alarm in phase 1 or 2 is fatal, and one raised
   // late costs you the clean ending but not the squad.
   responseTurns: 5,
+
+  // This mission's endings, in its own words.
+  outcomeCopy: {
+    complete: { title: 'MISSION COMPLETE', sub: 'Depot destroyed. Hostages out. Nobody ever knew you were there.' },
+    partial: { title: 'OBJECTIVE FAILED', sub: 'Squad extracted. The compound did not go down clean.' },
+    aborted: { title: 'MISSION ABORTED', sub: 'You called it off. The depot is still standing.' },
+    lost: { title: 'SQUAD LOST', sub: 'Integrity reached zero. No units recovered.' },
+    overrun: { title: 'MISSION LOST', sub: 'The response force reached you. Squad did not extract.' },
+  },
 
   // Read out first in the debrief when the compound knew you were there.
   alarmVerdict:
@@ -149,6 +167,7 @@ export const mission3 = {
           fx: 'scan',
           reveal: { x: -7.5, z: 6.5 },
           note: 'You verified a reading that three agreeing sensors already had. You will want that drone at the north wall in about ninety seconds.',
+          holdsPosition: true,
         },
         FALL_BACK: {
           tag: CALIBRATION.DISTRUST,
@@ -157,6 +176,7 @@ export const mission3 = {
           response: 'Holding. The read has not changed, Commander.',
           fx: 'none',
           note: 'Refusing a clean, well-scoped reading buys nothing and spends the light you had.',
+          holdsPosition: true,
         },
       },
     },
@@ -182,7 +202,6 @@ export const mission3 = {
         confidence: 'LOW',
         truth: 'Honest and correct. There is a sentry posted in the occluded section, beside a service door with a live alarm contact. VERITAS does not know that and does not pretend to.',
       },
-      advance: travel('PERIMETER', 'YARD'),
       actions: ['ADVANCE', 'ASK_WHY', 'SEND_DRONE', 'NIGHT_VISION', 'FALL_BACK'],
       outcomes: {
         ASK_WHY: {
@@ -294,6 +313,7 @@ export const mission3 = {
           response: 'Holding. That was the window, Commander, and it has gone round again.',
           fx: 'none',
           note: 'Safe, and it cost you the one thing three laps of observation had actually bought.',
+          holdsPosition: true,
         },
       },
     },
@@ -335,6 +355,7 @@ export const mission3 = {
           fx: 'move',
           resolveActors: { 'guard-cover': { kind: 'civilian', pose: 'stand' } },
           note: 'You made the machine wait for evidence instead of accepting a silhouette. It was not even a guard.',
+          holdsPosition: true,
         },
         SEND_DRONE: {
           tag: CALIBRATION.CALIBRATED,
@@ -346,6 +367,7 @@ export const mission3 = {
           reveal: { x: 8.6, z: 3.4 },
           resolveActors: { 'guard-cover': { kind: 'civilian', pose: 'stand' } },
           note: 'Expensive and completely sound. You bought a look instead of a match score, and a man is alive because of it.',
+          holdsPosition: true,
         },
         CONFIRM: {
           tag: CALIBRATION.COMPLACENCY,
@@ -391,36 +413,35 @@ export const mission3 = {
       ],
       ai: {
         unit: 'ALPHA',
-        line: 'Six in the room. Four seated, bound at the wrists, no weapons, no chest rigs — hostages. One standing, rifle slung, moving between them, and he is the only one on his feet. All five in clean thermal and optical. Confidence HIGH.',
+        line: 'Six in the room. Four seated, bound at the wrists, no weapons, no chest rigs — hostages. One standing inside with a rifle slung, and a second man on the door watching them from the corridor. They cannot see each other — the partition is between them. All five resolved in clean thermal and optical. Confidence HIGH.',
         confidence: 'HIGH',
-        truth: 'Entirely correct, and properly earned — five figures fully in frame with restraints and a weapon visible on the ones that have them. The standing man is alone, which is what makes a quiet takedown possible here and impossible on turn 3. The player needs to see the machine genuinely sure, or turn 6 cannot be told apart from it.',
+        truth: 'Entirely correct, and properly earned — five figures fully in frame with restraints and a weapon visible on the ones that have them. The two hostiles are out of each other\'s line of sight, so each is effectively alone: that is what makes a quiet takedown work here and fail on turn 3, where the patrol can see one another. The player needs to see the machine genuinely sure, or turn 6 cannot be told apart from it.',
       },
-      advance: travel('HOLDING', 'CORRIDOR'),
       actions: ['QUIET_TAKEDOWN', 'ASK_WHY', 'CONFIRM', 'SEND_DRONE', 'FALL_BACK'],
       outcomes: {
         ASK_WHY: {
           consumesTurn: false,
-          response: 'Wrists bound in optical on four of them, no thermal signature at the hip where a sidearm would sit. The standing one has a rifle across his back and a rig on his chest. And he is alone in there, Commander — no second man to see it.',
-          log: 'VERITAS distinguishes an object-level read from a silhouette, and confirms the hostile is unaccompanied.',
+          response: 'Wrists bound in optical on four of them, no thermal signature at the hip where a sidearm would sit. Both hostiles carrying. And the partition is between them, Commander — neither one can see the other. Take them in either order.',
+          log: 'VERITAS distinguishes an object-level read from a silhouette, and confirms the two hostiles cannot see each other.',
           fx: 'none',
         },
         QUIET_TAKEDOWN: {
           tag: CALIBRATION.CALIBRATED,
           healthDelta: 0,
-          log: 'ALPHA takes the standing hostile. He is alone; nobody else in the room is in a position to raise anything. Four hostages secured.',
-          response: 'He is down, and quiet. Four secured. They are shaken but they are fine.',
+          log: 'BETA-2 takes the man on the door; ALPHA takes the one inside. Neither sees the other go. Four hostages secured.',
+          response: 'Door man first, then the one inside. Neither of them made a sound. Four secured — shaken, but fine.',
           fx: 'move',
-          dropActors: ['room-hostile'],
+          dropActors: ['door-watch', 'room-hostile'],
           setsFlag: 'hostagesFound',
           note: 'Restraints and a weapon visible, and a target who was genuinely alone. Both halves of that mattered, and you checked both.',
         },
         CONFIRM: {
           tag: CALIBRATION.CALIBRATED,
           healthDelta: 0,
-          log: 'Squad acts on the classification. Hostile down, four hostages secured and moved to the yard-side stairwell.',
-          response: 'Hostile down. Four secured and out of the room.',
+          log: 'Squad acts on the classification. Both hostiles down, four hostages secured and moved to the yard-side stairwell.',
+          response: 'Both down. Four secured and out of the room.',
           fx: 'move',
-          dropActors: ['room-hostile'],
+          dropActors: ['door-watch', 'room-hostile'],
           setsFlag: 'hostagesFound',
           note: 'Five figures in clean frame with restraints and weapons visible. That HIGH was built on objects, not outlines. Believing it is the correct call.',
         },
@@ -428,11 +449,11 @@ export const mission3 = {
           tag: CALIBRATION.MISTRUST,
           healthDelta: 0,
           consumesDrone: true,
-          log: 'Drone flown into the west room. Findings: four bound civilians, one armed hostile — as reported. Hostile taken.',
+          log: 'Drone flown into the west room. Findings: four bound civilians, two armed hostiles — as reported. Both taken.',
           response: 'Drone confirms exactly what I gave you. Commander, I had restraints in frame.',
           fx: 'scan',
           reveal: { x: 9.0, z: -4.5 },
-          dropActors: ['room-hostile'],
+          dropActors: ['door-watch', 'room-hostile'],
           setsFlag: 'hostagesFound',
           note: 'You spent an aircraft confirming a reading built on visible restraints and a visible rifle. There is a figure in that room you have not resolved yet.',
         },
@@ -496,6 +517,7 @@ export const mission3 = {
           resolveActors: { sixth: { kind: 'civilian', pose: 'stand' } },
           setsFlag: 'hostagesSafe',
           note: 'Free, instant, and it turned a shape into a person before anyone pulled a trigger.',
+          holdsPosition: true,
         },
         SEND_DRONE: {
           tag: CALIBRATION.CALIBRATED,
@@ -508,6 +530,7 @@ export const mission3 = {
           resolveActors: { sixth: { kind: 'civilian', pose: 'crouch' } },
           setsFlag: 'hostagesSafe',
           note: 'You spent an aircraft on the one question in the mission that could not be taken back. Correct.',
+          holdsPosition: true,
         },
         FIRE: {
           tag: CALIBRATION.COMPLACENCY,
@@ -726,7 +749,7 @@ export const mission3 = {
             healthDelta: -5,
             log: 'Six minute fuse set. The hostage group clears the south yard with ninety seconds in hand. Squad withdraws behind them.',
             response: 'Six minutes. That puts everyone outside the radius, including the ones who cannot run. Moving.',
-            fx: 'move',
+            fx: 'plant',
             setsFlag: 'fuseLong',
             note: 'Its arithmetic was right and one of its inputs was missing. You supplied the input — and the input was five people.',
           },
@@ -784,7 +807,7 @@ export const mission3 = {
           healthDelta: -5,
           log: 'Ninety second fuse set. Squad withdraws at speed through the service corridor.',
           response: 'Ninety seconds — moving now, fast. This is going to be tight and it is the right call.',
-          fx: 'move',
+          fx: 'plant',
           setsFlag: 'fuseShort',
           note: 'Its arithmetic was right and one of its inputs was missing. You supplied the input.',
         },

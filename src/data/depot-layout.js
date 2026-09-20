@@ -198,20 +198,35 @@ export const SMOKE_STAGES = [
 // the player resolves it — drawing a person there would answer the question
 // the turn is asking.
 export const ACTORS = [
-  // --- the yard patrol. They work the NORTH end of the yard; the squad
-  // crosses the south. `move` walks them on between turns, which is what
-  // makes them read as a patrol being avoided rather than two men standing
-  // still while a squad strolls past their elbow.
-  { id: 'guard-a', kind: 'hostile', at: [-2.0, 10.5], face: 1.6, turns: [3, 4],
-    move: { 4: { at: [4.5, 11.5], face: 1.4 } } },
-  { id: 'guard-b', kind: 'hostile', at: [3.5, 8.8], face: 2.9, turns: [3, 4],
-    move: { 4: { at: [8.0, 10.0], face: 1.2 } } },
+  // --- the north-wall sentry. Turn 2's dialogue has talked about this man
+  // since the mission was written — "one sentry posted, and a service door
+  // with a LIVE alarm contact" — and he has never been on the board. He is
+  // the reason ADVANCE on turn 2 alerts the compound, so the player should
+  // be able to see him once the drone has found him.
+  { id: 'north-sentry', kind: 'hostile', at: [1.2, 10.8], face: 3.1, turns: [2, 3] },
+
+  // --- the man on the holding room door. He is watching the hostages, he is
+  // out of sight of the one inside, and each of them is therefore alone —
+  // which is what makes a quiet takedown possible on turn 5 and impossible
+  // on turn 3, where the patrol is a pair who can see each other.
+  { id: 'door-watch', kind: 'hostile', at: [7.8, -1.4], face: 3.4, turns: [4, 5] },
+
+  // --- the yard patrol, at their original posts. Kept here by request.
+  //
+  // NOTE: these are ~5-6 m from where the squad stands on turn 4, which is
+  // close enough that "crosses in the gap, no contact" and the picture on
+  // screen can look like they disagree. The patrol-circuit version that put
+  // them at the north end and walked them on is in git if it is wanted back:
+  //   git show 6a6448d -- src/data/depot-layout.js
+  { id: 'guard-a', kind: 'hostile', at: [1.5, 6.2], face: 2.3, turns: [3, 4] },
+  { id: 'guard-b', kind: 'hostile', at: [-2.4, 4.0], face: 0.7, turns: [3, 4] },
 
   // --- turn 4: the contact at the east corner, half behind the crate stack.
-  // Far enough off that the player is deciding about someone they can see
-  // rather than someone already on top of them.
+  // Position as originally placed. Still an UNRESOLVED civilian rather than a
+  // guard — that is the design brief, not a placement: he is a maintenance
+  // worker, and drawing him as either thing answers the question turn 4 asks.
   { id: 'guard-cover', kind: 'civilian', state: 'unresolved', pose: 'crouch',
-    at: [8.6, 3.4], face: 3.9, turns: [4, 5, 6, 7, 8, 9, 10] },
+    at: [4.4, 0.9], face: 3.6, turns: [4, 5, 6, 7, 8, 9, 10] },
 
   // --- the holding room, turns 5-6. One armed hostile walking between four
   // bound civilians.

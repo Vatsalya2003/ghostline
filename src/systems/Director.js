@@ -194,8 +194,31 @@ export class Director {
     await wait(0.1);
   }
 
+  // Put the squad where this turn happens, if they are not already there.
+  // Silent and instant: the intro is cutting or panning the camera anyway,
+  // and this only ever fires after an outcome that legitimately held them
+  // somewhere else. Without it a turn could open with the squad a zone
+  // behind the camera.
+  placeForTurn(turn) {
+    if (!turn?.stand) return;
+    const [sx, sz] = turn.stand;
+    const lead = this.squad.all[0];
+    if (!lead) return;
+    if (Math.hypot(lead.position.x - sx, lead.position.z - sz) < 3) return;
+
+    // Facing the way the squad came in, so nobody opens a turn back-to-front.
+    const heading = Math.atan2(sx - lead.position.x, sz - lead.position.z);
+    for (const unit of this.squad.all) {
+      const off = turn.formation?.[unit.id] || { side: 0, back: 0 };
+      const fx = Math.sin(heading), fz = Math.cos(heading);
+      unit.placeAt(sx + off.side * -fz - off.back * fx,
+                   sz + off.side * fx - off.back * fz, heading);
+    }
+  }
+
   async enterTurn(turn) {
     this.busy = true;
+    this.placeForTurn(turn);
     this.ui.commandBar.setLocked(true);
     this.ui.commandBar.clear();
     this.ui.hud.setTurn(turn);
@@ -396,6 +419,58 @@ export class Director {
         panCamera(this.camera, (u.position.x + place.x) / 2, (u.position.z + place.z) / 2, 1.3);
         break;
       }
+      // Planting the charge. The squad has to visibly do it: walk to the
+      // stack, kneel, and leave something behind that is still there next
+      // turn and blinking. Before this, "charge is set" was a sentence with
+      // nothing under it.
+      case 'plant': {
+        const charge = this.level.charge;
+        const lamp = this.level.chargeLamp;
+        const stack = this.level.tower;
+        if (!charge || !stack) { audio.moveStep(); break; }
+
+        // The stack sits in a group parented at the origin, so its own
+        // position is already world — no need to drag THREE in here for a
+        // getWorldPosition call.
+        const world = stack.position;
+        const planter = this.unit('ALPHA') || this.squad.all[0];
+
+        // Close on the stack, kneel, plant.
+        panCamera(this.camera, world.x, world.z, 1.0);
+        zoomCamera(this.camera, 9.5, 1.0);
+        this.focusUnit(planter.id);
+        planter.faceTowards(world.x, world.z, 0.3);
+        await wait(0.45);
+
+        planter.throwOrdnance(1.1);       // the kneel-and-place animation
+        audio.moveStep();
+        await wait(0.55);
+
+        charge.visible = true;
+        charge.scale.setScalar(0.4);
+        gsap.to(charge.scale, { x: 1, y: 1, z: 1, duration: 0.45, ease: 'back.out(2.4)' });
+        this.fx.ring(world.x, world.z, { radius: 2.4, duration: 0.9 });
+        audio.relay();
+        await wait(0.5);
+
+        // Armed. The lamp is the thing the player watches for the rest of
+        // the mission, so it starts now and does not stop.
+        if (lamp) {
+          gsap.killTweensOf(lamp.material);
+          lamp.material.emissiveIntensity = 0;
+          gsap.to(lamp.material, {
+            emissiveIntensity: 3.2, duration: 0.42,
+            repeat: -1, yoyo: true, ease: 'power2.inOut',
+          });
+        }
+        gsap.to(this.level.beacon.material, {
+          emissiveIntensity: 5, duration: 0.35, yoyo: true, repeat: 5,
+        });
+        punchZoom(this.camera, -1.1);
+        this.lightKick(2.4, 0.4);
+        await wait(0.4);
+        break;
+      }
       case 'move': audio.moveStep(); break;
       case 'relay':
         audio.relay();
@@ -466,8 +541,15 @@ export class Director {
     // still has to walk to wherever the next turn happens. Putting this on
     // the outcome meant remembering it on all four of them, and forgetting
     // one left the squad standing in the yard for the rest of the mission.
+    // Turn-level traversal: whichever command the player picked, the squad
+    // still has to walk to wherever the next turn happens.
+    //
+    // Except when the outcome says they did not move. Sending a drone means
+    // an aircraft went instead of them; falling back means they held. Walking
+    // the squad forward on those makes a liar of the line the player just
+    // read. The next turn puts them where it needs them — see placeForTurn.
     const advance = resolution.turn?.advance;
-    if (advance?.waypoints && !outcome.endsMission) {
+    if (advance?.waypoints && !outcome.endsMission && !outcome.holdsPosition) {
       await this.travelSquad(advance.waypoints, advance.formation, { run: !!outcome.urgent });
     }
     await wait(0.25);
@@ -512,7 +594,16 @@ export class Director {
     setTimeout(() => { el.classList.remove('on'); el.style.filter = ''; }, 110);
   }
 
+  // Mission restart: the charge comes back off the stack.
+  resetCharge() {
+    const charge = this.level?.charge;
+    const lamp = this.level?.chargeLamp;
+    if (lamp) { gsap.killTweensOf(lamp.material); lamp.material.emissiveIntensity = 0; }
+    if (charge) { charge.visible = false; charge.scale.setScalar(1); }
+  }
+
   reset() {
+    this.resetCharge();
     this.hostilesShown = false;
     this.fx.clearHostiles();
     this.fx.resetDrone();

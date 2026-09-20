@@ -361,10 +361,10 @@ const PROPS = [
   ['container', -6.2, -1.2, { size: 2.6, rot: 0.05 }],
   // The east-corner crate stack. The turn-4 contact stands behind THIS, so
   // it has to be at his shoulder rather than somewhere else in the yard.
-  ['supply-crate', 7.6, 4.2, { height: 1.2, rot: 0.15 }],
-  ['supply-crate', 8.8, 4.6, { height: 1.0, rot: 0.5 }],
-  ['supply-crate', 7.9, 5.4, { height: 0.9, rot: 0.3 }],
-  ['barrel', 6.6, 3.6, { height: 0.95, rot: 0.4 }],
+  ['supply-crate', 3.6, 1.7, { height: 1.2, rot: 0.15 }],
+  ['supply-crate', 4.9, 1.9, { height: 1.0, rot: 0.5 }],
+  ['supply-crate', 3.9, 2.7, { height: 0.9, rot: 0.3 }],
+  ['barrel', 5.4, 0.4, { height: 0.95, rot: 0.4 }],
   ['barrel', 2.6, 6.6, { height: 0.95, rot: 0.9 }],
   ['drum', -2.0, 3.6, { height: 1.0, rot: 0.2 }],
   ['sign-hazard', 4.2, 7.2, { size: 1.1, rot: 0.4 }],
@@ -494,6 +494,51 @@ export function createDepotLevel(scene) {
   chargePanel.name = 'charge-panel';
   stack.add(chargePanel);
 
+  // THE DEMOLITION CHARGE. Hidden until the squad actually plants it on turn
+  // 9 — before that the mission has only ever said the word "charge", and a
+  // player watching the board had no way to tell the difference between a
+  // charge being set and a number changing in a log line.
+  const charge = new THREE.Group();
+  charge.name = 'demolition-charge';
+  charge.visible = false;
+
+  const satchelMat = new THREE.MeshStandardMaterial({
+    color: 0x2b2f28, roughness: 0.85, metalness: 0.1, flatShading: true,
+  });
+  const tapeMat = new THREE.MeshStandardMaterial({
+    color: 0xc7a23a, roughness: 0.9, flatShading: true,
+  });
+
+  // Satchel, strapped flat against the stack.
+  charge.add(box(1.25, 0.55, 0.42, satchelMat, 0, 0, 0));
+  charge.add(box(1.32, 0.10, 0.45, tapeMat, 0, 0.16, 0));
+  charge.add(box(1.32, 0.10, 0.45, tapeMat, 0, -0.16, 0));
+
+  // Detonator block and its arming light.
+  charge.add(box(0.34, 0.26, 0.20, MAT.dark, 0.42, 0.30, 0.20));
+  const lamp = new THREE.Mesh(
+    new THREE.SphereGeometry(0.075, 10, 8),
+    new THREE.MeshStandardMaterial({
+      color: 0xff6b60, emissive: 0xe0524c, emissiveIntensity: 0,
+    })
+  );
+  lamp.position.set(0.42, 0.46, 0.22);
+  lamp.name = 'charge-lamp';
+  charge.add(lamp);
+
+  // Det cord running down into the stack — the detail that makes it read as
+  // placed by hand rather than dropped in.
+  for (let i = 0; i < 5; i++) {
+    const seg = box(0.05, 0.05, 0.22, tapeMat,
+                    -0.2 - i * 0.14, -0.30 - i * 0.07, 0.18 + i * 0.03);
+    seg.rotation.z = 0.5 + i * 0.08;
+    charge.add(seg);
+  }
+
+  charge.position.set(-1.1, 1.55, 0.72);
+  charge.rotation.y = 0.18;
+  stack.add(charge);
+
   const fire = hazard(group);
   placeProps(group, PROPS);
 
@@ -506,6 +551,8 @@ export function createDepotLevel(scene) {
     door: holdingDoor,
     tower: stack,
     beacon,
+    charge,
+    chargeLamp: lamp,
     generator: genUnit,
     relayConsole: chargePanel,
     fire,

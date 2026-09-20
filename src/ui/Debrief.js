@@ -4,11 +4,19 @@ import { audio } from '../systems/Audio.js';
 
 // Two scores, reported separately and deliberately allowed to disagree:
 // you can bring the squad home and still be told your judgement was poor.
+// Defaults, deliberately mission-agnostic. A mission overrides any of these
+// with its own `outcomeCopy` — the old table said "Relay restored" for every
+// ending of every mission, which is mission 1's sentence being read out over
+// a compound that has no relay in it.
 const OUTCOME_COPY = {
-  complete: { title: 'MISSION COMPLETE', sub: 'Relay restored. Squad extracted.', cls: 'outcome-complete' },
-  partial: { title: 'OBJECTIVE FAILED', sub: 'Squad extracted. The relay never came up.', cls: 'outcome-partial' },
+  complete: { title: 'MISSION COMPLETE', sub: 'Objectives met. Squad extracted.', cls: 'outcome-complete' },
+  partial: { title: 'OBJECTIVE FAILED', sub: 'Squad extracted. The objective was not met.', cls: 'outcome-partial' },
   aborted: { title: 'MISSION ABORTED', sub: 'You called it off at the objective.', cls: 'outcome-aborted' },
   lost: { title: 'SQUAD LOST', sub: 'Integrity reached zero. No units recovered.', cls: 'outcome-lost' },
+  // There are two ways to lose. Reporting the wrong one is worse than saying
+  // nothing: a player who was overrun at 70% integrity reads "integrity
+  // reached zero" and cannot work out what actually happened to them.
+  overrun: { title: 'MISSION LOST', sub: 'The response force reached you. Squad did not extract.', cls: 'outcome-lost' },
 };
 
 const ORDER = [
@@ -38,7 +46,13 @@ export class Debrief {
   }
 
   show(summary) {
-    const copy = OUTCOME_COPY[summary.outcome] || OUTCOME_COPY.partial;
+    // A loss with the squad still standing was not a loss of the squad — it
+    // was the compound closing on them.
+    const key = summary.outcome === 'lost' && summary.alarmed && summary.health > 0
+      ? 'overrun'
+      : summary.outcome;
+    const copy = { ...(OUTCOME_COPY[key] || OUTCOME_COPY.partial),
+                   ...(this.mission.outcomeCopy?.[key] || {}) };
     this.head.textContent = `DEBRIEF — SQUAD INTEGRITY ${summary.health}%`;
     this.result.textContent = copy.title;
     this.result.className = `verdict-line ${copy.cls}`;

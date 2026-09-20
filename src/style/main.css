@@ -785,6 +785,12 @@ body.pad-active .cmd .key { opacity: 0.35; }   /* pad navigates, it does not typ
 /* Deliberately the loudest thing on the HUD. Being seen is not a stat
    change, it is a different mission — so it does not share the quiet
    treatment the other panels get. */
+/* `.hidden` alone does nothing here: the only rule for it is .screen.hidden,
+   and #hud .panel { display: flex } outranks a bare class anyway. Without
+   this the COMPOUND ALERTED panel sat on screen for every run, alarm or not,
+   with an empty countdown in it. */
+#hud #alarm-box.hidden { display: none; }
+
 #alarm-box {
   border-color: var(--red);
   background: rgba(46, 12, 11, 0.55);
