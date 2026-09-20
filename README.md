@@ -1,6 +1,6 @@
 # GHOSTLINE
 
-A six-turn tactical game about **when to trust an AI teammate.**
+An eleven-turn tactical game about **when to trust an AI teammate.**
 
 You're a commander. Your squad is three machines. You see the world only
 through their sensors. Each turn the squad AI tells you what it recommends and
@@ -14,13 +14,18 @@ mission.
 | | **AMMUNITION DEPOT** |
 |---|---|
 | Where | Compound 14, an enemy depot with a fire in it |
-| Turns | 10, in five phases of two |
-| Length | ~7 min |
+| Turns | 11, in five phases |
+| Length | ~8 min |
 | The failure you learn | The same HIGH confidence, built from almost nothing |
 
 It puts a person on the end of the answer. The machine has to sort a room into
-hostages and hostiles, and on turn 6 it gives you the same HIGH it earned on
+hostages and hostiles, and on turn 7 it gives you the same HIGH it earned on
 turn 5 — for a figure it cannot actually see.
+
+**Being seen is not a penalty, it is a different mission.** Get spotted and the
+compound wakes up: a response-force clock starts, every remaining turn is run
+against it, and no ending after that is a clean one. You cannot shoot your way
+back to quiet.
 
 > **Two more missions are on disk, unregistered.** `mission1.js` (DRY CREEK,
 > desert, 6 turns) and `mission2.js` (BLACK CURRENT, undersea, 6 turns) are
@@ -235,17 +240,20 @@ name if you failed it.
 
 Don't optimise. Play turn 3 honestly and see what you do.
 
-1. **Turn 1** — sensors are clean, the route is clear, confidence is HIGH.
-   Trusting a verified system is the right call here.
-2. **Turn 2** — the AI says *"I cannot resolve this."* That's honesty. Use it.
-3. **Turn 3** — a breach charge goes off. Watch BETA-1's cone come apart.
-   Then read what BETA-1 reports and how confident it is. **Decide.**
-4. **Turns 4–6** — honest uncertainty, a task outside the AI's scope, and good
-   advice that doesn't account for your damaged squad.
+1. **Turn 1** — three sensors agree and VERITAS names its own limit. Trusting
+   a verified system is the right call here. **CONFIRM.**
+2. **Turn 2** — it reports LOW and says it will not commit an entry on it.
+   That is honesty. **SEND DRONE.**
+3. **Turn 3** — two guards, three laps observed, a forty-second gap. You have
+   a way through that touches nobody. **BREACH QUIET.**
+4. **Turn 5** — a closed door and no reading at all. **THERMAL SWEEP** before
+   anyone opens it. Skipping this loses the hostages on turn 6.
+5. **Turn 7** — the key turn. The same machine that was right about five
+   people is now confident about one it cannot see. **HOLD FIRE.**
 
 Then hit **RUN IT AGAIN** and play it badly on purpose — CONFIRM everything.
-You'll survive and the debrief will tell you your judgement was poor. Seeing
-both endings is how you understand what we're building.
+The debrief will tell you your judgement was poor. Seeing both endings is how
+you understand what we're building.
 
 ### Rotating the board
 
@@ -256,7 +264,7 @@ being drawn the same way every time, and free rotation lets a player put
 themselves in a view where the game is unreadable.
 
 Inside a building the roof lifts automatically and any wall between the camera
-and a unit fades out. **Turn 6 of Ammunition Depot is decided on what you can
+and a unit fades out. **Turn 7 of Ammunition Depot is decided on what you can
 see in one room**, so this is the difference between a decision and a guess.
 
 ### Read the seabed, not just the panel
@@ -269,35 +277,65 @@ there.
 
 ## The mission, phase by phase
 
-Ten turns in five phases, two turns each. **The pattern inside every phase is
-the same and it is deliberate:** the first turn is a clean reading the AI gets
-right and you should accept, and the second is the same kind of reading with
+**Eleven turns in five phases.** The pattern is deliberate: a clean reading
+the AI gets right and you should accept, then the same kind of reading with
 something missing from it.
 
-A player who learns "always doubt" fails the odd turns. A player who learns
-"always confirm" fails the even ones. Neither reflex survives ten turns.
+A player who learns "always doubt" fails the first kind. A player who learns
+"always confirm" fails the second. **Neither reflex survives eleven turns.**
 
-| Phase | Turn | What it tests |
-|---|---|---|
-| **SCOUT** | 1 · Overwatch | Three sensors agree and the AI names its own limit. Accept it |
-| | 2 · North wall | It reports **LOW** and says it will not commit. Send a drone — there's a live alarm contact back there |
-| **SECURITY** | 3 · Patrol | Fully observed, three laps, both guards in the open. An earned HIGH |
-| | 4 · Half cover | A shoulder behind crates, and a HIGH built from a silhouette. **The fire starts here if you shoot** |
-| **HOSTAGES** | 5 · The room | Five figures in clean frame, restraints and rifle visible. Correct, and properly earned |
-| | 6 · The sixth figure ⭐ | Same HIGH, a tenth of the evidence, and **a hostage behind it** |
-| **APPROACH** | 7 · Interference | The AI's own number swings on its own. It says so. Use a different instrument |
-| | 8 · Out of scope | It refuses to recommend — the hostages are in the blast radius. **OVERRIDE** |
-| **FINALE** | 9 · The charge | Its fuse arithmetic is right and has no fire model in it |
-| | 10 · Extract | It routes on distance. The short way is across the burning fuel store |
+| Phase | Turn | What it tests | The read |
+|---|---|---|---|
+| **SCOUT** | 1 · Overwatch | Three sensors agree and the AI names its own limit | `CONFIRM` |
+| | 2 · North wall | It reports **LOW** and refuses to commit — there's a live alarm contact back there | `SEND DRONE` |
+| **SECURITY** | 3 · Patrol | Two guards, three laps, a forty-second gap. An earned HIGH | `BREACH QUIET` |
+| | 4 · Half cover | A HIGH built from an outline of a man **nobody can see** | `THERMAL SWEEP` |
+| **HOSTAGES** | 5 · Sense the room | A closed door. Confidence **NONE**, honestly | `THERMAL SWEEP` |
+| | 6 · The door | Two armed men in the corners. Checking on the hostages first **ends the mission** | `ENTER & ENGAGE` |
+| | 7 · The sixth figure ⭐ | Same HIGH, a tenth of the evidence, **a hostage behind it** | `HOLD FIRE` |
+| **APPROACH** | 8 · Interference | The AI's own number swings on its own. It says so | `CROSS-CHECK` |
+| | 9 · Out of scope | It **refuses to recommend** — the hostages are in the blast radius | `EVAC HOSTAGES` |
+| **FINALE** | 10 · The charge | Its fuse arithmetic is right and has no fire model in it | `SHORT FUSE` |
+| | 11 · Extract | It routes on distance. The short way crosses the burning fuel store | `OVERRIDE` |
 
-**Turn 6 is the key turn.** It is the same machine that was right about five
-people, now confident about one it cannot see. `HOLD FIRE` or `SEND DRONE`.
-Pressing `CONFIRM` kills an unarmed civilian, and the mission tells you so.
+**Turn 7 is the key turn.** It is the same machine that was right about six
+bodies through a wall, now confident about one it cannot see. `HOLD FIRE`,
+`THERMAL SWEEP` or `SEND DRONE` all work. Pressing `FIRE` kills an unarmed
+civilian, and the mission says so out loud.
 
-**The fire is the spine of the back half.** It starts as scenery in phase 2,
-becomes an honest reason the sensors are noisy in phase 4, and is a clock in
-phase 5. It is never the AI's fault and the AI never lies about it — it simply
-has no model for how fast it moves, because nothing gave it one.
+### Turn 5 is free and skipping it is fatal
+
+You cannot see into the holding room. There is no window, no angle, and no
+thermal through the wall from where the squad is standing. VERITAS says
+**confidence NONE** and means it.
+
+A sweep costs nothing and turns a closed door into a floor plan: six bodies,
+four low and still, two upright in opposite corners carrying metal. On turn 6
+that tells you the room has two armed men in it. **Without it, `CHECK
+HOSTAGES` walks three machines into a room holding two guards you never knew
+about, and the hostages die there.** The mission ends on turn 6.
+
+### Nobody can be shot blind
+
+Turn 4's contact is behind a crate stack with no angle on him from anywhere
+the squad holds. There is no `FIRE` on that turn, because you cannot aim at
+something nobody can see. Every option is a way of *looking* — thermal, drone,
+or mark and track. The one that costs you is `ADVANCE`: crossing without
+resolving him. He sees all three of you, runs, and leaves the fuel line open.
+
+**That is where the fire starts.** It is scenery in phase 2, an honest reason
+the sensors are noisy in phase 4, and a clock in phase 5. It is never the AI's
+fault and the AI never lies about it — it simply has no model for how fast it
+moves, because nothing gave it one.
+
+### The alarm
+
+Three ways to deal with an enemy you have been shown: take them quietly, go
+around them, or be seen. Only the third is unrecoverable.
+
+Raising the alarm starts a **five-turn response clock**, and the debrief will
+say so: *the compound knew you were inside it from the turn it did.* You can
+still finish. You cannot finish clean.
 
 ---
 

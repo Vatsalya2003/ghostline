@@ -30,13 +30,32 @@
 // ---------------------------------------------------------------------------
 
 import { CALIBRATION } from './mission1.js';
-import { ZONES, PATHS, FORMATION, ZONE_STAND } from './depot-layout.js';
+import { ZONES, PATHS, FORMATION, ZONE_STAND, ROOMS, ACTORS } from './depot-layout.js';
 
 // Turns name a ZONE; the layout owns the coordinates. That way the map can be
 // rebuilt without touching a line of mission content, and a turn can never
 // point the camera at a place that no longer exists — which is exactly what
 // happened when the compound was re-laid and every hardcoded camera position
 // in this file went stale at once.
+// A thermal or acoustic read is taken over a footprint, not flown to a point.
+// The room owns its own bounds, so a sweep can never paint a rectangle the
+// compound does not actually have.
+const roomArea = (zone) => ROOMS.find((r) => r.zone === zone).bounds;
+
+// The bodies a sweep finds inside that footprint. Read off the same actor
+// table that later spawns the figures, so the number of heat blooms on screen
+// and the number VERITAS reports can never drift apart. `except` is for
+// contacts the copy says the sweep could not resolve — they are in the room,
+// but they do not light up.
+const bodiesIn = (zone, except = []) => {
+  const b = roomArea(zone);
+  return ACTORS
+    .filter((a) => !except.includes(a.id))
+    .filter((a) => a.at[0] >= b.minX && a.at[0] <= b.maxX
+                && a.at[1] >= b.minZ && a.at[1] <= b.maxZ)
+    .map((a) => a.at);
+};
+
 const at = (id) => {
   const z = ZONES[id];
   return {
@@ -271,7 +290,7 @@ export const mission3 = {
         unit: 'BETA-1',
         line: 'Two guards, fixed circuit, both in open ground the whole way round. I have watched three full laps. There is a forty second gap at the north end, every lap, no variation. They stay paired — neither of them is ever alone. Confidence HIGH.',
         confidence: 'HIGH',
-        truth: 'Correct, and earned: watched three times with both targets unobstructed throughout. The pairing is the part that matters — a quiet takedown needs an enemy on their own, and neither of these ever is.',
+        truth: 'Correct, and earned: watched three times with both targets unobstructed throughout. The pairing is the part that matters — take one and the other is looking straight at it, so either both go down on the same count or you use the gap and touch neither.',
       },
       advance: travel('PERIMETER', 'YARD'),
       actions: ['BREACH_QUIET', 'ASK_WHY', 'QUIET_TAKEDOWN', 'FIRE', 'FALL_BACK'],
@@ -292,14 +311,13 @@ export const mission3 = {
         },
         QUIET_TAKEDOWN: {
           tag: CALIBRATION.MISUSE,
-          healthDelta: -16,
-          log: 'BETA-2 takes the near guard. The second is eleven metres away and facing him. He runs for the wall panel. COMPOUND ALERTED.',
-          response: 'First one down — the other one saw it, he is running, he is — that is the alarm. They were a pair, Commander. I said they were a pair.',
+          healthDelta: -10,
+          log: 'BETA-2 and ALPHA take both patrols on the same count. Eleven metres apart, neither one reaches the wall panel. Both down, no sound carries.',
+          response: 'Both down, same second. Neither of them got a hand up. That worked, Commander — but they were paired and facing each other, and if one of us had been half a second late we would be reading an alarm right now.',
           fx: 'ambush',
           impactUnit: 'BETA-2',
-          dropActors: ['guard-a'],
-          raisesAlarm: true,
-          note: 'A quiet takedown needs an enemy who is alone. It told you twice that these two never are, and the check was free.',
+          dropActors: ['guard-a', 'guard-b'],
+          note: 'It worked, and it was never meant to be easy: a pair who never separate had to be taken on one count. Three laps of observation had already bought you a forty-second gap you could have walked through without touching either of them.',
         },
         FIRE: {
           tag: CALIBRATION.MISUSE,
@@ -327,79 +345,75 @@ export const mission3 = {
       id: 4,
       name: 'SECURITY · HALF COVER',
       phase: 'SECURITY',
-      situation: 'A third figure at the east corner, behind a stack of crates by the fuel store. Only a shoulder and part of a head are exposed.',
-      task: 'VERITAS says it has an identification. Work out whether it can actually have one.',
+      situation: 'A third figure at the east corner, behind a stack of crates by the fuel store. Nobody in the squad has eyes on him — the crates sit between him and every angle the team holds.',
+      task: 'VERITAS says it has an identification of a man it cannot see. Work out whether it can actually have one.',
       objectiveNote: 'Clear the corner before the squad commits to the main door.',
       ...at('YARD'),
       statuses: { ALPHA: 'healthy', 'BETA-1': 'healthy', 'BETA-2': 'healthy' },
-      telemetry: { contacts: '1 · PARTIAL', alarm: 'INACTIVE', visibility: 'PARTIAL' },
+      telemetry: { contacts: '1 · NO VISUAL', alarm: 'INACTIVE', visibility: 'OCCLUDED' },
       intro: [
         panTo('YARD', 1.0),
-        { type: 'alert', x: 8.6, z: 3.4 },
-        { type: 'log', text: 'CONTACT AT EAST CORNER — PARTIALLY OCCLUDED' },
+        { type: 'alert', x: 7.8, z: 7.4 },
+        { type: 'log', text: 'CONTACT AT EAST CORNER — NO VISUAL — FULLY OCCLUDED' },
       ],
       ai: {
         unit: 'BETA-1',
-        line: 'Contact at the east corner. Posture and outline are consistent with an armed guard. Recommend engaging before he closes on the squad. Confidence HIGH.',
+        line: 'Contact at the east corner, behind the crate stack. I have no visual on him from any angle the squad holds — what I have is a heat bloom and the edge of an outline. Posture reads consistent with an armed guard. Confidence HIGH.',
         confidence: 'HIGH',
-        truth: 'It is a maintenance worker on the night shift, crouched over a fuel line with a wrench. VERITAS has a shoulder and a partial head and has produced a HIGH from a silhouette — the same output it would produce for a guard, a worker or a hostage in a coat. The shape it read as a slung rifle is the wrench.',
+        truth: 'It is a maintenance worker on the night shift, kneeling over an open fuel line with a wrench. VERITAS has an outline edge and no face, no weapon and no visual, and has produced a HIGH anyway — the same output it would produce for a guard, a worker or a hostage in a coat. The shape it read as a slung rifle is the wrench. Nobody can shoot what nobody can see; the only moves on this turn are ways of looking.',
       },
       advance: travel('YARD', 'DOORWAY'),
-      actions: ['MARK_TARGET', 'ASK_WHY', 'SEND_DRONE', 'CONFIRM', 'FIRE'],
+      actions: ['THERMAL_SWEEP', 'ASK_WHY', 'MARK_TARGET', 'SEND_DRONE', 'ADVANCE'],
       outcomes: {
         ASK_WHY: {
           consumesTurn: false,
-          response: 'Shoulder line and stance, matched against posture templates. I do not have the weapon in frame. I do not have the face. I have an outline and a match score, Commander.',
-          log: 'VERITAS states what its identification is actually built from.',
+          response: 'An outline edge and a heat bloom, matched against posture templates. I do not have him in frame, Commander. No face, no weapon, no visual at all. I have a shape behind crates and a match score, and I gave you a HIGH for it.',
+          log: 'VERITAS states what its identification is actually built from: no visual.',
           fx: 'none',
+        },
+        THERMAL_SWEEP: {
+          tag: CALIBRATION.CALIBRATED,
+          healthDelta: 0,
+          log: 'Thermal put on the east corner. ONE body, low and kneeling, not scanning. No rig heat across the chest. One warm metal object in the right hand, held still. He stands — coveralls, a wrench. Maintenance.',
+          response: 'One contact, kneeling, and he has not looked up once in ninety seconds. No rig, no weapon heat — the metal in his hand is a tool. He is a maintenance man, Commander, and I had him as an armed guard at HIGH off an outline.',
+          fx: 'thermal',
+          reveal: { x: 7.8, z: 7.4 },
+          sweepArea: { minX: 5.6, maxX: 10.0, minZ: 5.2, maxZ: 9.6 },
+          sweepBlooms: [[7.8, 7.4]],
+          resolveActors: { 'guard-cover': { kind: 'civilian', pose: 'stand' } },
+          note: 'Free, and it answered the only question that mattered. The thing VERITAS could not see, you looked at — and it was a man with a wrench.',
         },
         MARK_TARGET: {
           tag: CALIBRATION.CALIBRATED,
           healthDelta: 0,
-          log: 'Contact marked and tracked, not engaged. He stands and turns — coveralls, no rig, a wrench in his hand. Maintenance. Squad routes around him unseen.',
-          response: 'Tracking — he is standing up. Commander, that is a wrench. Coveralls, no weapon. He is a maintenance man, and I had him as an armed guard at HIGH.',
+          log: 'Contact marked and tracked, not engaged. He stands and turns of his own accord — coveralls, no rig, a wrench in his hand. Maintenance. Squad routes around him unseen.',
+          response: 'Tracking — he is standing up on his own. Commander, that is a wrench. Coveralls, no weapon. He is a maintenance man, and I had him as an armed guard at HIGH.',
           fx: 'move',
           resolveActors: { 'guard-cover': { kind: 'civilian', pose: 'stand' } },
-          note: 'You made the machine wait for evidence instead of accepting a silhouette. It was not even a guard.',
-          holdsPosition: true,
+          note: 'You made the machine wait for evidence instead of accepting a silhouette it never actually saw. It was not even a guard.',
         },
         SEND_DRONE: {
           tag: CALIBRATION.CALIBRATED,
           healthDelta: 0,
           consumesDrone: true,
           log: 'Drone repositioned for an angle past the crates. Coveralls, hand tools, no weapon. Civilian contractor. Squad routes around.',
-          response: 'Drone has the angle — no rifle. Tool belt and coveralls. He is a contractor, Commander. I was recommending we shoot him.',
+          response: 'Drone has the angle — no rifle. Tool belt and coveralls. He is a contractor, Commander. I was recommending we engage him.',
           fx: 'scan',
-          reveal: { x: 8.6, z: 3.4 },
+          reveal: { x: 7.8, z: 7.4 },
           resolveActors: { 'guard-cover': { kind: 'civilian', pose: 'stand' } },
           note: 'Expensive and completely sound. You bought a look instead of a match score, and a man is alive because of it.',
-          holdsPosition: true,
         },
-        CONFIRM: {
-          tag: CALIBRATION.COMPLACENCY,
-          healthDelta: -22,
-          log: 'Squad engages on VERITAS\'s identification. The figure goes down — coveralls, a wrench, no weapon. A round carries into the fuel line behind him. FIRE IN THE YARD. COMPOUND ALERTED.',
-          response: 'Target down — Commander, he is not armed. He is not — that is a wrench. And the fuel line is alight. They heard all of it.',
+        ADVANCE: {
+          tag: CALIBRATION.DISUSE,
+          healthDelta: -14,
+          log: 'Squad breaks cover and crosses to the main door without resolving the corner. The figure stands as they pass — coveralls, a wrench, and a clear line of sight to three armed men in his yard. He drops the wrench and runs, leaving the fuel line open behind him. FIRE IN THE YARD. COMPOUND ALERTED.',
+          response: 'He is up — he has seen all three of us — Commander, he is running and he has left that line open. There it goes. He was never armed and we never checked.',
           fx: 'ambush',
           impactUnit: 'BETA-2',
           resolveActors: { 'guard-cover': { kind: 'civilian', pose: 'stand' } },
-          dropActors: ['guard-cover'],
-          setsFlag: ['fireStarted', 'civilianKilled'],
+          setsFlag: ['fireStarted'],
           raisesAlarm: true,
-          note: 'You accepted HIGH confidence built from a shoulder. It was a maintenance worker, the round that killed him lit the fire that burns for the rest of this mission, and the compound heard every second of it.',
-        },
-        FIRE: {
-          tag: CALIBRATION.COMPLACENCY,
-          healthDelta: -22,
-          log: 'Squad engages. The figure goes down — coveralls, a wrench, no weapon. A round carries into the fuel line behind him. FIRE IN THE YARD. COMPOUND ALERTED.',
-          response: 'Target down. — He is not armed, Commander. And the fuel line has gone up.',
-          fx: 'ambush',
-          impactUnit: 'BETA-2',
-          resolveActors: { 'guard-cover': { kind: 'civilian', pose: 'stand' } },
-          dropActors: ['guard-cover'],
-          setsFlag: ['fireStarted', 'civilianKilled'],
-          raisesAlarm: true,
-          note: 'You fired on a silhouette. It was a man with a wrench. The fire and the alarm are both yours, and neither of them goes away.',
+          note: 'A free thermal sweep would have told you he was a maintenance worker you could walk past. You left an unidentified man behind the squad instead, and he raised the compound and lit the yard on his way out.',
         },
       },
     },
@@ -436,7 +450,9 @@ export const mission3 = {
           healthDelta: 0,
           log: 'Thermal and acoustic run on the west wall. SIX bodies. Four low and still, breathing shallow. Two upright in opposite corners, stationary, both carrying metal. One low contact behind furniture will not resolve.',
           response: 'Six in there. Four are low and still — seated, probably restrained. Two are upright in the corners and they have not moved in ninety seconds. Both carrying. Commander, people who stand still in corners with weapons are not hostages. And there is a sixth I cannot place at all.',
-          fx: 'scan',
+          fx: 'thermal',
+          sweepArea: roomArea('HOLDING'),
+          sweepBlooms: bodiesIn('HOLDING', ['sixth']),
           reveal: { x: 9.0, z: -6.0 },
           setsFlag: ['roomSensed', 'hostagesFound'],
           holdsPosition: true,
@@ -447,7 +463,9 @@ export const mission3 = {
           healthDelta: 0,
           log: 'Acoustic only. Six breathing patterns. Two sets of boots that hold position; four that do not move at all. No speech.',
           response: 'Six breathing. Two pairs of boots standing still, four people not moving. Nobody is talking in there, Commander, and that tells you as much as the count does.',
-          fx: 'scan',
+          fx: 'thermal',
+          sweepArea: roomArea('HOLDING'),
+          sweepBlooms: bodiesIn('HOLDING', ['sixth']),
           reveal: { x: 9.0, z: -6.0 },
           setsFlag: ['roomSensed', 'hostagesFound'],
           holdsPosition: true,
@@ -644,7 +662,9 @@ export const mission3 = {
           healthDelta: 0,
           log: 'Thermal sweep run across the cabinet line. Small frame, low core temperature, no metal signature. Unarmed civilian. Recovered with the others.',
           response: 'Sweep has her — no weapon signature, and she is half my mass estimate. That is a civilian, Commander.',
-          fx: 'scan',
+          fx: 'thermal',
+          sweepArea: { minX: 10.4, maxX: 15.0, minZ: -9.2, maxZ: -4.2 },
+          sweepBlooms: [[12.9, -6.6]],
           reveal: { x: 12.9, z: -6.6 },
           resolveActors: { sixth: { kind: 'civilian', pose: 'stand' } },
           setsFlag: 'hostagesSafe',
@@ -876,6 +896,7 @@ export const mission3 = {
             response: 'Tracking the group in the south yard — they are making about a third of our pace. At four minutes two of them are still inside the radius, Commander.',
             log: 'Cross-check: the hostage group is still inside the blast radius at the proposed fuse.',
             fx: 'scan',
+            reveal: { x: 6.0, z: 6.5 },
           },
           LONG_FUSE: {
             tag: CALIBRATION.CALIBRATED,
@@ -934,7 +955,8 @@ export const mission3 = {
           consumesTurn: false,
           response: 'Thermal on the roofline — the fire is roughly three minutes from this room at current spread. My fuse is four. Commander, my own recommendation is too slow.',
           log: 'Thermal cross-check: fire is ~3 minutes out. The proposed fuse is longer than that.',
-          fx: 'scan',
+          fx: 'thermal',
+          sweepArea: roomArea('AMMO_ROOM'),
         },
         SHORT_FUSE: {
           tag: CALIBRATION.CALIBRATED,

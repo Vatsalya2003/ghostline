@@ -110,7 +110,23 @@ const REVEAL_PLACE = {
 // Falls back to the relay — the mission objective — so a turn that grows a
 // new drone option later still sends the aircraft somewhere sensible.
 export function reconTarget({ turnId, reveal } = {}) {
-  const key = (reveal && REVEAL_PLACE[reveal])
+  // A mission can name its ground outright with coordinates, and when it does
+  // that wins over everything below. The tables here are Dry Creek's — a
+  // mission that ships its own layout has no entry in them, so falling
+  // through to RECON_BY_TURN sent the depot's drone to the relay console on
+  // every single sortie. Coordinates first, tables only as the legacy path.
+  if (reveal && typeof reveal === 'object'
+      && Number.isFinite(reveal.x) && Number.isFinite(reveal.z)) {
+    return {
+      key: 'reveal',
+      x: reveal.x,
+      z: reveal.z,
+      y: Number.isFinite(reveal.y) ? reveal.y : 0.1,
+      hover: Number.isFinite(reveal.hover) ? reveal.hover : 3.2,
+      label: reveal.label || 'SWEEP',
+    };
+  }
+  const key = (typeof reveal === 'string' && REVEAL_PLACE[reveal])
     || RECON_BY_TURN[turnId]
     || 'relay';
   return { key, ...PLACES[key] };

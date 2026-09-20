@@ -386,6 +386,36 @@ export class Director {
         }
         break;
       }
+      // A sweep that does not fly. Thermal and acoustic reads are taken from
+      // where the squad is standing, so the thing the player should see is the
+      // room lighting up under the sensor — not an aircraft leaving. The
+      // mission supplies the footprint it is actually reading and the bodies
+      // the read finds; nothing about either is known here.
+      case 'thermal': {
+        const u = this.unit(this.state.lead) || this.unit('ALPHA');
+        audio.scan();
+
+        const r = outcome.reveal;
+        const area = outcome.sweepArea || (r
+          ? { minX: r.x - 4, maxX: r.x + 4, minZ: r.z - 4, maxZ: r.z + 4 }
+          : { minX: -4, maxX: 4, minZ: -4, maxZ: 4 });
+        const cx = (area.minX + area.maxX) / 2;
+        const cz = (area.minZ + area.maxZ) / 2;
+        const reach = Math.max(Math.abs(area.maxX - area.minX),
+                               Math.abs(area.maxZ - area.minZ)) / 2 + 1.5;
+
+        this.fx.areaSweep(area, { blooms: outcome.sweepBlooms || [] });
+
+        u?.ping(1.2, 1);
+        if (u) this.focusUnit(u.id || 'ALPHA');
+        this.fog?.revealAt(cx, cz, reach);
+        this.screenFX?.flash('scan', 620);
+        // Hold the squad in frame as well as the room — the whole point of the
+        // beat is that they are outside the thing they are reading.
+        panCamera(this.camera, (cx + (u ? u.position.x : cx)) / 2,
+                               (cz + (u ? u.position.z : cz)) / 2, 1.2);
+        break;
+      }
       case 'scan': {
         const u = this.unit('ALPHA');
         audio.scan();

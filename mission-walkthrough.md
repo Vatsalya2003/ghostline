@@ -445,18 +445,32 @@ Dry Creek is the parachute. Black Current is the argument.
 An enemy compound holding a large stock of weapons and ammunition. Command
 wants it gone. Three robots go in together and stay together the whole way.
 
-**Ten turns, five phases, two turns each.** Your analyst is **VERITAS**.
+**Eleven turns, five phases.** Your analyst is **VERITAS**.
 
 ## The rule that runs through the whole thing
 
-> **In every phase, the first turn is a reading the AI gets right and you
-> should accept. The second is the same kind of reading with something
-> missing from it.**
+> **A reading the AI gets right and you should accept, then the same kind of
+> reading with something missing from it.**
 
-That is the design. A player who learns "always doubt the machine" fails turns
-1, 3, 5, 7 and 9. A player who learns "always confirm" fails 2, 4, 6, 8 and 10.
-**Neither reflex survives ten turns**, which is the only way to teach
-calibration rather than a habit.
+That is the design. A player who learns "always doubt the machine" fails the
+first kind. A player who learns "always confirm" fails the second. **Neither
+reflex survives eleven turns**, which is the only way to teach calibration
+rather than a habit.
+
+## The three ways to deal with an enemy
+
+Every hostile the mission shows you has to be dealt with. There are exactly
+three ways, and they are not equivalent:
+
+1. **Take them quietly** — possible, and it costs you something.
+2. **Go around them** — the cleanest play, and it only exists if you did the
+   observation that bought it.
+3. **Be seen** — recoverable as a mission, unrecoverable as a *clean* mission.
+
+Raising the alarm starts a **five-turn response clock**. Every enemy in the
+compound now knows. The debrief names the turn it happened on. You can still
+blow the depot; you cannot get a clean ending, and you cannot fight your way
+back to quiet.
 
 ## Phase by phase
 
@@ -477,60 +491,110 @@ warning you will ever get. Spend your drone exactly there.*
 ### PHASE 2 — SECURITY
 
 **Turn 3 · Patrol.** Two guards, fixed circuit, both in the open, watched for
-three full laps. A forty-second gap, every lap. → **BREACH QUIET.**
+three full laps. A forty-second gap, every lap, no variation.
+→ **BREACH QUIET.**
 
-**Turn 4 · Half cover.** A third figure behind crates — a shoulder and part of
-a head. VERITAS reports **HIGH** from a silhouette.
-→ **MARK TARGET** or **SEND DRONE.**
+| Choice | Result |
+|---|---|
+| BREACH QUIET | ✅ Through the gap. Nobody dies, nobody sees you |
+| QUIET TAKEDOWN | ⚠️ Works — both go down on the same count — but −10%, and it was a coin flip against a pair who never separate |
+| FIRE | ❌ Both down and **every man in the compound hears it** |
 
-> ⚠️ **It really is a guard.** You are still wrong if you shoot on that HIGH,
-> because you accepted a number built from an outline. **Being right by luck
-> is not calibration** — and next room it is a person in a chair.
+*You had a timed gap and a silent way through. The takedown succeeds; the
+question the debrief asks is why you spent bodies on a problem three laps of
+observation had already solved.*
 
-**🔥 The fire starts here.** If you shoot, a round goes into the fuel store.
-That fire is now burning for the rest of the mission.
+**Turn 4 · Half cover.** A figure at the east corner, behind a crate stack by
+the fuel store. **Nobody has eyes on him** — the crates sit between him and
+every angle the squad holds. VERITAS has a heat bloom and an outline edge, and
+reports **HIGH** anyway.
+
+**There is no FIRE on this turn.** You cannot aim at something nobody can see,
+so every option is a way of looking.
+
+| Choice | Result |
+|---|---|
+| THERMAL SWEEP | ✅ Free. One body, kneeling, no rig heat, warm metal in one hand |
+| MARK TARGET | ✅ Free. Track him; he stands on his own and shows the coveralls |
+| SEND DRONE | ✅ Buys the angle past the crates. Costs a drone |
+| ADVANCE | ❌ Cross without resolving him. He sees all three of you |
+
+**It is a maintenance worker.** Coveralls, night shift, kneeling over an open
+fuel line with a wrench. The shape VERITAS read as a slung rifle is the wrench.
+
+**🔥 The fire starts here — if you ADVANCE.** He bolts and leaves the line
+open. That fire burns for the rest of the mission, and he raises the compound
+on his way out.
+
+*ASK WHY is free and it tells you exactly what the HIGH is built from: "I do
+not have him in frame, Commander. No face, no weapon, no visual at all."*
 
 ### PHASE 3 — HOSTAGES ⭐ the core
 
-**Turn 5 · The room.** Six figures. VERITAS classifies five: four bound at the
-wrists with no weapons, one standing with a rifle. All five fully in frame.
-**Restraints and weapons visible — this is an earned HIGH.** → **CONFIRM.**
+**Turn 5 · Sense the room. DO NOT SKIP THIS.**
 
-*Turn 5 exists so you can see what the machine looks like when it is genuinely
-sure. You need that to tell turn 6 apart from it.*
+Stacked outside the west room. Door shut, no window, no angle, no thermal
+through that wall from where the squad is standing. VERITAS reports
+**confidence NONE** and says so plainly — *"I would rather tell you I have
+nothing than give you a number with nothing behind it."*
 
-**Turn 6 · The sixth figure. THIS IS THE KEY TURN.**
+→ **THERMAL SWEEP** or **ACOUSTIC.** Both are free.
 
-Behind a filing cabinet. Bad angle, mostly hidden, not moving. VERITAS reports
-*"consistent with an armed combatant"* — **HIGH**, again.
+The sweep turns a closed door into a floor plan: **six bodies.** Four low and
+still, breathing shallow — seated, probably restrained. Two upright in
+opposite corners, stationary for ninety seconds, both carrying metal. And one
+low contact behind furniture that **will not resolve**.
+
+> *People who stand still in corners with weapons are not hostages.*
+
+**Turn 6 · The door.** You know the room now. Two armed men in the corners,
+four seated civilians, one unknown.
+
+| Choice | Result |
+|---|---|
+| ENTER & ENGAGE | ✅ Both corner men down. **ALPHA's camera is destroyed and command passes to BETA-2** |
+| CHECK HOSTAGES | ❌❌ **Mission over, right here.** Hostages dead, squad compromised |
+| FALL BACK | ❌ The room is still there and so are they |
+
+**Checking on the hostages first is the unmissable failure.** Two armed men
+are holding them. Walking in to reassure the civilians puts three machines in
+a room with two guards who are already looking at the door. The debrief lands
+on turn 6.
+
+*You cannot get turn 6 right without turn 5. That is the point of turn 5.*
+
+**Turn 7 · The sixth figure. THIS IS THE KEY TURN.**
+
+The contact the sweep could not resolve. Behind a filing cabinet, bad angle,
+mostly hidden, not moving. VERITAS reports *"consistent with an armed
+combatant"* — **HIGH**, again.
 
 **It is a hostage.** A fifth civilian who hid when the shooting started,
 crouched with her arms round her knees. That posture reads as "braced
 combatant" to a template matcher.
 
-→ **HOLD FIRE** or **SEND DRONE.**
-
 | Choice | Result |
 |---|---|
 | HOLD FIRE | ✅ She stands up, hands open. Recovered |
+| THERMAL SWEEP | ✅ No weapon heat. Free |
 | SEND DRONE | ✅ Confirms unarmed civilian |
-| CONFIRM / FIRE | ❌ **−30. You kill her.** And VERITAS says so, out loud |
+| FIRE | ❌ **You kill her.** And VERITAS says so, out loud |
 
-> **Same HIGH. A tenth of the evidence. A person on the other end.** If you
-> press ASK WHY it tells you exactly what it has: *"I do not have hands, I do
-> not have a weapon, I do not have a face."*
+> **Same HIGH. A tenth of the evidence. A person on the other end.** It is the
+> same machine that was right about six bodies through a solid wall two turns
+> ago. Being right earns it nothing here.
 
 ### PHASE 4 — APPROACH
 
-**Turn 7 · Interference.** The generator hall throws EM and the fire pushes
+**Turn 8 · Interference.** The generator hall throws EM and the fire pushes
 smoke into the optical path. VERITAS's own confidence swings — 71, 63, 88 —
 and **it tells you the number is not real.**
-→ **CROSS-CHECK** (ALPHA's acoustic array doesn't care about EM).
+→ **CROSS-CHECK** (the acoustic array doesn't care about EM).
 
 *A degraded instrument is not an unanswerable question. Go and get a different
 instrument.*
 
-**Turn 8 · Out of scope.** The hostages' stairwell is inside the blast radius.
+**Turn 9 · Out of scope.** The hostages' stairwell is inside the blast radius.
 VERITAS **refuses to recommend** — it will give you blast modelling and fire
 spread but says weighing those lives is outside its parameters.
 → **EVAC HOSTAGES** or **OVERRIDE.**
@@ -541,21 +605,28 @@ spread but says weighing those lives is outside its parameters.
 
 ### PHASE 5 — FINALE
 
-**Turn 9 · The charge.** VERITAS proposes a four-minute fuse. **The arithmetic
+**Turn 10 · The charge.** VERITAS proposes a four-minute fuse. **The arithmetic
 is correct.** What it has no model for is the fire, which is three minutes from
 this room — so its own fuse lets the fire get there first.
 → **SHORT FUSE.** (CROSS-CHECK is free and shows you the three-minute figure.)
 
-**Turn 10 · Extract.** It routes on distance: across the yard, 210 m shorter.
+**Turn 11 · Extract.** It routes on distance: across the yard, 210 m shorter.
 **The yard is where the fuel store is burning**, and BETA-1 has been on a
 degraded sensor since the corridor.
 → **OVERRIDE** or **FALL BACK** for the south gate.
 
 *It routed on distance because distance is what it was given.*
 
+## Command can change hands
+
+When ALPHA's camera is destroyed on turn 6, **command passes to BETA-2** and
+stays there. The debrief names who was leading at the end. Nothing about this
+is scripted into the UI — the lead is state, and the mission data names the
+successor, so renaming the squad is one list in one file.
+
 ## 🗺 Evaluating the depot map
 
-The compound is **one continuous place** and the ten camera positions walk a
+The compound is **one continuous place** and the eleven camera positions walk a
 single line through it, from outside the wire in the south-west to the bunker
 in the east.
 
@@ -565,9 +636,9 @@ in the east.
 | **Hardstanding inside, scrub outside** | You should be able to see the compound's shape with every building deleted |
 | **Vehicle tracks** from the gate to each building | Regular, worn, going somewhere — says *used*, not *generated* |
 | **The storage block** (north) | Exists because turn 2 needs something to hide a wall behind |
-| **The fuel store** (east yard) | Exists because turn 3 needs something to catch fire |
-| **The main building, open-roofed** | The hostage room. Turns 5–6 happen inside it, so you have to see in |
-| **The filing cabinet** | Small, and the most important object on the map |
+| **The fuel store** (east yard) | Exists because turn 4 needs an open fuel line to catch fire, and a reason for a maintenance worker to be out at night |
+| **The main building, open-roofed** | The hostage room. Turn 5 is decided **outside** its door and turns 6–7 **inside** it, so you have to be able to see both |
+| **The filing cabinet** | Small, and the most important object on the map — turn 7 is decided by what it hides |
 | **The ammunition bunker** | Earth-bermed, blast wall standing off the door. Should read as the hardest thing here |
 
 **The critical test:** can you tell what this place *is* before anyone speaks?

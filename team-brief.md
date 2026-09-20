@@ -2,6 +2,13 @@
 ### Defense Tech Jam 2026 · Trust Your Synthetic Teammates (NAWCTSD)
 ### Read this first. ~5 minutes.
 
+> ⚠️ **This is the original pre-production brief, kept for the pitch, the team
+> split and the design rationale — all of which still hold.** The six-turn
+> mission it describes is DRY CREEK, which is now on disk unregistered as the
+> fallback. **The shipped build is AMMUNITION DEPOT, eleven turns, and its key
+> beat is turn 7, not turn 3.** For what actually ships, read
+> [README.md](README.md) and [mission-walkthrough.md](mission-walkthrough.md).
+
 ---
 
 ## 1. WHAT WE'RE MAKING

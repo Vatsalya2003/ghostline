@@ -4,6 +4,7 @@ import { PALETTE } from './Scene.js';
 import { Drone } from './Drone.js';
 import { CombatFX } from './CombatFX.js';
 import { spawnModel, preload } from './AssetLoader.js';
+import { groundAt } from './Units.js';
 
 // Impacts, drone scans, hostile markers. Deterministic — every burst uses a
 // fixed pattern so the demo plays back the same way every time.
@@ -40,6 +41,95 @@ export class FX {
       onScan: () => {
         this.ring(to.x, to.z, { color, radius, duration: 1.1 });
         if (onArrive) onArrive(to);
+      },
+    });
+  }
+
+  // A sensor sweep laid over ground rather than flown to it. THERMAL_SWEEP
+  // and ACOUSTIC are taken from outside a closed door — nothing leaves the
+  // squad, so the read has to be legible as a wash over the room itself
+  // rather than as an aircraft going somewhere. Three parts, all deterministic:
+  // a warm panel the size of the room, a bar that travels the length of it,
+  // and a bloom wherever the sweep found a body.
+  //
+  // `area` is a footprint in world space: { minX, maxX, minZ, maxZ }.
+  areaSweep(area, { color = 0xff9a4d, duration = 2.0, blooms = [] } = {}) {
+    const minX = Math.min(area.minX, area.maxX);
+    const maxX = Math.max(area.minX, area.maxX);
+    const minZ = Math.min(area.minZ, area.maxZ);
+    const maxZ = Math.max(area.minZ, area.maxZ);
+    const w = maxX - minX;
+    const d = maxZ - minZ;
+    const cx = (minX + maxX) / 2;
+    const cz = (minZ + maxZ) / 2;
+    // Sample the real floor. The depot's rooms sit at three different heights
+    // and a sweep pinned to y=0 draws itself through the ammo room's ceiling.
+    const y = groundAt(cx, cz) + 0.09;
+
+    const group = new THREE.Group();
+    group.renderOrder = 13;
+    this.scene.add(group);
+
+    // The wash. Flat-laid, so the plane's local +y runs along world -z.
+    const wash = new THREE.Mesh(
+      new THREE.PlaneGeometry(w, d),
+      new THREE.MeshBasicMaterial({
+        color, transparent: true, opacity: 0,
+        blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide,
+      })
+    );
+    wash.rotation.x = -Math.PI / 2;
+    wash.position.set(cx, y, cz);
+    wash.renderOrder = 13;
+    group.add(wash);
+
+    // The footprint's edge, so the player can see exactly what was swept and
+    // what was not.
+    const edge = new THREE.LineSegments(
+      new THREE.EdgesGeometry(new THREE.PlaneGeometry(w, d)),
+      new THREE.LineBasicMaterial({
+        color, transparent: true, opacity: 0,
+        blending: THREE.AdditiveBlending, depthWrite: false,
+      })
+    );
+    edge.rotation.x = -Math.PI / 2;
+    edge.position.set(cx, y + 0.01, cz);
+    group.add(edge);
+
+    // The travelling bar. Starts at the near edge and crosses the room once.
+    const bar = new THREE.Mesh(
+      new THREE.PlaneGeometry(w, Math.max(0.35, d * 0.06)),
+      new THREE.MeshBasicMaterial({
+        color: 0xfff0d0, transparent: true, opacity: 0.85,
+        blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide,
+      })
+    );
+    bar.rotation.x = -Math.PI / 2;
+    bar.position.set(cx, y + 0.03, maxZ);
+    group.add(bar);
+
+    gsap.to(wash.material, { opacity: 0.30, duration: duration * 0.3, ease: 'power2.out' });
+    gsap.to(edge.material, { opacity: 0.85, duration: duration * 0.25, ease: 'power2.out' });
+    gsap.to(bar.position, { z: minZ, duration: duration * 0.72, ease: 'none' });
+
+    // Heat blooms, dropped as the bar reaches each one so the sweep looks like
+    // it is finding them rather than announcing them all at once.
+    for (const [bx, bz] of blooms) {
+      const t = d > 0 ? ((maxZ - bz) / d) * (duration * 0.72) : 0;
+      gsap.delayedCall(Math.max(0, t), () => {
+        this.ring(bx, bz, { color, radius: 2.4, duration: 0.9 });
+        this.burst(bx, bz, { color, count: 10, spread: 0.5, life: 0.7 });
+      });
+    }
+
+    gsap.to([wash.material, edge.material, bar.material], {
+      opacity: 0, duration: duration * 0.35, delay: duration * 0.65, ease: 'power1.in',
+      onComplete: () => {
+        this.scene.remove(group);
+        group.traverse((o) => {
+          if (o.geometry) o.geometry.dispose();
+          if (o.material) o.material.dispose();
+        });
       },
     });
   }

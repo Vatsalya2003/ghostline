@@ -30,7 +30,7 @@ poor is a designed outcome, not a bug.
 
 | | Environment | Turns | Registered |
 |---|---|---|---|
-| **AMMUNITION DEPOT** | `depot` — enemy compound, on fire | 10 | **yes — the only one** |
+| **AMMUNITION DEPOT** | `depot` — enemy compound, on fire | 11 | **yes — the only one** |
 | **DRY CREEK** | `day` — desert relay station | 6 | no — fallback |
 | **BLACK CURRENT** | `undersea` — test range at 240 m | 6 | no — fallback |
 
@@ -284,16 +284,50 @@ CONFIRM: {
   lostUnit: 'BETA-2',             // falls and stays down
   moves: { ALPHA: [4, -1], 'BETA-1': [2.5, -2] },   // ⚠ a MAP, not an array
   urgent: true,                   // units Run instead of Walk
-  reveal: { x: 7, z: -1 },        // where a drone sweep goes
-  endsMission: true,
+  holdsPosition: true,            // suppress the turn's `advance` for this outcome
+  reveal: { x: 7, z: -1 },        // where a drone sweep goes — see the trap below
+  sweepArea: { minX, maxX, minZ, maxZ },   // fx: 'thermal' — the footprint read
+  sweepBlooms: [[x, z], …],       // fx: 'thermal' — the bodies it finds
+  dropActors: ['guard-a'],        // actors that go down
+  resolveActors: { 'guard-cover': { kind: 'civilian', pose: 'stand' } },
+  raisesAlarm: true,              // starts the response clock; no clean ending after this
+  promotes: 'BETA-2',             // command handover
+  promoteReason: 'ALPHA is blind.',
+  endsMission: 'lost',            // ⚠ names the ending — never `true`
   altIfHealthAbove: { threshold: 88, tag: …, healthDelta: …, … },
 }
 ```
 
 ### `fx` values
 
-`none` · `move` · `scan` · `impact` · `ambush` · `alarm` · `relay` ·
-`nightvision`
+`none` · `move` · `scan` · `thermal` · `impact` · `ambush` · `alarm` ·
+`breach-room` · `plant` · `relay` · `nightvision`
+
+**`scan` flies the drone. `thermal` does not.** A thermal or acoustic read is
+taken from where the squad is standing, so the visible event has to be the
+ground lighting up rather than an aircraft leaving. Using `scan` for a sensor
+sweep launches a drone the fiction never sent.
+
+```js
+THERMAL_SWEEP: {
+  fx: 'thermal',
+  sweepArea: roomArea('HOLDING'),              // { minX, maxX, minZ, maxZ }
+  sweepBlooms: bodiesIn('HOLDING', ['sixth']), // [[x, z], …] — one per body found
+}
+```
+
+`FX.areaSweep` draws a warm wash the size of `sweepArea`, an outline so the
+player can see what was and was not swept, and a bar that crosses it once —
+dropping a heat bloom at each point in `sweepBlooms` **as the bar reaches it**,
+so the sweep looks like it is finding bodies rather than announcing them.
+The floor height is sampled with `groundAt`, because the depot's three rooms
+sit at three different heights.
+
+Derive `sweepBlooms` from the same `ACTORS` table that later spawns the
+figures. Mission 3 does this with `bodiesIn(zone, except)`, so the number of
+blooms on screen and the number the AI says out loud cannot drift apart. The
+`except` list is for contacts the copy says the sweep *could not* resolve —
+they are in the room, and they stay dark.
 
 ### Zones and traversal (Ammunition Depot)
 
@@ -334,6 +368,18 @@ and do not come from the layout. If you move the map, grep for them.
    declaring it short-circuits that.
 7. **Every flagged objective must be met for MISSION COMPLETE.** If your
    mission has two, both count.
+8. **`reveal` as coordinates, never as a name.** `reconTarget` used to resolve
+   a drone's destination through Dry Creek's `PLACES`/`RECON_BY_TURN` tables.
+   The depot passes `{ x, z }`, which is an object — indexing a table with it
+   gives `undefined`, so **every depot sortie silently flew to mission 1's
+   relay console.** Coordinates now win outright. If you add a mission, give
+   every `reveal` real coordinates and never rely on the turn-number table.
+9. **An actor's `turns` list is how long it loiters.** `guard-cover` was
+   authored as `[4, 5, 6, 7, 8, 9, 10, 11]` and followed the squad around the
+   compound for seven turns after his one scene. Give a contact the turns it
+   is *in*, not the rest of the mission.
+10. **If the prose says the squad moved, do not set `holdsPosition`.** Turn 4
+   said "squad routes around him" on three outcomes that all held position.
 
 ## Design principles that make a mission *good*
 
@@ -431,6 +477,16 @@ charge indicator, so turn 10's `relay` FX *is* the detonation.
   hole in a wall.
 - **Box geometry is long on local +x**, so aligning a run of panels to a line
   needs `atan2(-dz, dx)`.
+- **Anything in `/render` that carries a lookup table is carrying mission 1's
+  content.** `reconTarget` fell back through Dry Creek's place names for every
+  depot drone sweep, and the only symptom was an aircraft flying somewhere
+  slightly wrong — no error, no warning. This is the same class of bug as
+  `relayOnline`, `OUTCOME_COPY` and the first-flagged-objective check. **It has
+  now happened four times.** When a shared module has a default, ask which
+  mission wrote it.
+- **Effects pinned to `y = 0` draw through the floor.** The depot's yard,
+  holding room and ammo room sit at three different heights. Ground-laid
+  geometry samples `groundAt(x, z)` for the same reason the squad does.
 
 ---
 

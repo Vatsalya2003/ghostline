@@ -234,7 +234,7 @@ export const ACTORS = [
   // brief, not a placement: he is a maintenance worker, and drawing him as
   // either thing answers the question turn 4 asks.
   { id: 'guard-cover', kind: 'civilian', state: 'unresolved', pose: 'crouch',
-    at: [8.6, 3.4], face: 3.9, turns: [4, 5, 6, 7, 8, 9, 10, 11] },
+    at: [7.8, 7.4], face: 3.9, turns: [4] },
 
   // --- INSIDE THE HOLDING ROOM ------------------------------------------
   //
