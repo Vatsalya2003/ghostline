@@ -239,3 +239,24 @@ Full write-up in `map-rebuild-notes.md`.
 **Note for mission 1:** `Terrain.js` has the same z-mirror as bug 2, but nothing
 in Dry Creek is placed from its height field, so it is invisible there. Left
 alone deliberately rather than silently reshaping a rehearsed map.
+
+---
+
+# FIXED — AMMUNITION DEPOT build (branch `3d_V2`)
+
+| # | Severity | What | Cause |
+|---|---|---|---|
+| 1 | **P1** | The squad never moved on any turn that ordered a move | mission3's `moves` were written as an array of `{unit,x,z}`; the engine takes a map of callsign → `[x,z]`, so `Object.entries` handed back indices and the destructure threw. Caught by a console error during a scripted playthrough, not by reading |
+| 2 | **P2** | The perimeter wall rendered as a zigzag of notches | Panels were rotated with `atan2(dx,dz)`, which aligns local +z to the run — but a box panel is long on local **+x**, so every panel sat across the wall |
+| 3 | **P2** | A pale lit diamond stamped on a dark plain | Depot shadow camera was 45 units over a 180-unit ground. **Same defect as the seabed had** — see `map-rebuild-notes.md` |
+
+**Still open**
+
+| Severity | What |
+|---|---|
+| **P1** | `npm run verify` only walks mission 1. Missions 2 and 3 have a schema lint and playtests only. Extending `verify.mjs` to loop `MISSIONS` is the highest-value test job outstanding |
+| P2 | The depot's graded platform still shows a straight edge where it meets the hillside — softer than it was, not gone |
+| P2 | Residual soft diagonal banding on open seabed sediment (mission 2), isolated to the terrain material, term not yet identified |
+| P2 | Missions 2 and 3 have no baked voice — captions and TTS only |
+| P2 | All three missions use the same walker models; mission 2 should be AUVs |
+| P2 | Audio-suspend and GSAP-timeline pause on the FULL LOG panel are verified by reading, not by running — headless has no AudioContext |

@@ -1,5 +1,12 @@
 # GHOSTLINE — MISSION OPTIONS
 
+> **Superseded in part.** This document compares missions 1 and 2, which were
+> the choice at the time it was written. There are now **three** missions —
+> AMMUNITION DEPOT was added from the storyline brief and is documented in
+> `mission-walkthrough.md` (Part 5) and `README.md`. The comparison below is
+> still accurate about Dry Creek and Black Current; it simply is not the whole
+> picture any more.
+
 Two missions, one engine. Everything below is content in `src/data/`, not new
 systems: same turn manager, same trust grading, same debrief, same input.
 

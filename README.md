@@ -24,10 +24,19 @@ the answer — the machine has to sort a room into hostages and hostiles, and on
 turn 6 it gives you the same HIGH it earned on turn 5 for a figure it cannot
 actually see.
 
-**Design docs:** `team-brief.md` (what we're making) · `development-plan.md`
-(build order) · `mission-options.md` (both missions, side by side) ·
-`map-rebuild-notes.md` (the undersea map: what broke and how) ·
-`suggestion-bug.md` (bugs and ideas — log yours here)
+## Which document do you want?
+
+| You want to… | Read |
+|---|---|
+| **Install it and play** | this file |
+| **Understand the missions** and judge the map design | `mission-walkthrough.md` — plain language, no code |
+| **Work on the code** | **`DEVELOPER-GUIDE.md`** — architecture, how to write a mission, every trap we've already hit |
+| Log a bug or an idea | `suggestion-bug.md` |
+
+Also: `team-brief.md` (the original pitch) · `development-plan.md` (build
+order) · `mission-options.md` (missions 1 and 2 compared) ·
+`map-rebuild-notes.md` (the undersea map: five bugs and the rebuild) ·
+`audit-findings.md` · `gameplay-integration-notes.md`
 
 > **You are on branch `3d_V2`.** It carries the 3D character models, the
 > daylight desert, the split-screen layout and the whole Black Current mission.
@@ -428,24 +437,24 @@ desert. Nothing in `/systems` changed to add it.
 ## Where the code lives
 
 ```
-src/data/mission1.js   Dry Creek  — dialogue, confidence, outcomes, grades
-src/data/mission2.js   Black Current
-src/data/mission3.js   Ammunition Depot
-src/data/missions.js   registry + the ?mission= switch
-src/systems/           TurnManager, GameState, Director, Dialogue, Audio, Input
+src/data/              ALL mission content — mission1/2/3 + the registry
+src/systems/           TurnManager, GameState, Director, Input, Audio
 src/render/            Scene, Camera, Units, SensorCones, FogOfWar, FX
-  Terrain.js + Level.js         the desert
-  Seabed.js  + SeabedLevel.js   the undersea range
-  Depot.js   + DepotLevel.js    Compound 14
-  AssetLoader.js                FBX loading, with procedural fallback
+  Terrain.js + Level.js         'day'      — the desert
+  Seabed.js  + SeabedLevel.js   'undersea' — Test Range 9
+  Depot.js   + DepotLevel.js    'depot'    — Compound 14
+  AssetLoader.js                GLB loading, with procedural fallback
 src/ui/                CommsPanel, CommandBar, StatusHUD, MissionLog, Debrief
 src/style/main.css     HUD, palette, scanlines, the 70/30 split layout
-scripts/sim.mjs        headless mission runner
+scripts/               sim, verify, e2e, voice baking
 ```
 
 **The rule:** nothing in `/systems`, `/render` or `/ui` hardcodes mission
 content. If you find yourself typing dialogue into a `.js` file outside
 `/data`, stop.
+
+**Full architecture, the turn flow, how to write a mission, and the traps that
+have already caught someone → `DEVELOPER-GUIDE.md`.**
 
 ## Palette
 

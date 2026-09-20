@@ -165,3 +165,26 @@ Other work:
 > was taken with the veil 90 % down. Force
 > `OP.scene.getObjectByName('fog').material.uniforms.uReveal.value = 1`
 > before capturing.
+
+
+---
+
+# UPDATE — the shadow-frustum bug recurred
+
+Building Compound 14 (mission 3) reproduced defect 2 above exactly: the depot
+shadow camera was 45 units over a 180-unit ground, so everything outside it
+sampled the clamped edge of the shadow map and went dark. It read as a pale
+lit diamond stamped on a dark plain — not as a lighting bug.
+
+**This has now happened twice, in two different environments.** It is written
+up in `DEVELOPER-GUIDE.md` §5 as a standing trap. Any new environment needs
+its shadow camera sized to the camera's reach, not to `GROUND_SIZE`.
+
+Two further traps were added to the guide from the depot build:
+
+- **`moves` is a map, not an array.** `{ ALPHA: [x, z] }`. The array form
+  throws inside `Director.moveSquad` and the only visible symptom is that the
+  squad never moves.
+- **Box panels are long on local +x**, so aligning them to a run needs
+  `atan2(-dz, dx)`. Using `atan2(dx, dz)` puts every panel *across* the run —
+  the depot's perimeter wall came out as a zigzag of notches.
