@@ -98,6 +98,49 @@ export const SURFACE = {
                  tex: { set: 'ground-dirt', scale: 0.6, normalScale: 0.55, albedoMix: 0.3 } },
   gravel:      { color: 0xb9ae99, roughness: 1.0, metalness: 0.0,
                  tex: { set: 'ground-gravel', scale: 0.5, normalScale: 0.9 } },
+  // --- PEOPLE. The guards and the hostages (Actors.js).
+  //
+  // These are the only meshes in the compound the player is asked to tell
+  // apart from each other, so they are allowed to sit brighter and warmer
+  // than the concrete they stand on — a hostage who sinks into the floor is
+  // a hostage nobody spares.
+  //
+  // Character models are SKINNED, so any texture here has to be object space:
+  // a world projection slides across a figure as it is walked or herded, and
+  // the object-space unit is the model's own (~1.75 for a person), so the
+  // scale numbers are repeats-per-body-height rather than per-metre.
+  //
+  // Skin, hair and eyes stay untextured on purpose: a fabric normal on a face
+  // reads as damage, and at tactical zoom a head is thirty pixels.
+  skin:        { color: 0xc49472, roughness: 0.92, metalness: 0.0 },
+  hair:        { color: 0x2a2018, roughness: 0.96, metalness: 0.0 },
+  eyeDark:     { color: 0x15110d, roughness: 0.50, metalness: 0.0 },
+  // Helmet visor. Dark and a little wet — never emissive: cyan and amber
+  // already mean something about the player's own squad on this board.
+  visor:       { color: 0x16222b, roughness: 0.22, metalness: 0.60 },
+  // Tactical black, and the plate carrier over it. The guards read as a
+  // silhouette first, so the two stay close in value and far from the
+  // civilians' warm cloth.
+  tacticalCloth: { color: 0x3e464c, roughness: 0.92, metalness: 0.04,
+                 tex: { set: 'sandbag', scale: 4.0, space: 'object', normalScale: 0.5, albedoMix: 0.35 } },
+  tacticalRig: { color: 0x5a656e, roughness: 0.68, metalness: 0.28,
+                 tex: { set: 'metal-painted', scale: 4.6, space: 'object', normalScale: 0.6, albedoMix: 0.40 } },
+  // Depot workers. The hard hat and the vest are the whole read at forty
+  // units: warm, light, and nothing like the black rig opposite them.
+  hiVis:       { color: 0xc7a441, roughness: 0.84, metalness: 0.02,
+                 tex: { set: 'metal-painted', scale: 4.6, space: 'object', normalScale: 0.4, albedoMix: 0.30 } },
+  civVest:     { color: 0xa66037, roughness: 0.90, metalness: 0.0,
+                 tex: { set: 'sandbag', scale: 4.4, space: 'object', normalScale: 0.5, albedoMix: 0.35 } },
+  civCloth:    { color: 0xaba492, roughness: 0.95, metalness: 0.0,
+                 tex: { set: 'sandbag', scale: 4.4, space: 'object', normalScale: 0.6, albedoMix: 0.40 } },
+  civTrouser:  { color: 0x5e5240, roughness: 0.95, metalness: 0.0,
+                 tex: { set: 'sandbag', scale: 4.4, space: 'object', normalScale: 0.5, albedoMix: 0.35 } },
+  civTrouserDark: { color: 0x3d3529, roughness: 0.95, metalness: 0.0,
+                 tex: { set: 'sandbag', scale: 4.4, space: 'object', normalScale: 0.5, albedoMix: 0.35 } },
+  boot:        { color: 0x1a1b1d, roughness: 0.90, metalness: 0.06 },
+  // Cable ties and the tether off them. Pale on purpose — this is the cue
+  // turns 5 to 7 are decided on and it has to survive being forty pixels tall.
+  restraint:   { color: 0xd9d3c3, roughness: 0.80, metalness: 0.05 },
   // Placeholder for anything the unit/drone code re-tints per instance. The
   // colour here is never seen — setStatus overwrites it on the first frame.
   tint:        { color: 0x4ce0d8, roughness: 0.40, metalness: 0.35, emissive: 0x4ce0d8, emissiveIntensity: 1.60 },
@@ -153,6 +196,7 @@ const KIT_SURFACE = {
 // roughness range so they do not read as showroom plastic.
 const KEEP_ORIGINAL = new Set([
   'Atlas', 'Atlas.047', 'M_PCL_Flat_Palette', 'Headlights', 'BrakeLight',
+  'George_Texture',
 ]);
 
 // ...but an atlas authored for a different game is still authored for a
@@ -166,6 +210,7 @@ const KEEP_TINT = {
   Atlas: 0x6f6b4e,              // military-truck — yellow to olive drab
   Headlights: 0xb8b09a,
   BrakeLight: 0x7a3a34,
+  George_Texture: 0x9aa494,     // squad mech — drab base; Units.js tints per unit
   'Atlas.047': 0x9c9384,        // gate-barrier — knocked back, stripes kept
   M_PCL_Flat_Palette: 0xa9a08a, // ammo-crate — stencilling stays readable
 };

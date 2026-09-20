@@ -57,32 +57,389 @@ function onGround(object, x, z, { sink = 0, rotY = 0, tiltToSlope = true } = {})
 // keeps the fade contract intact, because the result is still one
 // MeshStandardMaterial the occlusion system can drive `opacity` on.
 //
+// `wx` names a WEATHERING PROGRAM — see the block below. The PBR set gives a
+// surface its grain; the weathering gives it a history, and history is what
+// the compound was missing. A concrete panel is not a concrete panel because
+// it has aggregate in it, it is one because it has a joint every 2.4 m, a
+// streak under the capping course and half a metre of yard thrown up its base.
+//
 // Base colours are lifted above the old flat values: the detail albedo
 // multiplies into them, so the pre-texture colour would come out a stop dark.
-const fadeMat = (color, roughness = 0.94, metalness = 0.02, tex = null) => {
+const fadeMat = (color, roughness = 0.94, metalness = 0.02, tex = null, wx = null) => {
   const mat = tex
     ? triplanarMaterial({ color, roughness, metalness, ...tex })
     : new THREE.MeshStandardMaterial({ color, roughness, metalness, flatShading: true });
   mat.transparent = true;
   mat.opacity = 1;
   mat.depthWrite = true;
+  if (wx) weather(mat, wx);
   return mat;
 };
 
+// ---------------------------------------------------------------- weathering
+
+// Everything the surface tells you that the geometry does not.
+//
+// These run on TOP of the triplanar detail, in the same world space it uses:
+// the projection already carries `vTriPos` and `vTriNrm` as varyings, so the
+// weathering costs no extra plumbing and no extra vertex work — only the
+// arithmetic, and nearly all of it is noise rather than texture fetches, which
+// is what keeps it affordable on the software rasteriser.
+//
+// Anchors matter. The triplanar injection appends itself to <map_fragment> and
+// replaces <roughnessmap_fragment> and <normal_fragment_maps> outright, so
+// weathering hangs off the chunks that come immediately AFTER each of those —
+// <color_fragment>, <metalnessmap_fragment> and
+// <clearcoat_normal_fragment_begin> (empty without USE_CLEARCOAT, and the only
+// safe seam left after the normal has been built).
+
+const WX_COMMON = /* glsl */`
+uniform float uWxBase;
+uniform float uWxTop;
+uniform float uWxSeed;
+uniform float uWxDirt;
+uniform vec2 uWxStain;
+uniform float uWxStainR;
+float wxH(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+float wxN(vec2 p) {
+  vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
+  return mix(mix(wxH(i), wxH(i + vec2(1.0, 0.0)), f.x),
+             mix(wxH(i + vec2(0.0, 1.0)), wxH(i + vec2(1.0, 1.0)), f.x), f.y);
+}
+float wxFbm(vec2 p) { return wxN(p) * 0.60 + wxN(p * 2.3) * 0.28 + wxN(p * 5.1) * 0.12; }
+// GLSL leaves smoothstep UNDEFINED when edge0 >= edge1. Every driver this has
+// been run on happens to evaluate the descending ramp anyway, which is exactly
+// the kind of thing that works until the demo is on someone else's laptop.
+// Everything below that wants a falling edge asks for it by name.
+float wxFall(float e0, float e1, float x) { return 1.0 - smoothstep(e0, e1, x); }
+`;
+
+// Poured and precast concrete, outdoors.
+const WX_WALL = /* glsl */`
+float wxRough = 1.0, wxMetalK = 1.0, wxHeight = 0.0;
+{
+  vec3 wn = normalize(vTriNrm);
+  float up = clamp(wn.y, 0.0, 1.0);
+  float y = vTriPos.y - uWxBase;                       // metres above the footing
+  float run = vTriPos.x + vTriPos.z + uWxSeed;         // along the wall, either axis
+  // The aggregate grain, before anything below tints it — this is the only
+  // part of the relief that comes from the scanned surface rather than from
+  // the history drawn on top of it.
+  float grain = dot(diffuseColor.rgb, vec3(0.299, 0.587, 0.114));
+
+  // Pour patches. No two panels of a wall this old are the same colour, and
+  // a compound of identical panels is the thing that reads as generated.
+  // Two scales: slab-sized blotches, and the finer mottling of a bad pour.
+  float pour = wxFbm(vec2(run * 0.23, vTriPos.y * 0.17)) * 0.72
+             + wxFbm(vec2(run * 0.95, vTriPos.y * 0.8) + 5.0) * 0.28;
+  diffuseColor.rgb *= 0.74 + pour * 0.56;
+  // The cool grey of cement against the warm cast of old sand-heavy mix, by
+  // patch. A concrete wall is never one hue, and the difference between the
+  // two is most of what stops it reading as painted cardboard. Held tight:
+  // the key light is already 0xffd4a0, and a warm cast on top of a warm sun
+  // is what turned the first pass of these walls the colour of plywood.
+  diffuseColor.rgb *= mix(vec3(1.035, 1.010, 0.965), vec3(0.955, 0.975, 1.0),
+                          smoothstep(0.35, 0.72, pour));
+
+  // Precast joints between panels. A vertical every 2.4 m, and a LIFT JOINT
+  // where the pour was stopped overnight — one per panel, at a height that
+  // varies with the panel, because a horizontal line at the same height along
+  // a whole building is a plank edge and turns concrete into cladding. That
+  // is exactly what the regular 1.2 m shutter line here used to do.
+  float panel = floor(run / 2.4);
+  float jv = abs(fract(run / 2.4 + 0.5) - 0.5) * 2.4;
+  float liftY = 0.9 + wxN(vec2(panel, 3.0)) * 1.5;
+  float jh = abs(y - liftY);
+  float joint = max(wxFall(0.0, 0.055, jv), wxFall(0.0, 0.030, jh) * 0.45);
+  diffuseColor.rgb *= 1.0 - joint * 0.45 * (1.0 - up);
+
+  // Runoff off the capping course. Thin, irregularly spaced, strongest under
+  // the cap and washed out well before the base. Grey-green, not brown: this
+  // is washed cement dust and algae, and a warm streak on a warm wall is wood.
+  float sf = wxFbm(vec2(run * 2.7, y * 0.16));
+  float streak = smoothstep(0.46, 0.84, sf)
+               * smoothstep(0.08, 0.55, y / max(uWxTop, 0.6)) * (1.0 - up);
+  diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * vec3(0.52, 0.56, 0.54), streak * 0.9);
+
+  // Splash. Every vehicle that has driven past has thrown the yard at the
+  // bottom half-metre, and rain has run the rest back down. The edge is a
+  // ragged tide line, not a band — a clean one reads as a painted plinth.
+  float edge = 0.34 + wxFbm(vec2(run * 1.4, 4.0)) * 0.62;
+  float splash = wxFall(0.0, edge, y) * (1.0 - up) * uWxDirt;
+  splash *= 0.55 + wxFbm(vec2(run * 3.0, y * 2.4) + 17.0) * 0.9;
+  splash = clamp(splash, 0.0, 1.0);
+  diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.085, 0.068, 0.047), splash * 0.72);
+
+  // Spalling: chipped faces show paler, sharper aggregate.
+  float chip = smoothstep(0.88, 0.965, wxFbm(vec2(run * 6.5, vTriPos.y * 5.5) + 31.0));
+  diffuseColor.rgb += chip * 0.10 * (1.0 - splash);
+
+  // Sun-bleached tops, wet-dark undersides.
+  diffuseColor.rgb *= 1.0 + up * 0.10 - clamp(-wn.y, 0.0, 1.0) * 0.22;
+
+  wxRough = 1.0 + splash * 0.10 + joint * 0.05 - chip * 0.10;
+  // Metres, because WX_BUMP divides it by the world size of a pixel. A 45 mm
+  // recess at a joint, a 16 mm spall, and a few millimetres of aggregate.
+  wxHeight = -joint * 0.045 + chip * 0.016 + (pour - 0.5) * 0.007 + (grain - 0.25) * 0.020;
+}
+`;
+
+// Corrugated sheet over the magazines. The roof is modelled as a slab, so the
+// profile has to come from here — and a roof with no profile is the single
+// flattest thing a compound seen from above can contain.
+const WX_ROOF = /* glsl */`
+float wxRough = 1.0, wxMetalK = 1.0, wxHeight = 0.0;
+{
+  vec3 wn = normalize(vTriNrm);
+  float up = clamp(wn.y, 0.0, 1.0);
+
+  // The rib profile itself comes from the metal-corrugated NORMAL map, which
+  // is a real one-axis relief scan (see SOURCES.md) — so it lights correctly
+  // from any sun angle instead of being a painted stripe, and it does not
+  // moiré the way an analytic sinusoid across a ten-metre slab does. What is
+  // left here is everything the scan cannot know: where this particular roof
+  // has been leaking, laid and walked on.
+  float rib = 0.5 + 0.5 * sin(vTriPos.x * 17.4);   // valley/crest hint only
+
+  // Sheet laps across the run, and the fixing line down each one.
+  float lap = wxFall(0.0, 0.09, abs(fract(vTriPos.z / 2.2 + 0.5) - 0.5) * 2.2);
+  diffuseColor.rgb *= 1.0 - lap * 0.20 * up;
+
+  // Rust blooming out of the fixings and creeping along the laps. Kept off
+  // full saturation: a roof that has gone properly orange pulls harder than
+  // anything else on the board and this is not what the eye should land on.
+  float rf = wxFbm(vec2(vTriPos.x * 0.55, vTriPos.z * 0.55) + uWxSeed);
+  float rust = max(smoothstep(0.66, 0.95, rf), lap * smoothstep(0.52, 0.88, rf)) * up;
+  diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.145, 0.082, 0.047), rust * 0.42);
+
+  // Grit and blown dust that has settled in the valleys and stayed there.
+  float grime = smoothstep(0.30, 0.78, wxFbm(vec2(vTriPos.x * 0.19, vTriPos.z * 0.19) + 9.0))
+              * up * (1.0 - rib * 0.55);
+  diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.150, 0.140, 0.116), grime * 0.50 * uWxDirt);
+
+  // The fascia under the edge is in permanent shadow and permanently filthy.
+  diffuseColor.rgb *= 1.0 - (1.0 - up) * 0.18;
+
+  wxRough = 1.0 + rust * 0.30 + grime * 0.26 - up * 0.06;
+  wxMetalK = clamp(1.0 - rust * 0.85 - grime * 0.55, 0.0, 1.0);
+  // The ribs come from the scan. This is only the step where one sheet laps
+  // over the next, and the pitting where the rust has eaten through.
+  wxHeight = -lap * 0.012 - rust * 0.005;
+}
+`;
+
+// Relief from the surface's own history, with no extra texture fetch.
+//
+// `wxHeight` is assembled by each weathering program out of the fields it has
+// ALREADY evaluated — joint depth, spalling, the pour, the sampled albedo's
+// own luminance. Screen-space derivatives turn that into a gradient and the
+// gradient into a normal (the standard derivative-bump construction: build the
+// surface frame from dFdx/dFdy of the world position, so the result is correct
+// on any face without a tangent attribute — which none of this geometry has).
+//
+// It matters most on concrete. Concrete036's normal map measures σ 7 where the
+// dirt is σ 27 — the set is nearly flat, which is documented upstream and is
+// exactly why a textured wall still read as painted card. A joint the shader
+// draws but does not indent is a line, not a joint.
+const WX_BUMP = /* glsl */`
+{
+  vec3 dpx = dFdx(vTriPos), dpy = dFdy(vTriPos);
+  float dhx = dFdx(wxHeight), dhy = dFdy(wxHeight);
+  vec3 wn = normalize(vTriNrm);
+  vec3 r1 = cross(dpy, wn), r2 = cross(wn, dpx);
+  float det = dot(dpx, r1);
+  vec3 grad = sign(det) * (dhx * r1 + dhy * r2);
+  vec3 bumped = normalize(abs(det) * wn - grad);
+  normal = normalize(mix(normal, (viewMatrix * vec4(bumped, 0.0)).xyz, 0.85));
+}
+`;
+
+// Interior slab: swept, but worn, jointed and stained under whatever leaks.
+const WX_FLOOR = /* glsl */`
+float wxRough = 1.0, wxMetalK = 1.0, wxHeight = 0.0;
+{
+  diffuseColor.rgb *= 0.84 + wxFbm(vTriPos.xz * 0.32 + uWxSeed) * 0.34;
+
+  float jx = wxFall(0.0, 0.055, abs(fract(vTriPos.x / 2.5 + 0.5) - 0.5) * 2.5);
+  float jz = wxFall(0.0, 0.055, abs(fract(vTriPos.z / 2.5 + 0.5) - 0.5) * 2.5);
+  diffuseColor.rgb *= 1.0 - max(jx, jz) * 0.38;
+
+  // Whatever this room holds has leaked. The caller says where and how far.
+  float sd = length(vTriPos.xz - uWxStain) / max(uWxStainR, 0.3);
+  float stain = clamp(exp(-sd * sd) * (0.25 + wxFbm(vTriPos.xz * 1.3) * 1.3), 0.0, 1.0);
+  diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.030, 0.026, 0.021), stain * 0.65);
+
+  // Handling dust, thickest where nobody walks.
+  float film = smoothstep(0.38, 0.86, wxFbm(vTriPos.xz * 0.52 + 21.0));
+  diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.30, 0.28, 0.235), film * uWxDirt * 0.40);
+
+  // Scuff arcs where crates get dragged round.
+  float scuff = smoothstep(0.88, 0.98, wxFbm(vTriPos.xz * 2.6 + 57.0));
+  diffuseColor.rgb *= 1.0 - scuff * 0.16;
+
+  wxRough = 1.0 - stain * 0.40 + film * 0.06;
+  wxHeight = -max(jx, jz) * 0.030 - scuff * 0.004;
+}
+`;
+
+// Painted steel that has been outdoors for a decade: gate leaves, the door,
+// the tower legs, the plant housing.
+const WX_METAL = /* glsl */`
+float wxRough = 1.0, wxMetalK = 1.0, wxHeight = 0.0;
+{
+  float y = vTriPos.y - uWxBase;
+  float f = wxFbm(vTriPos.xz * 1.5 + vec2(vTriPos.y * 0.8) + uWxSeed);
+
+  // Paint fails from the bottom up and from every fixing outwards.
+  float rust = clamp(smoothstep(0.56, 0.86, f) + wxFall(0.0, 0.8, y) * 0.5 * uWxDirt, 0.0, 1.0);
+  diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.155, 0.063, 0.028), rust * 0.66);
+
+  // Drag scratches: bare metal, brighter and much smoother than the paint.
+  float sc = smoothstep(0.90, 0.985, wxFbm(vec2((vTriPos.x + vTriPos.z) * 8.0, vTriPos.y * 1.1)));
+  diffuseColor.rgb += sc * 0.14;
+
+  diffuseColor.rgb *= 0.88 + wxFbm(vTriPos.xz * 0.5 + 77.0) * 0.26;
+
+  wxRough = 1.0 + rust * 0.34 - sc * 0.45;
+  wxMetalK = clamp(1.0 - rust * 0.8 + sc * 0.5, 0.0, 1.0);
+  wxHeight = rust * 0.004 - sc * 0.0015;
+}
+`;
+
+const WX = { wall: WX_WALL, roof: WX_ROOF, floor: WX_FLOOR, metal: WX_METAL };
+
+// Attach a weathering program to an already-built triplanar material.
+//
+// The triplanar's own compile hook runs first and is left untouched, so the
+// two are independent: the surface set can change without touching the
+// history, and vice versa.
+function weather(mat, spec) {
+  const { kind } = spec;
+  const body = WX[kind];
+  if (!body) return mat;
+
+  mat.userData.weather = {
+    kind,
+    base: spec.base ?? 0,
+    top: spec.top ?? 3.4,
+    seed: spec.seed ?? 0,
+    dirt: spec.dirt ?? 1,
+    stain: spec.stain ?? [1e4, 1e4],
+    stainR: spec.stainR ?? 1,
+  };
+
+  const baseCompile = mat.onBeforeCompile;
+  const baseKey = mat.customProgramCacheKey;
+
+  mat.onBeforeCompile = function compileWeathered(shader, renderer) {
+    baseCompile.call(this, shader, renderer);
+    const w = this.userData.weather;
+    shader.uniforms.uWxBase = { value: w.base };
+    shader.uniforms.uWxTop = { value: w.top };
+    shader.uniforms.uWxSeed = { value: w.seed };
+    shader.uniforms.uWxDirt = { value: w.dirt };
+    shader.uniforms.uWxStain = { value: new THREE.Vector2(w.stain[0], w.stain[1]) };
+    shader.uniforms.uWxStainR = { value: w.stainR };
+
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>', `#include <common>\n${WX_COMMON}`)
+      .replace('#include <color_fragment>', `#include <color_fragment>\n${WX[w.kind]}`)
+      .replace('#include <metalnessmap_fragment>', `#include <metalnessmap_fragment>
+        roughnessFactor = clamp(roughnessFactor * wxRough, 0.05, 1.0);
+        metalnessFactor = clamp(metalnessFactor * wxMetalK, 0.0, 1.0);`);
+
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <clearcoat_normal_fragment_begin>',
+        `#include <clearcoat_normal_fragment_begin>\n${WX_BUMP}`);
+  };
+  mat.customProgramCacheKey = function key() {
+    return `${baseKey.call(this)}|wx:${kind}`;
+  };
+  return mat;
+}
+
+// THREE's clone() carries NEITHER onBeforeCompile NOR customProgramCacheKey.
+//
+// This was live in the compound and invisible: every wall run, every capping
+// course and every roof in Compound 14 went through `MAT.wall.clone()`, came
+// out with no compile hook, and rendered as flat untinted colour — the whole
+// installation was a set of cream boxes while the props around it carried
+// full PBR. Anything that needs its own copy of a fadeable surface goes
+// through here now, and `overrides` is where a run gets its own footing
+// height, its own seed and its own amount of dirt.
+function cloneFade(source, overrides = null) {
+  // THREE.Material.copy() deep-copies userData through JSON.stringify, and a
+  // THREE.Texture sitting in there serialises its decoded image to a base64
+  // data URL on the way. With a triplanar set hanging off every surface that
+  // is three JPEGs re-encoded through a canvas per wall run, at boot, on the
+  // main thread. Hiding userData across the clone costs two lines; the real
+  // references are reattached below, which is all any caller wanted anyway.
+  const src = source.userData;
+  source.userData = {};
+  const copy = source.clone();
+  source.userData = src;
+
+  copy.userData = {};
+  if (src.tri) {
+    copy.userData.tri = src.tri;          // shared: the compile hook only reads it
+    copy.onBeforeCompile = source.onBeforeCompile;
+    copy.customProgramCacheKey = source.customProgramCacheKey;
+  }
+  if (src.weather) copy.userData.weather = { ...src.weather, ...(overrides || {}) };
+
+  copy.transparent = true;
+  copy.opacity = 1;
+  copy.depthWrite = true;
+  return copy;
+}
+
+// Roughness and metalness are deliberately NOT one pair of numbers across the
+// compound: poured concrete sits near 1.0 and 0, a galvanised roof is
+// half-metal and a third smoother, painted steel is smoother still until the
+// paint fails, and the interior slab is polished by boots where the exterior
+// is not. The weathering programs then push each of them around per fragment.
 const MAT = {
-  wall: fadeMat(0xc6b89e, 0.94, 0.02, { set: 'concrete', scale: 0.3, albedoMix: 0.45, normalScale: 0.9 }),
-  wallInner: fadeMat(0xb1a58d, 0.94, 0.02, { set: 'concrete', scale: 0.34, albedoMix: 0.45, normalScale: 0.8 }),
-  concrete: fadeMat(0xb0a695, 0.95, 0.02, { set: 'concrete', scale: 0.32, albedoMix: 0.45, normalScale: 0.9 }),
-  concreteDark: fadeMat(0x857e70, 0.96, 0.02, { set: 'concrete', scale: 0.3, albedoMix: 0.45, normalScale: 0.9 }),
+  // Cool grey-beige, not cream. The ground is warm tan for eighty metres in
+  // every direction; a warm wall on warm ground is why the compound read as
+  // one continuous material, and pulling the concrete a few degrees cold
+  // separates every structure from the pan it stands on without touching the
+  // exposure. The `scale` numbers put roughly one aggregate repeat every two
+  // and a half metres, which is the size real exposed aggregate reads at.
+  wall: fadeMat(0xc2c2bb, 0.96, 0.02,
+    { set: 'concrete', scale: 0.40, albedoMix: 0.66, normalScale: 1.2 },
+    { kind: 'wall', top: 3.4, dirt: 0.85 }),
+  wallInner: fadeMat(0xaeaea6, 0.93, 0.02,
+    { set: 'concrete', scale: 0.46, albedoMix: 0.62, normalScale: 0.9 },
+    { kind: 'wall', top: 3.4, dirt: 0.35 }),
+  concrete: fadeMat(0xb9b9b1, 0.97, 0.02,
+    { set: 'concrete', scale: 0.36, albedoMix: 0.66, normalScale: 1.15 },
+    { kind: 'wall', top: 2.8, dirt: 1.0 }),
+  concreteDark: fadeMat(0x8b8b82, 0.98, 0.02,
+    { set: 'concrete', scale: 0.32, albedoMix: 0.62, normalScale: 1.1 },
+    { kind: 'wall', top: 2.8, dirt: 1.0 }),
   // Corrugated sheet over the magazines, not poured concrete.
-  roof: fadeMat(0x716a5e, 0.88, 0.12, { set: 'metal-plate', scale: 0.6, albedoMix: 0.45, normalScale: 0.9 }),
-  metal: fadeMat(0x938d7f, 0.60, 0.55, { set: 'metal-plate', scale: 0.75, albedoMix: 0.5 }),
+  //
+  // `scale` 0.55 puts one repeat of the scan every 1.8 m, and the scan has
+  // eleven ribs across it — a 165 mm pitch, which is what profiled roofing
+  // sheet actually measures. Galvanised and dusty rather than painted, so the
+  // metalness is held well under a half: at 0.6 the low sun turns every crest
+  // into a blown white line and the roof becomes the brightest thing on the
+  // board, which is the last place the eye should be pulled.
+  roof: fadeMat(0x8e8a7c, 0.82, 0.26,
+    { set: 'metal-corrugated', scale: 0.55, albedoMix: 0.58, normalScale: 1.0 },
+    { kind: 'roof', dirt: 1.0 }),
+  metal: fadeMat(0x9a9384, 0.58, 0.60,
+    { set: 'metal-plate', scale: 0.75, albedoMix: 0.52 },
+    { kind: 'metal', dirt: 0.9 }),
   rust: fadeMat(0xa2663b, 0.92, 0.15, { set: 'metal-rust', scale: 1.0, albedoMix: 0.5 }),
   // Rubber and shadowed trim. Deliberately untextured: at this value the
   // detail map is invisible and the extra fetches are not worth a black edge.
   dark: fadeMat(0x3a3833, 0.9, 0.2),
-  // Swept hardstanding underfoot, finer than the wall aggregate.
-  floor: fadeMat(0x968e80, 0.97, 0.02, { set: 'concrete', scale: 0.42, albedoMix: 0.45, normalScale: 0.7 }),
+  // Swept hardstanding underfoot, finer than the wall aggregate and polished
+  // where boots go. Each room clones this with its own stain source.
+  floor: fadeMat(0xa79e90, 0.90, 0.03,
+    { set: 'concrete', scale: 0.46, albedoMix: 0.58, normalScale: 0.55 },
+    { kind: 'floor', dirt: 0.8, stainR: 2.0 }),
 };
 
 // Everything in the yard has been standing in the same dust.
@@ -126,20 +483,35 @@ const WALL_H = 3.4, WALL_T = 0.3;
 // A box is long on local +x, so aligning it to the run needs atan2(-dz, dx).
 // Using atan2(dx, dz) puts every panel *across* the wall — that is exactly
 // how the first version of this came out, as a zigzag of notches.
-function buildWall(group, seg, fadeables, height = WALL_H, mat = MAT.wall) {
-  // One material per wall RUN, not per panel and not shared across the whole
-  // compound. Shared would fade every wall in the building when one of them
-  // blocks the camera; per-panel would pop a single section out of a wall and
-  // read as a hole. A run is the unit the eye already treats as one thing.
-  const runMat = mat.clone();
-  const capMatRun = MAT.concreteDark.clone();
-  const meshes = [];
-
+function buildWall(group, seg, fadeables, height = WALL_H, mat = MAT.wall, dirt = null) {
   const [ax, az] = seg.a, [bx, bz] = seg.b;
   const dx = bx - ax, dz = bz - az;
   const len = Math.hypot(dx, dz);
   if (len < 0.01) return;
   const ang = Math.atan2(-dz, dx);
+
+  // One material per wall RUN, not per panel and not shared across the whole
+  // compound. Shared would fade every wall in the building when one of them
+  // blocks the camera; per-panel would pop a single section out of a wall and
+  // read as a hole. A run is the unit the eye already treats as one thing.
+  //
+  // It is also where the compound stops being one repeated wall. Each run
+  // gets its own noise seed, its own footing height so the splash zone sits
+  // on the ground the run actually stands on, and a small value offset — a
+  // dozen panels of exactly one grey is what reads as generated, and the
+  // difference between them does not have to be large to break that.
+  const seed = rand((ax * 31.7 + az * 11.3 + bx * 7.1 + bz * 3.3) * 0.5) * 97;
+  const foot = depotHeight((ax + bx) / 2, (az + bz) / 2);
+  const runMat = cloneFade(mat, {
+    base: foot, top: height, seed, dirt: dirt ?? mat.userData.weather?.dirt ?? 1,
+  });
+  runMat.color.offsetHSL((rand(seed) - 0.5) * 0.012, (rand(seed + 5) - 0.5) * 0.05,
+                         (rand(seed + 9) - 0.5) * 0.07);
+  runMat.roughness = clamp(runMat.roughness + (rand(seed + 13) - 0.5) * 0.08, 0.4, 1);
+  const capMatRun = cloneFade(MAT.concreteDark, {
+    base: foot + height, top: 0.4, seed: seed + 41, dirt: 0.25,
+  });
+  const meshes = [];
 
   // Turn the door fractions into keep-out spans along the run.
   const gaps = (seg.doors || []).map((d) => {
@@ -252,12 +624,30 @@ function roomFloorAndRoof(group, room, fadeables, roofs) {
   const w = maxX - minX, d = maxZ - minZ;
   const y = depotHeight(cx, cz);
 
-  const floor = box(w, 0.12, d, MAT.floor, cx, y + 0.06, cz);
+  // The slab carries what the room is FOR. The corridor is a plant room and
+  // the plant leaks, so its stain sits under the generator; the magazine is
+  // where ammunition is handled, so its floor is filmed with the dust of it;
+  // the holding room is just a room people have been kept in. Coordinates come
+  // from the zone's own anchor, never from a number typed in here.
+  const anchor = ZONES[room.zone]?.anchor || { x: cx, z: cz };
+  const FLOOR_ROLE = {
+    CORRIDOR: { stain: [anchor.x + 1.5, anchor.z - 1.0], stainR: 2.8, dirt: 0.7 },
+    AMMO_ROOM: { stain: [anchor.x, anchor.z], stainR: 1.4, dirt: 1.35 },
+    HOLDING: { stain: [anchor.x - 2.0, anchor.z - 2.0], stainR: 1.6, dirt: 0.55 },
+  };
+  const floorMat = cloneFade(MAT.floor, {
+    seed: rand(cx * 13.1 + cz * 7.7) * 61,
+    base: y,
+    ...(FLOOR_ROLE[room.zone] || {}),
+  });
+  const floor = box(w, 0.12, d, floorMat, cx, y + 0.06, cz);
   floor.receiveShadow = true;
   floor.castShadow = false;
   group.add(floor);
 
-  const roofMat = MAT.roof.clone();
+  const roofMat = cloneFade(MAT.roof, {
+    base: y + room.height, top: 0.5, seed: rand(cx * 3.9 + cz * 17.3) * 53,
+  });
   const roof = box(w + 0.4, 0.26, d + 0.4, roofMat, cx, y + room.height + 0.13, cz);
   group.add(roof);
   const roofMeshes = [roof];
@@ -287,16 +677,19 @@ function outbuilding(group, spec, fadeables) {
   for (const [name, seg] of Object.entries(sides)) {
     const doors = (spec.doors || []).filter((d) => d.wall === name)
       .map((d) => ({ at: d.at, width: d.width }));
-    buildWall(group, { ...seg, doors }, fadeables, spec.height, MAT.wall);
+    buildWall(group, { ...seg, doors }, fadeables, spec.height, MAT.wall, 1.0);
   }
   const cx = (minX + maxX) / 2, cz = (minZ + maxZ) / 2;
   const y = depotHeight(cx, cz);
-  const roofMat = MAT.roof.clone();
+  const roofMat = cloneFade(MAT.roof, {
+    base: y + spec.height, top: 0.4, seed: rand(cx * 23.7 + cz * 5.1) * 71,
+  });
   const roof = box(maxX - minX + 0.4, 0.24, maxZ - minZ + 0.4, roofMat,
                    cx, y + spec.height + 0.12, cz);
   group.add(roof);
   fadeables.push({ id: `${spec.id}-roof`, materials: [roofMat], meshes: [roof] });
-  group.add(box(maxX - minX, 0.1, maxZ - minZ, MAT.floor, cx, y + 0.05, cz));
+  const floorMat = cloneFade(MAT.floor, { base: y, dirt: 1.0, seed: rand(cx + cz) * 29 });
+  group.add(box(maxX - minX, 0.1, maxZ - minZ, floorMat, cx, y + 0.05, cz));
 }
 
 // ---------------------------------------------------------------- hazard
@@ -484,7 +877,10 @@ export function createDepotLevel(scene) {
   onGround(holdingDoor, 7.3, 0, { tiltToSlope: false });
   holdingDoor.position.y += 1.15;
   holdingDoor.name = 'holding-door';
-  holdingDoor.material = MAT.metal.clone();
+  // Its own copy, because the occlusion system fades it independently — and
+  // through cloneFade, so it keeps its surface. The weathering is turned down:
+  // this door is opened several times a day and the paint on it shows it.
+  holdingDoor.material = cloneFade(MAT.metal, { base: depotHeight(7.3, 0), dirt: 0.45, seed: 17 });
   holdingDoor.material.emissive = new THREE.Color(0x4ce0d8);
   holdingDoor.material.emissiveIntensity = 0.18;
   group.add(holdingDoor);

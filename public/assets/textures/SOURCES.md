@@ -1,6 +1,6 @@
 # GHOSTLINE — TEXTURE SOURCES AND LICENCES
 
-Ten PBR surface sets for the depot, one directory per material slot the
+Eleven PBR surface sets for the depot, one directory per material slot the
 renderer asks for. **Every set is CC0 1.0 Universal (public domain) and comes
 from [ambientCG](https://ambientcg.com).** No attribution is required, nothing
 is non-commercial, nothing needs permission to ship, judge or record. The
@@ -12,7 +12,7 @@ ambientCG's blanket statement, from <https://ambientcg.com/license>:
 > Universal License. This applies to the downloadable asset files and the
 > material preview renders shown for each asset on the site.
 
-**Total: 37 JPEGs, 21.9 MB.** Downloaded and committed — no CDN, no network
+**Total: 41 JPEGs, 22.5 MB.** Downloaded and committed — no CDN, no network
 fetch at runtime. The game still runs offline.
 
 **Normals are the OpenGL convention.** Every archive ships both
@@ -33,9 +33,18 @@ though it is inside-out, that is the thing to check first.
 | `metal-plate` | DiamondPlate008C | [view?id=DiamondPlate008C](https://ambientcg.com/view?id=DiamondPlate008C) | CC0 1.0 | albedo, normal, rough, ao | 1024 | 840 KB |
 | `metal-rust` | Metal041C | [view?id=Metal041C](https://ambientcg.com/view?id=Metal041C) | CC0 1.0 | albedo, normal, rough | 1024 | 520 KB |
 | `metal-painted` | PaintedMetal006 | [view?id=PaintedMetal006](https://ambientcg.com/view?id=PaintedMetal006) | CC0 1.0 | albedo, normal, rough, ao | 1024 | 1.3 MB |
+| `metal-corrugated` | CorrugatedSteel005 | [view?id=CorrugatedSteel005](https://ambientcg.com/view?id=CorrugatedSteel005) | CC0 1.0 | albedo, normal, rough, ao | 1024 | 656 KB |
 | `wood-planks` | Planks021 | [view?id=Planks021](https://ambientcg.com/view?id=Planks021) | CC0 1.0 | albedo, normal, rough, ao | 1024 | 704 KB |
 | `rock` | Rock060 | [view?id=Rock060](https://ambientcg.com/view?id=Rock060) | CC0 1.0 | albedo, normal, rough, ao | 1024 | 1.1 MB |
 | `sandbag` | Fabric011 | [view?id=Fabric011](https://ambientcg.com/view?id=Fabric011) | CC0 1.0 | albedo, normal, rough | 1024 | 744 KB |
+
+`metal-corrugated` was added later than the other ten, for the depot roofs.
+It is a plain rename-and-requantise of the official `CorrugatedSteel005_1K-JPG`
+archive: `_Color` → `albedo.jpg` (q88), `_NormalGL` → `normal.jpg` (q90),
+`_Roughness` → `rough.jpg` (q85), `_AmbientOcclusion` → `ao.jpg` (q85). No
+resize, no colour correction, no recombination. Its `_Metalness` map was
+discarded like every other one here — the renderer takes metalness from the
+material, and this surface is uniform steel anyway.
 
 Three sets have no `ao.jpg` — Concrete036, Metal041C and Fabric011 do not ship
 an ambient occlusion map upstream. Nothing was synthesised to fill the gap.
@@ -54,6 +63,7 @@ Chosen by looking at the sets, not by picking an ID out of the family.
 | `metal-plate` | Dark steel tread plate, moderately worn. The pattern lives in the normal map, so the albedo stays a flat grey that tints cleanly. |
 | `metal-rust` | Heavy corrosion with metal still showing through, rather than Rust009's uniform orange field. Reads as a drum that has been outside for years. |
 | `metal-painted` | The only credible green painted metal on the site with proper chipping and scuffing. See the caveat below. |
+| `metal-corrugated` | The magazine roofs are the largest single surface the tactical camera ever looks at, and they were being drawn as a procedural sine wave — regular enough to moiré, and with no fixings, no lap staining and no rust in the valleys. This set carries the profile in the NORMAL map (σ 54 on red, σ 2.9 on green: pure one-axis relief) over a plain weathered-galvanised albedo, so the ribs light correctly from any sun angle instead of being a painted stripe. CorrugatedSteel006A/B/C are the same geometry in bright green; 005 is the only bare-steel one. |
 | `wood-planks` | Rough-sawn raw timber — pallets and crates, not flooring. Mid-tone, so it survives being tinted in either direction. |
 | `rock` | Neutral grey-brown with strong cracked relief (normal-map σ 35, the strongest in the set). Rock029 is desert-correct but too saturated an orange; Rock051/062 carry moss. |
 | `sandbag` | Coarse khaki weave. See the caveat below. |
