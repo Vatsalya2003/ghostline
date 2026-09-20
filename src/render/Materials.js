@@ -209,7 +209,6 @@ const KEEP_TINT = {
   Atlas: 0x6f6b4e,              // military-truck — yellow to olive drab
   Headlights: 0xb8b09a,
   BrakeLight: 0x7a3a34,
-  George_Texture: 0x9aa494,     // squad mech — drab base; Units.js tints per unit
   'Atlas.047': 0x9c9384,        // gate-barrier — knocked back, stripes kept
   M_PCL_Flat_Palette: 0xa9a08a, // ammo-crate — stencilling stays readable
 };
