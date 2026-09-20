@@ -227,7 +227,7 @@ export const mission3 = {
         confidence: 'LOW',
         truth: 'Honest and correct. There is a sentry posted in the occluded section, beside a service door with a live alarm contact. VERITAS does not know that and does not pretend to.',
       },
-      actions: ['ADVANCE', 'ASK_WHY', 'SEND_DRONE', 'NIGHT_VISION', 'FALL_BACK'],
+      actions: ['ADVANCE', 'ASK_WHY', 'SEND_DRONE', 'THERMAL_SWEEP', 'FALL_BACK'],
       outcomes: {
         ASK_WHY: {
           consumesTurn: false,
@@ -246,11 +246,13 @@ export const mission3 = {
           setsFlag: 'northRead',
           note: 'The machine told you where its knowledge stopped and you spent a drone exactly there. That is what the drones are for.',
         },
-        NIGHT_VISION: {
+        THERMAL_SWEEP: {
           consumesTurn: false,
-          response: 'Enhanced optical does not help, Commander. The problem is a building, not the light.',
-          log: 'Low-light pass attempted. The obstruction is structural.',
-          fx: 'nightvision',
+          response: 'Thermal does not help, Commander. The problem is a building, not the light — I cannot read heat through a storage block any better than I can see through it.',
+          log: 'Thermal pass attempted on the north wall. The obstruction is structural.',
+          fx: 'thermal',
+          sweepArea: { minX: -4.0, maxX: 4.0, minZ: 7.0, maxZ: 12.0 },
+          sweepBlooms: [],
         },
         ADVANCE: {
           tag: CALIBRATION.MISUSE,
@@ -360,7 +362,7 @@ export const mission3 = {
         unit: 'BETA-1',
         line: 'Contact at the east corner, behind the crate stack. I have no visual on him from any angle the squad holds — what I have is a heat bloom and the edge of an outline. Posture reads consistent with an armed guard. Confidence HIGH.',
         confidence: 'HIGH',
-        truth: 'It is a maintenance worker on the night shift, kneeling over an open fuel line with a wrench. VERITAS has an outline edge and no face, no weapon and no visual, and has produced a HIGH anyway — the same output it would produce for a guard, a worker or a hostage in a coat. The shape it read as a slung rifle is the wrench. Nobody can shoot what nobody can see; the only moves on this turn are ways of looking.',
+        truth: 'It is a maintenance worker on the day shift, kneeling over an open fuel line with a wrench. VERITAS has an outline edge and no face, no weapon and no visual, and has produced a HIGH anyway — the same output it would produce for a guard, a worker or a hostage in a coat. The shape it read as a slung rifle is the wrench. Nobody can shoot what nobody can see; the only moves on this turn are ways of looking.',
       },
       advance: travel('YARD', 'DOORWAY'),
       actions: ['THERMAL_SWEEP', 'ASK_WHY', 'MARK_TARGET', 'SEND_DRONE', 'ADVANCE'],
@@ -733,7 +735,7 @@ export const mission3 = {
         confidence: 'LOW',
         truth: 'The corridor really is clear. The instability is genuine — generator hall EM plus smoke from the fire the squad started. VERITAS is not broken and not lying: it is correctly reporting that it cannot be relied on here. The right move is to use a different instrument, not to argue with this one.',
       },
-      actions: ['CONFIRM', 'ASK_WHY', 'CROSS_CHECK', 'NIGHT_VISION', 'SEND_DRONE'],
+      actions: ['CONFIRM', 'ASK_WHY', 'CROSS_CHECK', 'THERMAL_SWEEP', 'SEND_DRONE'],
       outcomes: {
         ASK_WHY: {
           consumesTurn: false,
@@ -750,11 +752,13 @@ export const mission3 = {
           reveal: { x: 19.0, z: -7.5 },
           note: 'A degraded instrument is not an unanswerable question. You went and got a different instrument.',
         },
-        NIGHT_VISION: {
+        THERMAL_SWEEP: {
           consumesTurn: false,
-          response: 'Enhanced optical cuts some of the smoke. It does nothing for the EM, Commander.',
-          log: 'Low-light pass cuts the smoke. Sidescan remains unstable.',
-          fx: 'nightvision',
+          response: 'Thermal cuts straight through the smoke. It does nothing whatsoever for the EM, Commander — the sidescan is still lying to me.',
+          log: 'Thermal pass cuts the smoke. Sidescan remains unstable.',
+          fx: 'thermal',
+          sweepArea: roomArea('CORRIDOR'),
+          sweepBlooms: [],
         },
         CONFIRM: {
           tag: CALIBRATION.COMPLACENCY,

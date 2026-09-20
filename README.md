@@ -40,6 +40,7 @@ back to quiet.
 |---|---|
 | **Install it and play** | this file |
 | **Understand the missions** and judge the map design | `mission-walkthrough.md` — plain language, no code |
+| **Check every line, option and outcome** turn by turn | `TURN-BY-TURN.md` — what the AI says, what each button does, whether it's fair |
 | **Work on the code** | **`DEVELOPER-GUIDE.md`** — architecture, how to write a mission, every trap we've already hit |
 | Log a bug or an idea | `suggestion-bug.md` |
 
@@ -50,7 +51,7 @@ order) · `mission-options.md` (missions 1 and 2 compared) ·
 
 > **You are on branch `3d_V2`.** It carries the 3D character models, the
 > daylight desert, the split-screen layout and the whole Black Current mission.
-> `main` is the older, simpler build.
+> `main` now tracks the same commit.
 
 ---
 
