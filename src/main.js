@@ -457,12 +457,6 @@ input.addContext(input.screenContext({
   onCancel: () => { screens.hideBriefing(); screens.showTitle(); },
 }));
 input.addContext(input.screenContext({
-  name: 'tutorial', priority: 45,
-  el: document.getElementById('screen-tutorial'),
-  ring: screens.tutorialRing, label: 'BACK',
-  onCancel: () => { screens.hideTutorial(); screens.showTitle(); },
-}));
-input.addContext(input.screenContext({
   name: 'title', priority: 40,
   el: document.getElementById('screen-title'),
   ring: screens.titleRing, label: 'BEGIN MISSION',
@@ -474,7 +468,7 @@ initVoices();
 ui.hud.setTurn(null);
 ui.hud.setHealth(100);
 ui.hud.setDrones(mission1.drones);
-ui.hud.setStatuses(state.statuses);
+ui.hud.setStatuses(state.statuses, state.ammo);
 
 window.addEventListener('resize', () => resizeCamera(camera, renderer));
 document.addEventListener('pointerdown', () => audio.unlock(), { once: true });

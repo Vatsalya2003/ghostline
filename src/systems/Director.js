@@ -154,7 +154,7 @@ export class Director {
           }
           this.screenFX?.glitch(520);
           this.state.statuses[beat.unit] = beat.status;
-          this.ui.hud.setStatuses(this.state.statuses);
+          this.ui.hud.setStatuses(this.state.statuses, this.state.ammo);
           this.syncDegradedMood();
           await wait(0.8);
           break;
@@ -230,7 +230,7 @@ export class Director {
     this.ui.commandBar.setLocked(true);
     this.ui.commandBar.clear();
     this.ui.hud.setTurn(turn);
-    this.ui.hud.setStatuses(this.state.statuses);
+    this.ui.hud.setStatuses(this.state.statuses, this.state.ammo);
     this.ui.hud.setDrones(this.state.drones);
     this.ui.comms.setConfidence('NONE');
 

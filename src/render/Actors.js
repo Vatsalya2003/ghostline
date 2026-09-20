@@ -1,479 +1,111 @@
 import * as THREE from 'three';
 import gsap from 'gsap';
 import { groundAt } from './Units.js';
-import { spawnModel } from './AssetLoader.js';
-import { surfaceMaterial } from './Materials.js';
+import { triplanarMaterial } from './Textures.js';
 
 // ============================================================================
 // THE PEOPLE
 // ============================================================================
 //
-// Ammunition Depot is a mission about deciding who is in a room. The player is
-// told about six figures, given a filing cabinet to look at, and asked whether
-// to shoot one of them. That decision is made by looking at the board, so the
-// board has to carry it: a captive and a shooter must be tellable apart across
-// a room, at tactical zoom, without reading a word of the briefing.
+// Ammunition Depot is a mission about deciding who is in a room, and until now
+// the room was empty. The player was told about six figures, given a filing
+// cabinet to look at, and asked to decide whether to shoot one of them. That
+// is not a decision, it is a guess about a sentence.
 //
-// These used to be hand-built boxes. Boxes could carry "dark vs pale" and
-// "standing vs seated" and nothing else — and a mission whose whole mechanic
-// is *is that a person or a threat* cannot be argued on a stack of cubes.
-// They are now rigged CC0 characters (Quaternius, public domain — see
-// public/assets/SOURCES.md), posed by hand through their bones.
+// So: simple low-poly figures, built in code like everything else here — no
+// downloaded meshes, nothing to license, and they cost one draw call each.
 //
-// TWO KINDS, and they are separated on every axis available:
+// TWO KINDS, and they have to be tellable apart from across a room at
+// tactical zoom, because that is the entire mechanic:
 //
-//   HOSTILE   modular_men/Swat. Black tactical rig, helmet and visor, on
-//             their feet, a rifle in both hands. Different MODEL, not just a
-//             different colour — the silhouette says it before the palette.
-//   CIVILIAN  modular_men/Worker and modular_women/Worker. Depot staff: hard
-//             hat, hi-vis vest, work trousers. Two models so four hostages in
-//             one room are not four copies of one man.
+//   HOSTILE   dark tactical gear, red band, rifle held across the body,
+//             standing square. Reads as armed at a glance.
+//   CIVILIAN  pale clothing, no rifle, and posture does the work — seated
+//             with the shoulders down, or crouched small behind cover.
 //
-// Colour alone would not be enough — cyan, amber and red already mean things
-// about the player's own squad on this board — so posture and restraint do
-// most of the work. The hostages are on the floor with their wrists tied and
-// a tether running down to a floor anchor. That is a shape, and shapes read
-// at forty units where a hex code does not.
+// Colour alone would not be enough: the player is looking at a board where
+// cyan/amber/red already mean something about their own squad. So the
+// silhouettes differ too — a rifle is a shape, and a seated figure is half
+// the height of a standing one.
 //
-// NOBODY IS ANIMATED. These files ship with a rig and no clips, which is the
-// right trade here: this room is a held frame, not a firefight, and a posed
-// figure costs no mixer and no per-frame skinning update. The poses are bone
-// rotations applied once, on load — see POSES and swingBone below.
-//
-// UNRESOLVED is the important state and is deliberately NOT a person. A figure
-// the AI cannot classify is a dashed amber marker with no body at all, because
-// the whole point of turn 6 is that you do not know what it is yet. Drawing it
-// as either kind would answer the question the mission is asking.
+// UNRESOLVED is the important state. A figure the AI cannot actually see is
+// drawn as a dashed outline with a question mark, not as a person — because
+// the whole point of turn 6 is that you do not know what it is yet.
 
-// ---------------------------------------------------------------- the models
-
-// Kit material name -> GHOSTLINE surface, per file. Character kits name their
-// own materials (`Skin`, `Swat`, `Worker_Vest`) and several of those names
-// collide with the prop table in Materials.js — `Eye` maps to the squad's
-// emissive status tint, which would hand every hostage glowing cyan eyes, and
-// anything unmapped falls through to concrete, which would hand them all
-// concrete faces. Every material on these files is therefore named here.
-//
-// The two worker files disagree about what `Brown` means — trousers on the
-// man, irises on the woman — so they get one map each rather than a shared one.
-const GUARD_SURFACES = {
-  Swat_Black: 'tacticalCloth',
-  Swat: 'tacticalRig',
-  Skin: 'skin',
-  Visor: 'visor',
+// Lifted well above the compound's own palette. These are the only meshes on
+// the board the player is asked to *identify*, and at tactical zoom under a
+// dusk key they were reading as silhouettes against silhouettes.
+const HOSTILE = {
+  cloth: 0x5e666e, trim: 0xff5a4a, skin: 0xd2a684, gear: 0x434a53,
+};
+const CIVILIAN = {
+  cloth: 0xf0e8d2, trim: 0xa9bcc8, skin: 0xe2b894, gear: 0x9a9184,
 };
 
-const WORKER_M_SURFACES = {
-  Skin: 'skin',
-  Worker_Yellow: 'hiVis',       // hard hat
-  Worker_Vest: 'civVest',
-  LightBrown: 'civCloth',       // shirt
-  Brown: 'civTrouser',
-  Brown2: 'civTrouserDark',
-  Black: 'boot',
-  Grey: 'boot',
-  Eyebrows: 'hair',
-  Moustache: 'hair',
-  Eye: 'eyeDark',
-};
-
-const WORKER_F_SURFACES = {
-  Skin: 'skin',
-  Worker_Yellow: 'hiVis',
-  Worker_Vest: 'civVest',
-  White: 'civCloth',
-  DarkBrown: 'hair',
-  Brown: 'eyeDark',
-  Brown_02: 'civTrouser',
-  Brown2: 'civTrouserDark',
-  Black: 'boot',
-};
-
-// World-space surfaces on purpose: an object-space projection samples the
-// rifle's own file units, which are a hundredth of a metre across, and the
-// whole weapon comes out one flat texel.
-const RIFLE_SURFACES = {
-  Main: 'steel', Grey: 'steel', White: 'steelLight', Black: 'steelDark',
-};
-
-const GUARD = { model: 'guard-swat', height: 1.82, surfaces: GUARD_SURFACES };
-const CIVILIANS = [
-  { model: 'civilian-worker', height: 1.74, surfaces: WORKER_M_SURFACES },
-  { model: 'civilian-worker-f', height: 1.66, surfaces: WORKER_F_SURFACES },
-];
-
-const RIFLE_MODEL = 'rifle-ar';
-const RIFLE_LENGTH = 0.78;
-
-// --------------------------------------------------------------- the posing
-
-// These rigs arrive in a T-pose with no animation clips, so every figure has
-// to be posed here or the room fills up with people being crucified.
-//
-// A pose is a list of bone directions in the FIGURE'S OWN FRAME:
-//
-//     +Y up      +Z the way the figure is facing      +X its left
-//
-// (the character's right hand is at -X, which is what you get when +Z is
-// forward and the frame is right-handed).
-//
-// Bones are listed parent-first. Each one is *swung* from where the rigger
-// left it rather than rotated to an absolute orientation — see swingBone.
-//
-// `drop` sinks the whole body so a seated figure's weight lands on the floor
-// instead of on its bind-pose feet. It is in the model file's own units and
-// gets scaled with the figure.
-const POSES = {
-  // Armed and on their feet. The legs keep the bind pose, which is already a
-  // standing one; everything from the waist up goes on the weapon. The right
-  // hand is back at the hip, the left is forward and across — so the barrel
-  // lies over the chest and sticks out past the left shoulder, which is the
-  // read the whole mission hangs on: a shape, not a colour.
-  guard: {
-    drop: 0,
-    bones: [
-      ['Abdomen', [0, 0.995, 0.09]],
-      ['Chest', [0, 0.995, -0.09]],
-      ['Head', [0, 0.99, 0.12]],
-      ['UpperArm.R', [-0.32, -0.90, -0.28]],
-      ['LowerArm.R', [0.30, -0.30, 0.91]],
-      ['Hand.R', [0.26, -0.22, 0.94]],
-      ['UpperArm.L', [0.36, -0.82, 0.44]],
-      ['LowerArm.L', [-0.50, -0.26, 0.83]],
-      ['Hand.L', [-0.55, -0.22, 0.81]],
-    ],
-  },
-
-  // A civilian on their feet: shoulders rolled in, head down, and both hands
-  // held together in front at the waist where the tie can be seen. Nobody
-  // stands like this unless something is being done to them.
-  standBound: {
-    drop: 0,
-    bones: [
-      ['Abdomen', [0, 0.99, 0.13]],
-      ['Chest', [0, 0.98, 0.16]],
-      ['Head', [0, 0.96, 0.28]],
-      ['UpperArm.R', [-0.20, -0.96, 0.18]],
-      ['LowerArm.R', [0.56, -0.42, 0.72]],
-      ['Hand.R', [0.50, -0.40, 0.77]],
-      ['UpperArm.L', [0.20, -0.96, 0.18]],
-      ['LowerArm.L', [-0.56, -0.42, 0.72]],
-      ['Hand.L', [-0.50, -0.40, 0.77]],
-    ],
-  },
-
-  // On the floor, knees up, wrists together over the lap. This is the pose the
-  // mission is decided on, so it is built to be unmistakable from above: half
-  // the height of a guard, no weapon line, and the hands pinned to one point.
-  seated: {
-    drop: 0.73,
-    bones: [
-      ['Hips', [0, 0.96, -0.28]],
-      ['Abdomen', [0, 0.96, -0.26]],
-      ['Torso', [0, 0.99, 0.12]],
-      ['Chest', [0, 0.98, 0.18]],
-      ['Head', [0, 0.94, 0.33]],
-      // Knees ABOVE the hips. Nobody sits like this on a chair, which is the
-      // point: the pose has to say floor even when the floor is not in frame.
-      ['UpperLeg.R', [-0.17, 0.66, 0.73]],
-      ['LowerLeg.R', [-0.04, -0.93, 0.36]],
-      ['Foot.R', [0, -0.12, 0.99]],
-      ['UpperLeg.L', [0.17, 0.66, 0.73]],
-      ['LowerLeg.L', [0.04, -0.93, 0.36]],
-      ['Foot.L', [0, -0.12, 0.99]],
-      ['UpperArm.R', [-0.26, -0.90, 0.35]],
-      ['LowerArm.R', [0.55, 0.12, 0.83]],
-      ['Hand.R', [0.45, 0.05, 0.89]],
-      ['UpperArm.L', [0.26, -0.90, 0.35]],
-      ['LowerArm.L', [-0.55, 0.12, 0.83]],
-      ['Hand.L', [-0.45, 0.05, 0.89]],
-    ],
-  },
-
-  // Folded down small behind cover. Deep squat, head tucked, hands pulled in
-  // to the chest — the shape of someone trying not to be found.
-  crouch: {
-    drop: 0.46,
-    bones: [
-      ['Hips', [0, 0.96, 0.28]],
-      ['Abdomen', [0, 0.93, 0.36]],
-      ['Torso', [0, 0.96, 0.28]],
-      ['Chest', [0, 0.97, 0.24]],
-      ['Head', [0, 0.92, 0.39]],
-      ['UpperLeg.R', [-0.16, -0.36, 0.92]],
-      ['LowerLeg.R', [0, -0.60, -0.80]],
-      ['Foot.R', [0, -0.10, 0.99]],
-      ['UpperLeg.L', [0.16, -0.36, 0.92]],
-      ['LowerLeg.L', [0, -0.60, -0.80]],
-      ['Foot.L', [0, -0.10, 0.99]],
-      ['UpperArm.R', [-0.22, -0.86, 0.46]],
-      ['LowerArm.R', [0.60, 0.25, 0.76]],
-      ['Hand.R', [0.50, 0.20, 0.84]],
-      ['UpperArm.L', [0.22, -0.86, 0.46]],
-      ['LowerArm.L', [-0.60, 0.25, 0.76]],
-      ['Hand.L', [-0.50, 0.20, 0.84]],
-    ],
-  },
-};
-
-const POSE_FOR = { stand: 'standBound', seated: 'seated', crouch: 'crouch' };
-
-const _up = new THREE.Vector3(0, 1, 0);
-const _v = new THREE.Vector3();
-const _v2 = new THREE.Vector3();
-
-// Rotation accumulated from `root` (exclusive) down to `node` (inclusive) —
-// i.e. where this bone is pointing in the figure's own frame.
-function chainQuat(node, root, out = new THREE.Quaternion()) {
-  out.identity();
-  for (let n = node; n && n !== root; n = n.parent) out.premultiply(n.quaternion);
-  return out;
-}
-
-// Swing a bone to point along `dir`, keeping the twist the rig was authored
-// with.
-//
-// The obvious implementation — build the rotation that takes +Y to `dir` and
-// write it in — is wrong, and wrong in a way that is hard to see coming: the
-// shortest rotation from +Y carries no information about roll, so an arm swung
-// down from a T-pose comes out with its elbow rotated to an arbitrary angle
-// and bends sideways. Swinging from the BIND direction instead leaves every
-// bone's authored roll intact and only moves it where it was asked to go,
-// which is what an animator's FK handle does.
-//
-// `bind` holds each bone's figure-space orientation captured before anything
-// was touched. Parents are posed first, so the parent term below is the live,
-// already-posed chain while the bone's own term is still its rest pose.
-function swingBone(bone, root, bind, dir, roll = 0) {
-  const bindQ = bind.get(bone);
-  if (!bindQ) return;
-  const from = _v.copy(_up).applyQuaternion(bindQ).normalize();
-  const to = _v2.set(dir[0], dir[1], dir[2]).normalize();
-  const want = new THREE.Quaternion().setFromUnitVectors(from, to).multiply(bindQ);
-  if (roll) want.premultiply(new THREE.Quaternion().setFromAxisAngle(to, roll));
-  bone.quaternion.copy(chainQuat(bone.parent, root).invert().multiply(want));
-}
-
-// GLTFLoader sanitises node names on the way in: a dot is a reserved
-// character in three's animation property paths, so the rig's `UpperArm.R`
-// arrives as `UpperArmR` on the Object3D. The tables above are written in the
-// rig's own names — which is what you see in Blender and in the .glb — so
-// both sides of every lookup come through here.
-//
-// Missing this is silent and very confusing: the dotless bones (Hips, Chest,
-// Head) pose, every limb stays in its T-pose, and the room fills with people
-// being crucified six inches under the floor.
-const boneKey = (name) => name.replace(/[.:[\]/]/g, '');
-
-function boneMap(root) {
-  const bones = {};
-  root.traverse((o) => { if (o.isBone) bones[boneKey(o.name)] = o; });
-  return bones;
-}
-
-function applyPose(root, bones, pose, jitter = 0) {
-  const bind = new Map();
-  for (const b of Object.values(bones)) bind.set(b, chainQuat(b, root));
-  for (const [name, dir, roll] of pose.bones) {
-    const bone = bones[boneKey(name)];
-    if (bone) swingBone(bone, root, bind, dir, roll || 0);
-  }
-  // A room of identical people is a room of props. One small head turn each,
-  // deterministic per actor, is enough to break the copy-paste read without
-  // costing a second pose table.
-  if (jitter && bones.Neck) bones.Neck.rotation.y += jitter;
-}
-
-// CLOSE THE HANDS.
-//
-// The rigs ship with the fingers splayed flat, which is correct for a T-pose
-// and wrong for everyone in this room: these people are either gripping a
-// weapon or tied at the wrists, and a spread hand reads as neither. Left
-// alone it looks, at close zoom, like six people doing jazz hands.
-//
-// Derived from the hand rather than hard-coded, because the three files do
-// not agree on the rig: the SWAT hand numbers its finger bones 2-3-4 and the
-// women's 1-2-3. So the curl direction is measured — fingers close toward the
-// palm, and which side the palm is on falls out of the handedness of the
-// cross product of the finger direction with the thumb's. Each joint is bent
-// a little further than its parent, which is what makes a fist instead of a
-// flat hand rotated at the knuckle.
-const FINGER = /^(Index|Middle|Ring|Pinky)\d/;
-
-function depthFrom(bone, stop) {
-  let d = 0;
-  for (let n = bone; n && n !== stop; n = n.parent) d += 1;
-  return d;
-}
-
-function curlFingers(root, bones, step = 0.45) {
-  root.updateMatrixWorld(true);
-  for (const side of ['R', 'L']) {
-    const hand = bones[`Hand${side}`];
-    const tip = bones[`Middle4${side}`] || bones[`Middle3${side}`];
-    const thumb = bones[`Thumb3${side}`] || bones[`Thumb2${side}`];
-    if (!hand || !tip || !thumb) continue;
-
-    const h = root.worldToLocal(worldOf(hand, new THREE.Vector3()));
-    const f = root.worldToLocal(worldOf(tip, new THREE.Vector3())).sub(h).normalize();
-    const t = root.worldToLocal(worldOf(thumb, new THREE.Vector3())).sub(h).normalize();
-    const palm = new THREE.Vector3().crossVectors(f, t)
-      .multiplyScalar(side === 'R' ? -1 : 1);
-    if (palm.lengthSq() < 0.05) continue;    // thumb in line with the fingers
-    palm.normalize();
-
-    const digits = Object.entries(bones)
-      .filter(([name, bone]) => name.endsWith(side) && FINGER.test(name)
-        && depthFrom(bone, hand) > 0 && depthFrom(bone, hand) < 8)
-      .map(([, bone]) => bone)
-      .sort((a, b) => depthFrom(a, hand) - depthFrom(b, hand));
-
-    const bind = new Map();
-    for (const b of digits) bind.set(b, chainQuat(b, root));
-    for (const b of digits) {
-      const from = _up.clone().applyQuaternion(bind.get(b)).normalize();
-      const perp = palm.clone().sub(from.clone().multiplyScalar(palm.dot(from)));
-      if (perp.lengthSq() < 1e-6) continue;
-      const a = step * depthFrom(b, hand);
-      const dir = from.multiplyScalar(Math.cos(a))
-        .add(perp.normalize().multiplyScalar(Math.sin(a)));
-      swingBone(b, root, bind, [dir.x, dir.y, dir.z]);
-    }
-  }
-}
-
-// Accumulated uniform scale from `node` up to `stop` (exclusive). These rigs
-// carry a x100 armature scale, so anything parented to a bone has to be told
-// what a metre is.
-function accumScale(node, stop) {
-  let s = 1;
-  for (let n = node; n && n !== stop; n = n.parent) s *= n.scale.x;
-  return s;
-}
-
-// A box spanning two points. Restraints are straight runs between two things
-// that have already been measured, which is all a cable tie or a tether is.
-function link(a, b, w, mat, extra = 0) {
-  const d = _v.subVectors(b, a);
-  const len = Math.max(d.length() + extra, 0.02);
-  const m = new THREE.Mesh(new THREE.BoxGeometry(w, w, len), mat);
-  m.position.copy(a).add(b).multiplyScalar(0.5);
-  m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), d.clone().normalize());
+function box(w, h, d, mat, x, y, z, rotY = 0) {
+  const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
+  m.position.set(x, y, z);
+  m.rotation.y = rotY;
   m.castShadow = true;
+  m.receiveShadow = true;
   return m;
 }
 
-const _p = new THREE.Vector3();
-const worldOf = (obj, out) => out.setFromMatrixPosition(obj.matrixWorld);
-
-// THE RESTRAINT. Measured off the posed skeleton rather than guessed: the tie
-// is drawn between wherever the two wrists actually ended up, so it stays on
-// them whatever the pose does.
-//
-// Deliberately overscaled. This is the cue turns 5 to 7 are decided on, and a
-// correctly-sized cable tie at tactical zoom is two pixels of nothing.
-function restrain(body, bones, { tether = false } = {}) {
-  const hl = bones[boneKey('Hand.L')];
-  const hr = bones[boneKey('Hand.R')];
-  if (!hl || !hr) return;
-
-  const mat = surfaceMaterial('restraint');
-  const pl = body.worldToLocal(worldOf(hl, new THREE.Vector3()));
-  const pr = body.worldToLocal(worldOf(hr, new THREE.Vector3()));
-  body.add(link(pr, pl, 0.055, mat, 0.13));
-
-  if (!tether) return;
-
-  // Down to the floor between the knees, where nothing else is, so the line is
-  // never buried in a thigh. The player should be able to see what is holding
-  // them there, not infer it from a sentence in the log.
-  const mid = pl.clone().add(pr).multiplyScalar(0.5);
-  const anchor = new THREE.Vector3(mid.x, 0.03, mid.z + 0.08);
-  body.add(link(mid, anchor, 0.028, mat));
-
-  const plate = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.12, 0.15, 0.06, 8), surfaceMaterial('steelDark'),
-  );
-  plate.position.copy(anchor).setY(0.025);
-  plate.castShadow = true;
-  body.add(plate);
-}
-
-// THE RIFLE, in the hand rather than near it.
-//
-// Parented to the right hand bone, then turned so the barrel runs through the
-// left hand — which means the weapon lands in both hands for any arm pose,
-// instead of being hand-placed against one of them and floating off the other.
-function holdRifle(body, bones) {
-  const hand = bones[boneKey('Hand.R')];
-  const support = bones[boneKey('Hand.L')];
-  if (!hand) return;
-
-  const mount = new THREE.Group();
-  mount.name = 'rifle-mount';
-  mount.scale.setScalar(1 / accumScale(hand, body));
-  hand.add(mount);
-
-  const { group: rifle } = spawnModel(RIFLE_MODEL, {
-    size: RIFLE_LENGTH, anchor: 'center', overrides: RIFLE_SURFACES,
-  });
-  mount.add(rifle);
-
-  if (!support) return;
-  body.updateMatrixWorld(true);
-
-  // Everything below is in mount space, which the scale above has made
-  // metre-sized again. The file's origin sits at the grip and the barrel runs
-  // toward -X, so -X is what has to end up pointing at the support hand.
-  const target = mount.worldToLocal(worldOf(support, new THREE.Vector3()));
-  const dir = target.clone().normalize();
-  const ex = dir.clone().negate();
-  const upLocal = _p.copy(_up)
-    .applyQuaternion(mount.getWorldQuaternion(new THREE.Quaternion()).invert());
-  const ey = upLocal.clone().sub(ex.clone().multiplyScalar(upLocal.dot(ex)));
-  if (ey.lengthSq() < 1e-6) ey.set(0, 1, 0);
-  ey.normalize();
-  const ez = new THREE.Vector3().crossVectors(ex, ey);
-  rifle.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(ex, ey, ez));
-}
-
-// ------------------------------------------------------------- the fallbacks
-
-// The stand-in, on screen until the file lands and forever if it never does.
-// Same contract as the units and the audio: a missing asset is a coarser
-// mission, never a missing one. It is the blocky figure these actors used to
-// be, on the same surfaces the real models get, so the swap is a sharpening
-// rather than a recolour.
-function blockFigure(armed, pose) {
+// One humanoid, about 1.7 units tall standing. Deliberately blocky: it has to
+// read at a glance from forty units away, and a detailed figure at this scale
+// is a smudge with a higher triangle count.
+function figure(palette, { armed = false, pose = 'stand' } = {}) {
   const g = new THREE.Group();
-  const cloth = surfaceMaterial(armed ? 'tacticalCloth' : 'civCloth');
-  const trim = surfaceMaterial(armed ? 'tacticalRig' : 'hiVis');
-  const skin = surfaceMaterial('skin');
-  const gear = surfaceMaterial(armed ? 'tacticalRig' : 'civVest');
-
-  const box = (w, h, d, mat, x, y, z) => {
-    const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
-    m.position.set(x, y, z);
-    m.castShadow = true;
-    return m;
-  };
+  // Surfaced, like everything else in the compound. These were the last
+  // flat-colour meshes on the board, which made the people read as diagrams
+  // standing in a textured room.
+  //
+  // Object space, not world: a world projection slides across a figure as it
+  // is placed, and these are the meshes the player is asked to look hardest
+  // at. Scale is in the figure's own units — a 1.7-unit person wants a few
+  // repeats across the torso, not a fraction of one.
+  //
+  // Cloth takes the coarse weave; webbing and rifle take painted metal. Skin
+  // is left untextured on purpose: a fabric normal on a face reads as damage.
+  const cloth = triplanarMaterial({
+    set: 'sandbag', color: palette.cloth, roughness: 0.92, metalness: 0.0,
+    scale: 3.4, space: 'object', normalScale: 0.6, albedoMix: 0.55,
+  });
+  const trim = triplanarMaterial({
+    set: 'sandbag', color: palette.trim, roughness: 0.85, metalness: 0.05,
+    scale: 4.0, space: 'object', normalScale: 0.5, albedoMix: 0.5,
+  });
+  const skin = new THREE.MeshStandardMaterial({ color: palette.skin, roughness: 0.95, flatShading: true });
+  const gear = triplanarMaterial({
+    set: 'metal-painted', color: palette.gear, roughness: 0.7, metalness: 0.3,
+    scale: 5.0, space: 'object', normalScale: 0.7, albedoMix: 0.6,
+  });
 
   const seated = pose === 'seated';
   const crouch = pose === 'crouch';
   const legH = seated ? 0.36 : crouch ? 0.46 : 0.78;
   const torsoY = legH + (seated ? 0.32 : crouch ? 0.30 : 0.42);
 
+  // Legs. Seated figures get them folded forward instead of standing.
   for (const side of [-1, 1]) {
     const leg = box(0.17, legH, 0.19, cloth, side * 0.13, legH / 2, 0);
     if (seated) { leg.rotation.x = -1.15; leg.position.set(side * 0.13, 0.20, 0.22); }
     g.add(leg);
   }
-  g.add(box(0.46, seated ? 0.58 : 0.62, 0.27, cloth, 0, torsoY, 0));
-  g.add(box(0.48, 0.16, 0.30, trim, 0, torsoY + 0.16, 0));
-  const headY = torsoY + (seated ? 0.44 : 0.48);
-  g.add(box(0.24, 0.26, 0.24, skin, 0, headY, 0));
-  g.add(box(0.28, 0.10, 0.28, armed ? gear : trim, 0, headY + 0.17, 0));
 
+  const torso = box(0.46, seated ? 0.58 : 0.62, 0.27, cloth, 0, torsoY, seated ? 0.02 : 0);
+  g.add(torso);
+
+  // The identifying band — a plate carrier on a hostile, a collar on a
+  // civilian. Same geometry, opposite meaning, which is the point.
+  g.add(box(0.48, 0.16, 0.30, trim, 0, torsoY + 0.16, seated ? 0.02 : 0));
+
+  const headY = torsoY + (seated ? 0.44 : 0.48);
+  g.add(box(0.24, 0.26, 0.24, skin, 0, headY, seated ? 0.02 : 0));
+  // Helmet / hair, so the head is not a floating cube.
+  g.add(box(0.28, 0.10, 0.28, armed ? gear : trim, 0, headY + 0.17, seated ? 0.02 : 0));
+
+  // Arms. A civilian's are forward and together — bound at the wrists.
   for (const side of [-1, 1]) {
     const arm = box(0.13, 0.48, 0.14, cloth, side * 0.29, torsoY + 0.05, 0);
     if (!armed) { arm.rotation.x = -0.9; arm.position.set(side * 0.17, torsoY - 0.02, 0.22); }
@@ -482,6 +114,8 @@ function blockFigure(armed, pose) {
   }
 
   if (armed) {
+    // Held across the body. A rifle is the single clearest "this one is a
+    // threat" cue available at this scale, so it is chunky on purpose.
     const rifle = new THREE.Group();
     rifle.add(box(0.07, 0.07, 0.84, gear, 0, 0, 0));
     rifle.add(box(0.06, 0.16, 0.16, gear, 0, -0.10, -0.18));
@@ -489,74 +123,37 @@ function blockFigure(armed, pose) {
     rifle.rotation.set(0.12, -0.35, 0);
     g.add(rifle);
   } else {
-    const bind = surfaceMaterial('restraint');
-    g.add(box(0.26, 0.10, 0.13, bind, 0, torsoY - 0.14, 0.41));
+    // BOUND WRISTS. This is the cue turns 5 to 7 are decided on, so it is
+    // drawn to be legible from across the room rather than to be subtle: a
+    // pale band at the wrists, and — for a seated figure — the tether running
+    // back to the conduit the mission says they are tied to. A player who can
+    // see the tie does not have to infer it from a sentence.
+    const bindMat = new THREE.MeshStandardMaterial({
+      color: 0xd8d2c4, roughness: 0.85, metalness: 0.05, flatShading: true,
+    });
+    const wrists = box(0.26, 0.10, 0.13, bindMat, 0, torsoY - 0.14, 0.41);
+    g.add(wrists);
+
     if (seated) {
-      const tether = box(0.05, 0.05, 0.52, bind, 0, torsoY - 0.16, 0.14);
+      // Tether back to the wall run. Thin, slack-looking, and deliberately
+      // the same pale colour as the band so the two read as one restraint.
+      const tether = box(0.05, 0.05, 0.52, bindMat, 0, torsoY - 0.16, 0.14);
       tether.rotation.x = 0.22;
       g.add(tether);
     }
   }
+
   return g;
 }
 
-function disposeTree(root) {
-  root.traverse((o) => { if (o.isMesh) o.geometry?.dispose(); });
-}
-
-// One person: a group that can be parented and positioned right now, with the
-// real figure landing inside it when the file arrives.
-function person(kindName, poseName, variant = 0, jitter = 0) {
-  const body = new THREE.Group();
-  const armed = kindName === 'hostile';
-  const look = armed ? GUARD : CIVILIANS[variant % CIVILIANS.length];
-  // A hostile is always on his feet with the weapon up, whatever the table
-  // says about posture — the pose field describes civilians.
-  const pose = armed ? POSES.guard : (POSES[POSE_FOR[poseName]] || POSES.standBound);
-
-  const fallback = blockFigure(armed, poseName);
-  body.add(fallback);
-
-  const { group, ready } = spawnModel(look.model, {
-    height: look.height,
-    skinned: true,            // rebuild the skeleton per instance
-    overrides: look.surfaces,
-    // These faces are modelled smooth. Faceting them, which is right for the
-    // compound's hard-edged props, turns a head into a gemstone.
-    flatShading: false,
-  });
-  body.add(group);
-
-  ready.then((res) => {
-    if (!res) return;         // file missing — the stand-in stays
-    body.remove(fallback);
-    disposeTree(fallback);
-
-    // `drop` is in the file's units; the figure has been scaled to a real
-    // height since, so the sink has to come with it.
-    const s = res.bounds?.size?.y ? look.height / res.bounds.size.y : 1;
-    group.position.y = -(pose.drop || 0) * s;
-
-    const bones = boneMap(res.model);
-    applyPose(res.model, bones, pose, jitter);
-    curlFingers(res.model, bones);
-    body.updateMatrixWorld(true);
-
-    if (armed) holdRifle(body, bones);
-    else restrain(body, bones, { tether: poseName === 'seated' });
-  });
-
-  return body;
-}
-
 // The ground marker under a figure. This is what makes them findable at
-// tactical zoom, where a 1.8-unit figure is forty pixels tall.
+// tactical zoom, where a 1.7-unit figure is forty pixels tall.
 function marker(color, { dashed = false } = {}) {
   const ring = new THREE.Mesh(
-    new THREE.RingGeometry(0.42, dashed ? 0.50 : 0.52, dashed ? 16 : 28, 1,
+    new THREE.RingGeometry(0.42, dashed ? 0.50 : 0.68, dashed ? 16 : 28, 1,
       0, dashed ? Math.PI * 2 : Math.PI * 2),
     new THREE.MeshBasicMaterial({
-      color, transparent: true, opacity: dashed ? 0.55 : 0.8,
+      color, transparent: true, opacity: dashed ? 0.55 : 1.0,
       side: THREE.DoubleSide, depthWrite: false,
     })
   );
@@ -590,9 +187,39 @@ function unresolved() {
   return g;
 }
 
+// The overhead indicator. A ring on the floor tells you where someone is; it
+// does not survive a wall, a crate or a shallow camera. This does: a fat
+// emissive chevron floating above the head, drawn with depth testing off so it
+// stays legible through the compound, RED for armed and GREEN for a hostage.
+//
+// It is deliberately not amber — amber is the unresolved marker, and an
+// unresolved contact never gets one of these.
+function beacon(color) {
+  const g = new THREE.Group();
+  const mat = new THREE.MeshBasicMaterial({
+    color, transparent: true, opacity: 0.95,
+    depthTest: false, depthWrite: false, toneMapped: false,
+  });
+  // Tip down, pointing at the head it belongs to.
+  const cone = new THREE.Mesh(new THREE.ConeGeometry(0.30, 0.52, 4), mat);
+  cone.rotation.x = Math.PI;
+  cone.rotation.y = Math.PI / 4;
+  cone.position.y = 2.42;
+  g.add(cone);
+  // A bar over the cone widens the thing horizontally, which is the axis a
+  // tactical camera has the most of.
+  const bar = new THREE.Mesh(new THREE.BoxGeometry(0.62, 0.10, 0.10), mat);
+  bar.position.y = 2.82;
+  g.add(bar);
+  for (const m of g.children) m.renderOrder = 40;
+  g.userData.mat = mat;
+  g.userData.baseY = 0;
+  return g;
+}
+
 const KIND = {
-  hostile: { armed: true, ring: 0xe0524c },
-  civilian: { armed: false, ring: 0xe0a84c },
+  hostile:  { palette: HOSTILE,  armed: true,  ring: 0xff3b30, beacon: 0xff3b30 },
+  civilian: { palette: CIVILIAN, armed: false, ring: 0x3cf07a, beacon: 0x3cf07a },
 };
 
 export class Actors {
@@ -602,27 +229,23 @@ export class Actors {
     this.group.name = 'actors';
     this.byId = new Map();
 
-    let civilians = 0;
-
     for (const spec of specs) {
       const kind = KIND[spec.kind] || KIND.hostile;
       const holder = new THREE.Group();
       holder.name = `actor-${spec.id}`;
 
-      // Which of the two civilian models this one is. Assigned in table order
-      // so the four in the holding room alternate rather than landing as four
-      // copies of the same man.
-      const variant = spec.kind === 'civilian' ? civilians++ : 0;
-      const jitter = ((variant % 3) - 1) * 0.18;
-
       const body = spec.state === 'unresolved'
         ? unresolved()
-        : person(spec.kind, spec.pose || 'stand', variant, jitter);
+        : figure(kind.palette, { armed: kind.armed, pose: spec.pose || 'stand' });
       holder.add(body);
 
       const ring = marker(spec.state === 'unresolved' ? 0xe0a84c : kind.ring,
                           { dashed: spec.state === 'unresolved' });
       holder.add(ring);
+
+      // Unresolved contacts do not get one: you have not been told what it is.
+      let mark = null;
+      if (spec.state !== 'unresolved') { mark = beacon(kind.beacon); holder.add(mark); }
 
       holder.position.set(spec.at[0], groundAt(spec.at[0], spec.at[1]), spec.at[1]);
       holder.rotation.y = spec.face ?? 0;
@@ -630,7 +253,7 @@ export class Actors {
       this.group.add(holder);
 
       this.byId.set(spec.id, {
-        spec, holder, body, ring, variant, jitter,
+        spec, holder, body, ring, mark,
         kind: spec.kind, down: false, resolved: spec.state !== 'unresolved',
       });
     }
@@ -702,11 +325,14 @@ export class Actors {
     if (!a || a.resolved) return;
     a.holder.remove(a.body);
     const k = KIND[kind] || KIND.civilian;
-    a.body = person(kind, pose, a.variant, a.jitter);
+    a.body = figure(k.palette, { armed: k.armed, pose });
     a.holder.add(a.body);
     a.holder.remove(a.ring);
     a.ring = marker(k.ring);
     a.holder.add(a.ring);
+    if (a.mark) a.holder.remove(a.mark);
+    a.mark = beacon(k.beacon);
+    a.holder.add(a.mark);
     a.resolved = true;
     a.kind = kind;
     a.holder.scale.setScalar(0.85);
@@ -722,6 +348,7 @@ export class Actors {
     gsap.to(a.holder.rotation, { x: -Math.PI / 2 * 0.86, duration: 0.5, ease: 'power2.in' });
     gsap.to(a.holder.position, { y: a.holder.position.y + 0.12, duration: 0.5 });
     gsap.to(a.ring.material, { opacity: 0.25, duration: 0.5 });
+    if (a.mark) gsap.to(a.mark.userData.mat, { opacity: 0.22, duration: 0.5 });
   }
 
   // Everything a mission outcome can say about the people on the board.
@@ -753,6 +380,7 @@ export class Actors {
     for (const a of this.byId.values()) {
       if (a.down || a.kind !== 'hostile') continue;
       a.ring.material.color.setHex(0xff3b30);
+      a.mark?.userData.mat.color.setHex(0xff3b30);
       gsap.to(a.ring.material, { opacity: 1, duration: 0.4, yoyo: true, repeat: 5 });
     }
     this.alarmed = true;
@@ -767,7 +395,8 @@ export class Actors {
       a.holder.position.set(a.spec.at[0], groundAt(a.spec.at[0], a.spec.at[1]), a.spec.at[1]);
       a.holder.scale.setScalar(1);
       a.holder.visible = false;
-      a.ring.material.opacity = a.spec.state === 'unresolved' ? 0.55 : 0.8;
+      if (a.mark) a.mark.userData.mat.opacity = 0.95;
+      a.ring.material.opacity = a.spec.state === 'unresolved' ? 0.55 : 1.0;
     }
   }
 
@@ -775,7 +404,9 @@ export class Actors {
   // looking like a settled fact.
   update(t) {
     for (const a of this.byId.values()) {
-      if (a.resolved || !a.holder.visible) continue;
+      if (!a.holder.visible) continue;
+      if (a.mark && !a.down) a.mark.position.y = Math.sin(t * 2.4) * 0.09;
+      if (a.resolved) continue;
       const k = 0.65 + 0.35 * Math.sin(t * 3.2);
       for (const bar of a.body.children) bar.material.opacity = 0.35 + k * 0.5;
     }
