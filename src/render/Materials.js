@@ -196,7 +196,6 @@ const KIT_SURFACE = {
 // roughness range so they do not read as showroom plastic.
 const KEEP_ORIGINAL = new Set([
   'Atlas', 'Atlas.047', 'M_PCL_Flat_Palette', 'Headlights', 'BrakeLight',
-  'George_Texture',
 ]);
 
 // ...but an atlas authored for a different game is still authored for a
