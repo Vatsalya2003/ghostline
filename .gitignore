@@ -2,7 +2,9 @@ node_modules
 dist
 .DS_Store
 
-# Mixamo character FBX — 2.8 GB, and `git add -A` would happily stage all of
-# it. AssetLoader falls back to the procedural chassis when they are absent,
-# so a clone without them runs and plays identically.
+# Mixamo character FBX. Deleted 2026-09-20 — 30 files, 2.8 GB, and nothing
+# ever loaded them: all skeletal animation is baked into the two GLBs in
+# public/assets/models/, which are tracked. The rule stays because the folder
+# was inside public/, so Vite copied every byte into dist/ on a local build,
+# and `git add -A` would have staged the lot if the rule ever came off.
 public/models/
