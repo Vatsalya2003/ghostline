@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { spawnProp } from './AssetLoader.js';
-import { triplanarMaterial } from './Textures.js';
+import { triplanarMaterial, renderTier } from './Textures.js';
 import { cloneSurface } from './Materials.js';
 import { depotHeight } from './Depot.js';
 import {
@@ -98,6 +98,7 @@ uniform float uWxBase;
 uniform float uWxTop;
 uniform float uWxSeed;
 uniform float uWxDirt;
+uniform float uWxRib;
 uniform vec2 uWxStain;
 uniform float uWxStainR;
 float wxH(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
@@ -157,18 +158,23 @@ float wxRough = 1.0, wxMetalK = 1.0, wxHeight = 0.0;
   // the cap and washed out well before the base. Grey-green, not brown: this
   // is washed cement dust and algae, and a warm streak on a warm wall is wood.
   float sf = wxFbm(vec2(run * 2.7, y * 0.16));
-  float streak = smoothstep(0.46, 0.84, sf)
-               * smoothstep(0.08, 0.55, y / max(uWxTop, 0.6)) * (1.0 - up);
-  diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * vec3(0.52, 0.56, 0.54), streak * 0.9);
+  float streak = smoothstep(0.42, 0.80, sf)
+               * smoothstep(0.02, 0.30, y / max(uWxTop, 0.6)) * (1.0 - up);
+  diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * vec3(0.46, 0.50, 0.48), streak);
 
   // Splash. Every vehicle that has driven past has thrown the yard at the
-  // bottom half-metre, and rain has run the rest back down. The edge is a
-  // ragged tide line, not a band — a clean one reads as a painted plinth.
-  float edge = 0.34 + wxFbm(vec2(run * 1.4, 4.0)) * 0.62;
+  // bottom metre of this wall, and every winter has run it back down. Three
+  // parts, because a single band reads as a painted plinth: a ragged tide
+  // line whose height wanders between 0.5 and 1.4 m, a hard dark crust in the
+  // last 150 mm where the ground actually touches, and the soil's own colour
+  // rather than a grey — this is the yard, climbing the building.
+  float edge = 0.55 + wxFbm(vec2(run * 1.1, 4.0)) * 0.85;
   float splash = wxFall(0.0, edge, y) * (1.0 - up) * uWxDirt;
-  splash *= 0.55 + wxFbm(vec2(run * 3.0, y * 2.4) + 17.0) * 0.9;
+  splash *= 0.45 + wxFbm(vec2(run * 2.2, y * 1.7) + 17.0) * 1.15;
   splash = clamp(splash, 0.0, 1.0);
-  diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.085, 0.068, 0.047), splash * 0.72);
+  float crust = wxFall(0.0, 0.16 + wxN(vec2(run * 2.0, 9.0)) * 0.18, y) * (1.0 - up) * uWxDirt;
+  diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.062, 0.046, 0.030), splash * 0.62);
+  diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.030, 0.023, 0.016), crust * 0.65);
 
   // Spalling: chipped faces show paler, sharper aggregate.
   float chip = smoothstep(0.88, 0.965, wxFbm(vec2(run * 6.5, vTriPos.y * 5.5) + 31.0));
@@ -177,7 +183,7 @@ float wxRough = 1.0, wxMetalK = 1.0, wxHeight = 0.0;
   // Sun-bleached tops, wet-dark undersides.
   diffuseColor.rgb *= 1.0 + up * 0.10 - clamp(-wn.y, 0.0, 1.0) * 0.22;
 
-  wxRough = 1.0 + splash * 0.10 + joint * 0.05 - chip * 0.10;
+  wxRough = 1.0 + splash * 0.10 + crust * 0.06 + joint * 0.05 - chip * 0.10;
   // Metres, because WX_BUMP divides it by the world size of a pixel. A 45 mm
   // recess at a joint, a 16 mm spall, and a few millimetres of aggregate.
   wxHeight = -joint * 0.045 + chip * 0.016 + (pour - 0.5) * 0.007 + (grain - 0.25) * 0.020;
@@ -199,7 +205,15 @@ float wxRough = 1.0, wxMetalK = 1.0, wxHeight = 0.0;
   // moiré the way an analytic sinusoid across a ten-metre slab does. What is
   // left here is everything the scan cannot know: where this particular roof
   // has been leaking, laid and walked on.
-  float rib = 0.5 + 0.5 * sin(vTriPos.x * 17.4);   // valley/crest hint only
+  //
+  // Except on the low tier, which does not fetch normal maps at all. The
+  // magazine roofs are the largest thing the camera ever looks down on, and
+  // without the scan they go back to being flat grey lids. uWxRib is zero on
+  // a real GPU and paints the profile in as shading when there is no relief to
+  // light — the cheap version of the effect, used only where it is the only
+  // version available.
+  float rib = 0.5 + 0.5 * sin(vTriPos.x * 17.4);
+  diffuseColor.rgb *= 1.0 + (rib - 0.5) * uWxRib * up;
 
   // Sheet laps across the run, and the fixing line down each one.
   float lap = wxFall(0.0, 0.09, abs(fract(vTriPos.z / 2.2 + 0.5) - 0.5) * 2.2);
@@ -338,6 +352,7 @@ function weather(mat, spec) {
     shader.uniforms.uWxTop = { value: w.top };
     shader.uniforms.uWxSeed = { value: w.seed };
     shader.uniforms.uWxDirt = { value: w.dirt };
+    shader.uniforms.uWxRib = { value: renderTier() === 'low' ? 0.26 : 0.0 };
     shader.uniforms.uWxStain = { value: new THREE.Vector2(w.stain[0], w.stain[1]) };
     shader.uniforms.uWxStainR = { value: w.stainR };
 
@@ -500,7 +515,12 @@ function buildWall(group, seg, fadeables, height = WALL_H, mat = MAT.wall, dirt 
   // on the ground the run actually stands on, and a small value offset — a
   // dozen panels of exactly one grey is what reads as generated, and the
   // difference between them does not have to be large to break that.
-  const seed = rand((ax * 31.7 + az * 11.3 + bx * 7.1 + bz * 3.3) * 0.5) * 97;
+  // Kept small on purpose. The seed goes straight into a
+  // fract(sin(dot(p, k)) * 43758.5) hash, and that construction loses its
+  // precision — and starts banding — once the argument to sin() reaches the
+  // tens of thousands. A seed of 90 multiplied by the 6.5x frequency of the
+  // spalling term gets there on its own.
+  const seed = rand((ax * 31.7 + az * 11.3 + bx * 7.1 + bz * 3.3) * 0.5) * 7.3;
   const foot = depotHeight((ax + bx) / 2, (az + bz) / 2);
   const runMat = cloneFade(mat, {
     base: foot, top: height, seed, dirt: dirt ?? mat.userData.weather?.dirt ?? 1,
@@ -508,8 +528,12 @@ function buildWall(group, seg, fadeables, height = WALL_H, mat = MAT.wall, dirt 
   runMat.color.offsetHSL((rand(seed) - 0.5) * 0.012, (rand(seed + 5) - 0.5) * 0.05,
                          (rand(seed + 9) - 0.5) * 0.07);
   runMat.roughness = clamp(runMat.roughness + (rand(seed + 13) - 0.5) * 0.08, 0.4, 1);
+  // The capping course sits three metres up. It is weathered and streaked like
+  // the rest of the run, but `dirt: 0` — measuring its splash zone from its
+  // OWN underside painted every cap in the compound as though it were standing
+  // in the yard, which is a very visible kind of wrong along a wall top.
   const capMatRun = cloneFade(MAT.concreteDark, {
-    base: foot + height, top: 0.4, seed: seed + 41, dirt: 0.25,
+    base: foot, top: height + 0.4, seed: seed + 3.1, dirt: 0,
   });
   const meshes = [];
 
@@ -636,7 +660,7 @@ function roomFloorAndRoof(group, room, fadeables, roofs) {
     HOLDING: { stain: [anchor.x - 2.0, anchor.z - 2.0], stainR: 1.6, dirt: 0.55 },
   };
   const floorMat = cloneFade(MAT.floor, {
-    seed: rand(cx * 13.1 + cz * 7.7) * 61,
+    seed: rand(cx * 13.1 + cz * 7.7) * 6.1,
     base: y,
     ...(FLOOR_ROLE[room.zone] || {}),
   });
@@ -645,9 +669,15 @@ function roomFloorAndRoof(group, room, fadeables, roofs) {
   floor.castShadow = false;
   group.add(floor);
 
+  // Sheets bought at different times and weathered for different lengths of
+  // it. Three magazine roofs in exactly one grey is the first thing the eye
+  // finds from a top-down camera, and they are the largest surface in it.
+  const roofSeed = rand(cx * 3.9 + cz * 17.3);
   const roofMat = cloneFade(MAT.roof, {
-    base: y + room.height, top: 0.5, seed: rand(cx * 3.9 + cz * 17.3) * 53,
+    base: y + room.height, top: 0.5, seed: roofSeed * 5.3,
   });
+  roofMat.color.offsetHSL((roofSeed - 0.5) * 0.02, (rand(roofSeed + 2) - 0.5) * 0.06,
+                          (rand(roofSeed + 7) - 0.5) * 0.11);
   const roof = box(w + 0.4, 0.26, d + 0.4, roofMat, cx, y + room.height + 0.13, cz);
   group.add(roof);
   const roofMeshes = [roof];
@@ -681,14 +711,17 @@ function outbuilding(group, spec, fadeables) {
   }
   const cx = (minX + maxX) / 2, cz = (minZ + maxZ) / 2;
   const y = depotHeight(cx, cz);
+  const roofSeed = rand(cx * 23.7 + cz * 5.1);
   const roofMat = cloneFade(MAT.roof, {
-    base: y + spec.height, top: 0.4, seed: rand(cx * 23.7 + cz * 5.1) * 71,
+    base: y + spec.height, top: 0.4, seed: roofSeed * 7.1,
   });
+  roofMat.color.offsetHSL((roofSeed - 0.5) * 0.02, (rand(roofSeed + 2) - 0.5) * 0.06,
+                          (rand(roofSeed + 7) - 0.5) * 0.11);
   const roof = box(maxX - minX + 0.4, 0.24, maxZ - minZ + 0.4, roofMat,
                    cx, y + spec.height + 0.12, cz);
   group.add(roof);
   fadeables.push({ id: `${spec.id}-roof`, materials: [roofMat], meshes: [roof] });
-  const floorMat = cloneFade(MAT.floor, { base: y, dirt: 1.0, seed: rand(cx + cz) * 29 });
+  const floorMat = cloneFade(MAT.floor, { base: y, dirt: 1.0, seed: rand(cx + cz) * 2.9 });
   group.add(box(maxX - minX, 0.1, maxZ - minZ, floorMat, cx, y + 0.05, cz));
 }
 

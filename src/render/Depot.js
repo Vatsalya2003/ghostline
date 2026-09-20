@@ -268,8 +268,8 @@ const C = {
   soilWarm:  [170, 141, 101],   // the dry hillside, sun side
   soilCool:  [139, 128, 108],   // the same hillside where it holds moisture
   grassDry:  [143, 134,  86],   // burnt-off grass, late in the season
-  pan:       [136, 133, 122],   // graded hardstanding inside the wire
-  gravel:    [154, 151, 143],   // crushed stone apron around the buildings
+  pan:       [129, 122, 106],   // graded hardstanding inside the wire
+  gravel:    [152, 148, 138],   // crushed stone apron around the buildings
   scraped:   [120,  99,  73],   // soil turned over and never re-grown
   road:      [106,  90,  69],   // compacted vehicle route
   rut:       [ 84,  71,  54],   // the two wheel lines inside it
@@ -323,24 +323,42 @@ function buildZoneFields(G) {
       g += (C.grassDry[1] - g) * gw * 0.62;
       b += (C.grassDry[2] - b) * gw * 0.62;
 
-      // --- 3. inside the wire it is graded hardstanding.
+      // --- 3. inside the wire it is graded hardstanding. NOT a slab: it is
+      // the hillside with the topsoil pushed off it and ten years of traffic
+      // on top, so the soil underneath keeps showing through in patches. A
+      // uniform pan is a concrete apron, and a concrete apron the size of a
+      // football pitch is the single most artificial thing this map contained.
+      const worn = sstep(0.36, 0.72, fbm(wx * 0.06 - 51, wz * 0.06 + 29, 3));
+      const padR = C.pan[0] + (C.scraped[0] - C.pan[0]) * worn * 0.55;
+      const padG = C.pan[1] + (C.scraped[1] - C.pan[1]) * worn * 0.55;
+      const padB = C.pan[2] + (C.scraped[2] - C.pan[2]) * worn * 0.55;
       const pad = sstep(-0.5, 1.8, inside);
-      r += (C.pan[0] - r) * pad * 0.84;
-      g += (C.pan[1] - g) * pad * 0.84;
-      b += (C.pan[2] - b) * pad * 0.84;
+      r += (padR - r) * pad * 0.84;
+      g += (padG - g) * pad * 0.84;
+      b += (padB - b) * pad * 0.84;
 
-      // --- 4. crushed-stone apron: out to 7 m of a building, and a big one
-      // at the gate where every delivery stops. The outer edge is warped by
-      // several metres of noise — stone gets spread by shovel and then kicked
-      // about for a decade, and an apron that is a perfect offset of the
-      // building it surrounds is the giveaway that nobody spread it.
+      // Grader passes. The pad was cut flat by a machine working in lanes, and
+      // the faint stripe that leaves never quite goes away.
+      const lane = Math.sin((wx * 0.82 + wz * 0.57) * 1.15
+        + fbm(wx * 0.05, wz * 0.05, 2) * 4.0) * 0.5 + 0.5;
+      const laneK = 1 + (lane - 0.5) * 0.055 * pad;
+      r *= laneK; g *= laneK; b *= laneK;
+
+      // --- 4. crushed-stone apron. A BAND, not a halo: the room footprints
+      // are adjacent and cover x 4-32, so a 7 m offset from each of them
+      // merged into one pale sheet over the entire compound and turned the
+      // whole yard the colour of the stone. Three and a half metres is the
+      // width somebody actually barrows stone out to. The outer edge is warped
+      // by a couple of metres of noise — stone gets spread by shovel and then
+      // kicked about for a decade, and an apron that is a perfect offset of
+      // the building it surrounds is the giveaway that nobody spread it.
       const gateD = Math.hypot(wx - GATE.x, wz - GATE.z);
-      const apronEdge = sd + (fbm(wx * 0.13 + 44, wz * 0.13 - 8, 2) - 0.5) * 4.4;
-      const apron = clamp(pad * (sstep(7.0, 1.0, apronEdge) * 0.9
-        + Math.exp(-Math.pow(gateD / 5.5, 2)) * 0.8), 0, 1);
-      r += (C.gravel[0] - r) * apron * 0.55;
-      g += (C.gravel[1] - g) * apron * 0.55;
-      b += (C.gravel[2] - b) * apron * 0.55;
+      const apronEdge = sd + (fbm(wx * 0.15 + 44, wz * 0.15 - 8, 2) - 0.5) * 2.6;
+      const apron = clamp(pad * (sstep(3.6, 0.5, apronEdge) * 0.95
+        + Math.exp(-Math.pow(gateD / 4.4, 2)) * 0.85), 0, 1);
+      r += (C.gravel[0] - r) * apron * 0.6;
+      g += (C.gravel[1] - g) * apron * 0.6;
+      b += (C.gravel[2] - b) * apron * 0.6;
 
       // --- 5. bare scraped soil hard against every wall, and the dark drip
       // line the roof edge has been pouring onto for years.
@@ -358,14 +376,22 @@ function buildZoneFields(G) {
       b += (C.scraped[2] - b) * wall * 0.3;
 
       // --- 7. vehicle route, worn down to compacted dirt, with two ruts.
-      const track = Math.exp(-Math.pow(td / 1.35, 2));
-      r += (C.road[0] - r) * track * 0.66;
-      g += (C.road[1] - g) * track * 0.66;
-      b += (C.road[2] - b) * track * 0.66;
-      const rutW = Math.exp(-Math.pow((td - 0.62) / 0.24, 2));
-      r += (C.rut[0] - r) * rutW * 0.55;
-      g += (C.rut[1] - g) * rutW * 0.55;
-      b += (C.rut[2] - b) * rutW * 0.55;
+      //
+      // This is the single loudest thing the ground has to say — a road from
+      // the gate to every building that has ever taken a delivery is what
+      // makes the compound read as USED. At two thirds strength it was there
+      // in the data and invisible on the board, drowned by the pale apron it
+      // runs across. The edge is noise-warped so it wanders like a route that
+      // was driven rather than surveyed.
+      const tdw = td + (fbm(wx * 0.19 - 23, wz * 0.19 + 7, 2) - 0.5) * 1.1;
+      // A defined edge, not a Gaussian. A road that fades off over three metres
+      // reads as a stain; a road that stops reads as a road. The ruts inside it
+      // are too thin to survive this grid and are stroked onto the canvas
+      // afterwards instead — see the rut pass below.
+      const track = sstep(2.3, 1.1, Math.abs(tdw));
+      r += (C.road[0] - r) * track * 0.86;
+      g += (C.road[1] - g) * track * 0.86;
+      b += (C.road[2] - b) * track * 0.86;
 
       // --- 8. the line people walk. Narrower than a tyre and not where the
       // tyres go — this is the route the mission itself takes.
@@ -381,11 +407,14 @@ function buildZoneFields(G) {
       b += (C.wear[2] - b) * door * 0.4;
 
       // --- 10. ammunition handling. Everything within reach of the magazine
-      // door carries a pale film of it.
-      const ammo = sstep(11.0, 1.0, rectDistance(wx, wz, AMMO_BOUNDS)) * pad;
-      r += (C.dust[0] - r) * ammo * 0.28;
-      g += (C.dust[1] - g) * ammo * 0.28;
-      b += (C.dust[2] - b) * ammo * 0.28;
+      // door carries a pale film of it. Five metres, not eleven: the magazine
+      // is a 10x16 m building and an eleven-metre halo round it reached most
+      // of the compound, which is not a handling area, it is a wash.
+      const ammo = sstep(5.2, 0.4, rectDistance(wx, wz, AMMO_BOUNDS)) * pad
+        * (0.55 + fbm(wx * 0.3 + 71, wz * 0.3 - 41, 2) * 0.9);
+      r += (C.dust[0] - r) * ammo * 0.34;
+      g += (C.dust[1] - g) * ammo * 0.34;
+      b += (C.dust[2] - b) * ammo * 0.34;
 
       // --- 11. fuel. Blotched by noise rather than a clean disc, because a
       // spill follows the camber and the cracks, not a compass.
@@ -394,20 +423,22 @@ function buildZoneFields(G) {
         const d = Math.hypot(wx - ox, wz - oz);
         oil = Math.max(oil, Math.exp(-Math.pow(d / rad, 2)) * amt);
       }
-      oil *= 0.25 + fbm(wx * 0.55 + 61, wz * 0.55 - 17, 3) * 1.1;
+      // Stretched along the run of the yard rather than isotropic, because a
+      // spill follows the camber and the cracks, not a compass.
+      oil *= 0.18 + fbm(wx * 0.30 + 61, wz * 0.78 - 17, 3) * 1.15;
       oil = clamp(oil, 0, 1);
-      r += (C.oil[0] - r) * oil * 0.55;
-      g += (C.oil[1] - g) * oil * 0.55;
-      b += (C.oil[2] - b) * oil * 0.55;
+      r += (C.oil[0] - r) * oil * 0.45;
+      g += (C.oil[1] - g) * oil * 0.45;
+      b += (C.oil[2] - b) * oil * 0.45;
 
       // --- 12. fine mottling so no two square metres match.
       const mo = 0.92 + mottle * 0.16;
       cr[k] = r * mo; cg[k] = g * mo; cb[k] = b * mo;
 
       // --- and which real surface the shader should sample here.
-      sR[k] = clamp(pad * 0.3 + apron * 0.75 + track * 0.2, 0, 1);
+      sR[k] = clamp(pad * 0.3 + apron * 0.85 + track * 0.25, 0, 1);
       sG[k] = clamp(ammo * 0.55 + door * 0.35 + sstep(0.62, 0.95, shade) * out * 0.45, 0, 1);
-      sB[k] = clamp(track * 0.85 + foot * 0.55 + door * 0.6 + oil * 0.9 + pad * 0.22, 0, 1);
+      sB[k] = clamp(track * 0.9 + foot * 0.55 + door * 0.6 + oil * 0.9 + pad * 0.22, 0, 1);
       sA[k] = clamp(gw * (1 - pad), 0, 1);
     }
   }
@@ -451,12 +482,14 @@ function makeGroundTexture(px = 1536) {
       r += grain * 22; g += grain * 20; bl += grain * 16;
 
       // Grit and stones, at macro scale: the ones big enough to see from the
-      // tactical camera. Denser on the gravel apron.
+      // tactical camera. Six times denser on the apron, which is what makes a
+      // crushed-stone apron read as crushed stone rather than as pale dirt —
+      // the colour difference alone was carrying all of it, and colour alone
+      // is what a zone looks like when nobody has spread anything on it.
       const gravelHere = F.sR[a];
       const stone = rand(pxx * 11.3 + py * 7.1 + 41.7);
-      const stoneCut = 0.9972 - gravelHere * 0.0035;
-      if (stone > stoneCut) { r = 190 + grain * 20; g = 182 + grain * 20; bl = 164 + grain * 18; }
-      else if (stone < 0.0026 + gravelHere * 0.002) { r *= 0.52; g *= 0.52; bl *= 0.52; }
+      if (stone > 0.997 - gravelHere * 0.016) { r = 188 + grain * 24; g = 181 + grain * 24; bl = 166 + grain * 20; }
+      else if (stone < 0.0026 + gravelHere * 0.012) { r *= 0.54; g *= 0.55; bl *= 0.57; }
 
       const k = (py * px + pxx) * 4;
       data[k] = r < 0 ? 0 : r > 255 ? 255 : r;
@@ -473,22 +506,68 @@ function makeGroundTexture(px = 1536) {
   // Sharp marks, drawn on top of the field pass because they are smaller than
   // a field cell and would be smeared away by the upsample.
 
+  // THE RUTS.
+  //
+  // A wheel rut is about 300 mm across. The zone grid resolves 280 mm a cell
+  // and the canvas 117 mm a pixel, so computing them as a field gave a rut
+  // less than one sample wide: it averaged away to nothing, which is exactly
+  // why the road read as a vague dark smudge with no wheels in it. Stroked as
+  // geometry they are resolution-independent and properly antialiased.
+  //
+  // Each segment is offset along its own normal, so the pair follows the
+  // route's corners. Round caps close the small wedge at every joint.
+  ctx.lineCap = 'round';
+  const strokeOffset = (line, off, width, style) => {
+    ctx.strokeStyle = style;
+    ctx.lineWidth = width * scale;
+    for (let i = 0; i < line.length - 1; i++) {
+      const a = line[i], b = line[i + 1];
+      const dx = b.x - a.x, dz = b.y - a.y;
+      const len = Math.hypot(dx, dz) || 1;
+      const nx = -dz / len * off, nz = dx / len * off;
+      ctx.beginPath();
+      ctx.moveTo(toPx(a.x + nx), toPx(a.y + nz));
+      ctx.lineTo(toPx(b.x + nx), toPx(b.y + nz));
+      ctx.stroke();
+    }
+  };
+  for (const line of TRACKS) {
+    // The crown between the wheels, where the ground was never compacted and
+    // the dust still collects.
+    strokeOffset(line, 0, 0.55, 'rgba(176,168,148,0.20)');
+    for (const side of [-0.72, 0.72]) {
+      strokeOffset(line, side, 0.34, 'rgba(70,58,44,0.42)');
+      strokeOffset(line, side, 0.13, 'rgba(48,39,29,0.34)');
+      // The shoulder the tyre throws up on the outside of each rut.
+      strokeOffset(line, side * 1.42, 0.22, 'rgba(158,146,122,0.18)');
+    }
+  }
+
   // Drip stains and spot leaks where vehicles and drums stand.
-  for (const [cx, cz, count, spread] of [
-    [GATE.x + 2.6, GATE.z, 70, 4.0],
-    [3, 2, 100, 5.5],
-    [FIRE_SOURCE.x, FIRE_SOURCE.z, 120, 3.4],
-    [26.5, -3.2, 70, 4.2],
+  //
+  // Small and many, at low alpha. Large blots at high alpha came out as ink
+  // splats — and worse, the polar scatter used one hash for the angle and one
+  // for the radius, which correlate enough to arrange the drops into petals.
+  // Separate primes per axis, and a per-drop bearing for the smear.
+  for (const [cx, cz, count, spread, seed] of [
+    [GATE.x + 2.6, GATE.z, 46, 3.6, 311],
+    [3, 2, 64, 5.0, 907],
+    [FIRE_SOURCE.x, FIRE_SOURCE.z, 80, 3.0, 1451],
+    [26.5, -3.2, 46, 3.8, 2039],
   ]) {
     for (let i = 0; i < count; i++) {
-      const s = rand(i + cx * 31 + cz * 17);
-      const a = rand(i + 700 + cx) * Math.PI * 2;
-      const rr = Math.sqrt(rand(i + 1400 + cz)) * spread;
-      ctx.fillStyle = s > 0.6 ? 'rgba(24,20,16,0.26)' : 'rgba(44,36,28,0.16)';
+      const s = rand(i * 1.7 + seed);
+      const dx = (rand(i * 2.3 + seed + 97) - 0.5) * 2 * spread;
+      const dz = (rand(i * 3.1 + seed + 613) - 0.5) * 2 * spread;
+      const fall = 1 - Math.min(1, Math.hypot(dx, dz) / spread);
+      if (rand(i * 5.3 + seed + 41) > 0.25 + fall * 0.75) continue;
+      const bearing = rand(i * 7.9 + seed + 1777) * Math.PI;
+      const long = 0.10 + s * s * 0.55;
+      ctx.fillStyle = s > 0.72 ? 'rgba(20,17,13,0.20)' : 'rgba(42,35,27,0.11)';
       ctx.beginPath();
-      ctx.ellipse(toPx(cx + Math.cos(a) * rr), toPx(cz + Math.sin(a) * rr),
-                  (0.22 + s * 0.7) * scale, (0.16 + s * 0.5) * scale,
-                  a, 0, Math.PI * 2);
+      ctx.ellipse(toPx(cx + dx), toPx(cz + dz),
+                  long * scale, (0.05 + s * 0.13) * scale,
+                  bearing, 0, Math.PI * 2);
       ctx.fill();
     }
   }
@@ -511,17 +590,19 @@ function makeGroundTexture(px = 1536) {
 
   // Scattered small debris inside the wire — chips of concrete, a dropped
   // fastener, the stuff that ends up on a working yard and never gets swept.
-  for (let i = 0; i < 2600; i++) {
+  // Mostly PALE, because most of it is broken concrete: an even mix of light
+  // and dark came out looking like coffee grounds thrown across the pan.
+  for (let i = 0; i < 1500; i++) {
     const x = (rand(i + 5501) - 0.5) * DEPOT_SIZE * 0.55 + 6;
     const z = (rand(i + 9901) - 0.5) * DEPOT_SIZE * 0.5 - 2;
     if (insideWire(x, z) < 0.6) continue;
     if (structureDistance(x, z) < 0.4) continue;
     const s = rand(i + 13000);
-    ctx.fillStyle = s > 0.5
-      ? `rgba(176,170,152,${0.35 + s * 0.3})`
-      : `rgba(58,50,40,${0.25 + s * 0.35})`;
+    ctx.fillStyle = s > 0.28
+      ? `rgba(180,174,156,${0.28 + s * 0.26})`
+      : `rgba(74,64,52,${0.20 + s * 0.30})`;
     ctx.beginPath();
-    ctx.ellipse(toPx(x), toPx(z), (0.05 + s * 0.14) * scale, (0.04 + s * 0.1) * scale,
+    ctx.ellipse(toPx(x), toPx(z), (0.04 + s * 0.11) * scale, (0.03 + s * 0.08) * scale,
                 s * 6.28, 0, Math.PI * 2);
     ctx.fill();
   }
@@ -749,8 +830,11 @@ function scrub(scene, uniforms) {
     // a flat grey facet. One instanced draw, three taps, and a dodecahedron
     // stops reading as a dodecahedron.
     { name: 'rock', count: 540, seed: 7700, geo: new THREE.DodecahedronGeometry(1, 0), spread: 10, cluster: 6,
-      colors: [0x9e9488, 0xada396, 0x857c71, 0xb6aa98], min: 0.2, max: 0.9, squash: 0.6, sink: 0.35, tilt: true, accept: wild,
-      mat: instancedRock(1.3) },
+      colors: [0xc8bfae, 0xd6ccb9, 0xb0a695, 0xe0d5bf], min: 0.2, max: 0.9, squash: 0.6, sink: 0.35, tilt: true, accept: wild,
+      // Rock060's albedo means 0.108 in linear light — a dark set. Mixed in at
+      // full strength over a mid-grey tint the stones came out as black blobs
+      // scattered on a pale hillside, which reads as holes in the ground.
+      mat: instancedRock(1.3, 0.5) },
     // The weed line along the inside of the wall. Sparse, short, and the
     // single cheapest way to say "this yard is maintained, but not today".
     { name: 'weeds', count: 900, seed: 15500, geo: tuft, spread: 2.4, cluster: 3,
@@ -774,7 +858,11 @@ function scrub(scene, uniforms) {
   for (const sp of SPECIES) {
     const mesh = new THREE.InstancedMesh(sp.geo, sp.mat, sp.count);
     mesh.name = sp.name;
-    mesh.castShadow = sp.name !== 'grass' && sp.name !== 'weeds';
+    // Rubble is 40-110 mm across and the shadow map resolves about 40 texels
+    // to the metre: every stone cast a three-texel blob several times its own
+    // size, and eight hundred of those read as mud spattered over the yard
+    // rather than as stones lying on it.
+    mesh.castShadow = sp.name !== 'grass' && sp.name !== 'weeds' && sp.name !== 'rubble';
     mesh.receiveShadow = true;
     if (sp.sway) addSway(sp.mat, uniforms);
 
