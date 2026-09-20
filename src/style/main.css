@@ -822,12 +822,6 @@ body.pad-active .cmd .key { opacity: 0.35; }   /* pad navigates, it does not typ
    it pushed the situation text and the command bar off the bottom. */
 
 #map-box {
-  position: absolute;
-  right: 12px;
-  /* Clear of the control-prompt strip along the bottom of the stage. */
-  bottom: 46px;
-  z-index: 30;
-  width: clamp(148px, 14vw, 202px);
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -990,3 +984,41 @@ body.pad-active .cmd .key { opacity: 0.35; }   /* pad navigates, it does not typ
 }
 #tutorial-list li::before { content: '·'; position: absolute; left: 2px; color: var(--cyan); }
 #tutorial-list b { color: #9fc4bd; font-weight: 400; letter-spacing: 0.06em; }
+
+
+/* ---------- log inside the objective panel ----------
+   The mission log is the record of the objective above it, so it shares the
+   panel rather than sitting in its own box. A hairline does the separating —
+   a second border here would read as two instruments, which is exactly what
+   moving it in was meant to stop. */
+#turn-box #log {
+  margin-top: 9px;
+  padding-top: 8px;
+  border-top: 1px solid var(--hairline);
+}
+#turn-box #log-head {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 8px;
+}
+/* Capped tight. The objective is the thing being read at a glance; the log is
+   the last few lines under it, and FULL LOG is there for the rest. */
+#turn-box #log-lines { max-height: 7vh; overflow-y: auto; margin-top: 4px; }
+
+/* The column now carries the map as well, so the scrolling middle gives up
+   the height it was holding for a standalone log panel. */
+#middle { gap: 8px; }
+
+
+/* The minimap is one instrument among several now, not a feature wall. A
+   square canvas at the column's full width is ~460px tall and pushes squad
+   integrity, unit status, the drones and the command list off the bottom —
+   so the height is capped and the aspect is released. MapView derives its
+   scale from the shorter axis, so a wide panel simply shows more ground
+   sideways rather than distorting the board. */
+#map-box #minimap {
+  aspect-ratio: auto;
+  height: clamp(96px, 12vh, 150px);
+}
+#map-box { flex: 0 0 auto; }
+/* The overlay on [M] carries a full legend; repeating all six keys in a
+   140px-tall panel cost more column than the information was worth. */
+#map-box #map-keys { display: none; }

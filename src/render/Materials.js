@@ -121,9 +121,9 @@ export const SURFACE = {
   // Tactical black, and the plate carrier over it. The guards read as a
   // silhouette first, so the two stay close in value and far from the
   // civilians' warm cloth.
-  tacticalCloth: { color: 0x3e464c, roughness: 0.92, metalness: 0.04,
+  tacticalCloth: { color: 0x4a545b, roughness: 0.92, metalness: 0.04,
                  tex: { set: 'sandbag', scale: 4.0, space: 'object', normalScale: 0.5, albedoMix: 0.35 } },
-  tacticalRig: { color: 0x5a656e, roughness: 0.68, metalness: 0.28,
+  tacticalRig: { color: 0x6b7680, roughness: 0.68, metalness: 0.28,
                  tex: { set: 'metal-painted', scale: 4.6, space: 'object', normalScale: 0.6, albedoMix: 0.40 } },
   // Depot workers. The hard hat and the vest are the whole read at forty
   // units: warm, light, and nothing like the black rig opposite them.

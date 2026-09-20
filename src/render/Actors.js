@@ -93,7 +93,7 @@ const WORKER_F_SURFACES = {
 // rifle's own file units, which are a hundredth of a metre across, and the
 // whole weapon comes out one flat texel.
 const RIFLE_SURFACES = {
-  Main: 'steelDark', Grey: 'steelDark', White: 'steel', Black: 'rubber',
+  Main: 'steel', Grey: 'steel', White: 'steelLight', Black: 'steelDark',
 };
 
 const GUARD = { model: 'guard-swat', height: 1.82, surfaces: GUARD_SURFACES };
