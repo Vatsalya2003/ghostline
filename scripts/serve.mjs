@@ -9,6 +9,7 @@ const TYPES = {
   '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css',
   '.mp3': 'audio/mpeg', '.ogg': 'audio/ogg', '.wav': 'audio/wav',
   '.json': 'application/json', '.svg': 'image/svg+xml', '.png': 'image/png',
+  '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp',
   '.glb': 'model/gltf-binary', '.gltf': 'model/gltf+json',
   '.ttf': 'font/ttf', '.woff2': 'font/woff2',
 };

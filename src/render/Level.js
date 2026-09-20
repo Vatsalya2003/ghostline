@@ -2,6 +2,15 @@ import * as THREE from 'three';
 import { PALETTE, addPractical } from './Scene.js';
 import { spawnProp } from './AssetLoader.js';
 import { surfaceMaterial } from './Materials.js';
+import { terrainHeight } from './Terrain.js';
+
+// Where a prop's feet go. The compound slab is flat and sits at y = 0, and the
+// height field is already masked to agree with it there, so this is one call
+// for the whole level rather than two cases to keep straight.
+//
+// Clamped upward only: a prop must never sink below the slab it is standing
+// on, and the mask leaves a few centimetres of noise right at the boundary.
+const groundAt = (x, z) => Math.max(0, terrainHeight(x, z));
 
 // Relay Station 7 — an abandoned industrial compound.
 //
@@ -200,6 +209,72 @@ const APPROACH = [
   ['antenna-mast', -10.2, -3.0, { height: 2.8, rot: 0.4 }],
 ];
 
+// The ammunition side of the installation, outside the wire.
+//
+// Everything here is read from the wide view or while the camera is panned off
+// the compound, so it is composed as silhouette and grouping rather than as
+// detail. Three ideas, each one a place with a job:
+//
+//   the magazine row   three earth-covered magazines in a line, doors onto a
+//                      service road, set apart the way explosives storage
+//                      always is. Built in code — see magazine().
+//   the handling yard  where lorries were loaded: pallets, crate stacks, a
+//                      truck still backed up to the stack it was working
+//   the checkpoint     the road block, the tower that watched it, and the
+//                      sandbag position that covered both
+//
+// None of it stands inside the tactical area. The squad's approach corridor
+// runs roughly x -8..4, z 2..8 and the whole of the compound interior is
+// gameplay space; everything below sits outside both.
+const DEPOT_YARD = [
+  // Loading stacks, squared up to the service road like something worked here.
+  ['pallet', 12.4, -1.2, { size: 1.7, rot: 0.02 }],
+  ['pallet', 12.4, 0.6, { size: 1.7, rot: 0.0 }],
+  ['pallet', 14.2, -1.0, { size: 1.7, rot: 0.51 }],
+  ['crate-stack', 12.4, -1.2, { size: 1.5, rot: 0.06 }],
+  ['crate-stack', 12.5, 0.5, { size: 1.3, rot: 0.33 }],
+  ['crate-stack', 14.2, -1.0, { size: 1.6, rot: 0.61 }],
+  ['ammo-crate', 13.3, 1.6, { height: 0.42, rot: 0.18 }],
+  ['ammo-crate', 13.7, 1.9, { height: 0.42, rot: 0.55 }],
+  ['supply-crate', 15.0, 1.2, { height: 0.8, rot: 0.22 }],
+  ['barrel', 15.4, -2.4, { height: 1.0, rot: 0.1 }],
+  ['drum', 15.0, -3.0, { height: 1.1, rot: 0.4 }],
+  // Backed up to the stacks, where it was being loaded.
+  ['military-truck', 12.9, 3.6, { height: 2.9, rot: 0.52 }],
+  ['floodlight', 16.2, 2.0, { height: 3.2, rot: 0.7 }],
+  ['sign-hazard', 11.2, 2.4, { size: 1.2, rot: 0.12 }],
+
+  // Service road furniture between the yard and the magazines.
+  ['barrier-concrete', 10.6, -5.0, { size: 2.0, rot: 0.0 }],
+  ['barrier-concrete', 10.6, -3.1, { size: 2.0, rot: 0.0 }],
+  ['guard-tower', 10.9, -8.2, { height: 4.6, rot: 0.12 }],
+];
+
+// The magazine service road, on the west side. A second truck and the spill of
+// handling gear that says the doors were in use.
+const DEPOT_WEST = [
+  ['military-truck', -10.8, 3.4, { height: 2.9, rot: 0.22 }],
+  ['pallet', -11.6, -1.6, { size: 1.7, rot: 0.3 }],
+  ['crate-stack', -11.6, -1.6, { size: 1.4, rot: 0.34 }],
+  ['ammo-crate', -11.2, -0.6, { height: 0.42, rot: 0.7 }],
+  ['drum', -12.0, -7.2, { height: 1.1, rot: 0.2 }],
+  ['barrel', -11.6, -6.7, { height: 1.0, rot: 0.5 }],
+  ['sign-hazard', -11.0, -4.4, { size: 1.2, rot: 0.52 }],
+  ['floodlight', -12.4, -10.0, { height: 3.2, rot: 0.3 }],
+  ['barrier-concrete', -9.4, 8.2, { size: 2.0, rot: 0.14 }],
+  ['barrier-concrete', -7.8, 9.4, { size: 2.0, rot: 0.62 }],
+];
+
+// The checkpoint on the access road, built out around the fence line that was
+// already here.
+const DEPOT_CHECKPOINT = [
+  ['gate-barrier', -12.4, 14.0, { size: 2.8, rot: 0.42 }],
+  ['guard-tower', -15.4, 12.6, { height: 4.6, rot: 0.55 }],
+  ['barrier-concrete', -10.9, 15.2, { size: 2.0, rot: 0.42 }],
+  ['barrier-concrete', -9.8, 16.0, { size: 2.0, rot: 0.42 }],
+  ['pallet', -16.2, 15.6, { size: 1.7, rot: 0.18 }],
+];
+
 // Outside the wire, along the access road. These are not scattered props —
 // each group is a small story the player reads without being told:
 //
@@ -255,7 +330,13 @@ function placeProps(group, table) {
       // origin and lifting them by hand is cheaper than re-authoring the file.
       anchor: opts.anchor === 'top' ? 'center' : 'ground',
     });
-    holder.position.set(x, opts.anchor === 'top' ? (opts.height || 1) : 0, z);
+    // Props used to be pinned to y = 0 wherever they stood. Inside the wire
+    // that is right — the slab is flat — but the terrain has real relief once
+    // you are clear of the compound, and the outermost dressing was hanging
+    // above its own shadow or sunk to the knees in the ground. Sampling the
+    // height field is what the field is for.
+    const base = groundAt(x, z);
+    holder.position.set(x, base + (opts.anchor === 'top' ? (opts.height || 1) : 0), z);
     group.add(holder);
 
     ready.then((res) => {
@@ -271,6 +352,112 @@ function placeProps(group, table) {
       res.model.traverse((o) => { if (o.isMesh) o.castShadow = false; });
     });
   }
+}
+
+// --------------------------------------------------------- the ammunition side
+//
+// What makes a place read as an ammunition depot is not crates. It is the
+// **earth-covered magazines**: a concrete box, a blast door at one end, and a
+// berm of spoil thrown over the top and sides so that if one goes up it vents
+// through the open end instead of taking its neighbours with it. They are
+// built in rows, set well apart for exactly that reason, and that spacing is
+// the silhouette — three low green-brown humps in a line, at a distance from
+// everything else, with a service road running past the doors.
+//
+// Built in code rather than modelled: the shape is four boxes and a berm, and
+// the CC0 kits have nothing remotely like it.
+function magazine(group, { x, z, rot = 0, length = 7.2, width = 4.1, height = 2.2 }) {
+  const mag = new THREE.Group();
+  mag.position.set(x, groundAt(x, z), z);
+  mag.rotation.y = rot;
+
+  const concrete = surfaceMaterial('concrete');
+  const berm = surfaceMaterial('berm');
+
+  // The magazine proper.
+  mag.add(box(width, height, length, concrete, 0, height / 2, 0));
+
+  // The earth cover, as one mound rather than a lid on two walls.
+  //
+  // Cross-section is a trapezoid — wide at the base, narrower over the roof,
+  // sloping away at about 35 degrees — extruded along the magazine and closed
+  // off at the back with a slope of its own. The open end stops short of the
+  // headwall, because the door has to be clear: that asymmetry is the whole
+  // point of the shape, and it is what stops it reading as a shed.
+  const cover = () => {
+    const halfBase = width / 2 + width * 0.92;
+    const halfTop = width / 2 + 0.22;
+    const top = height + 0.85;
+    const front = length / 2 - 0.1;      // stops short of the headwall
+    const back = -length / 2 - 2.4;      // and runs out past the rear
+    const backTop = -length / 2 - 0.2;
+
+    // 8 corners: base and top rectangles, the top one inset and shorter.
+    const v = new Float32Array([
+      -halfBase, 0, back, halfBase, 0, back, halfBase, 0, front, -halfBase, 0, front,
+      -halfTop, top, backTop, halfTop, top, backTop, halfTop, top, front, -halfTop, top, front,
+    ]);
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.BufferAttribute(v, 3));
+    // Winding matters here and is easy to get backwards: computeVertexNormals
+    // derives the normal from it, and a roof wound the wrong way gets a normal
+    // pointing at the ground. It still draws — it just takes its light from
+    // under the world, which read as three pale blue slabs sitting where the
+    // earth mounds should be.
+    g.setIndex([
+      4, 7, 6, 4, 6, 5,        // roof                 +Y
+      0, 3, 7, 0, 7, 4,        // west flank           -X, sloping up
+      1, 6, 2, 1, 5, 6,        // east flank           +X, sloping up
+      0, 5, 1, 0, 4, 5,        // rear slope           -Z, sloping up
+      3, 2, 6, 3, 6, 7,        // front, cut back around the door   +Z
+    ]);
+    g.computeVertexNormals();
+    const mesh = new THREE.Mesh(g, berm);
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    return mesh;
+  };
+  mag.add(cover());
+
+  // Blast door at the open end, set into a concrete headwall.
+  const headwall = surfaceMaterial('concreteDim');
+  mag.add(box(width + 0.9, height + 0.7, 0.5, headwall, 0, (height + 0.7) / 2, length / 2 + 0.2));
+  const door = box(2.0, height * 0.78, 0.22, surfaceMaterial('steelDark'),
+    0, height * 0.39, length / 2 + 0.48);
+  door.name = 'magazine-door';
+  mag.add(door);
+
+  // Vent stacks through the roof — the detail that stops it reading as a shed.
+  for (const vz of [-length * 0.26, length * 0.1]) {
+    const stack = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.16, 0.18, 1.0, 8),
+      surfaceMaterial('steelDark'));
+    stack.position.set(width * 0.16, height + 1.2, vz);
+    stack.castShadow = true;
+    mag.add(stack);
+  }
+
+  // Concrete apron at the door, where the forklifts worked.
+  const apron = new THREE.Mesh(
+    new THREE.BoxGeometry(width + 2.6, 0.06, 3.4), surfaceMaterial('gravel'));
+  apron.position.set(0, 0.03, length / 2 + 1.9);
+  apron.receiveShadow = true;
+  mag.add(apron);
+
+  group.add(mag);
+  return mag;
+}
+
+// A sandbag emplacement: a curved revetment with something behind it worth
+// protecting. Reads as a fighting position rather than a pile of bags.
+function emplacement(group, { x, z, facing = 0 }) {
+  placeProps(group, [
+    ['sandbag-wall', x, z, { size: 3.2, rot: facing }],
+    ['sandbag-pile', x + Math.cos(facing * Math.PI * 2 + 1.6) * 1.9,
+      z + Math.sin(facing * Math.PI * 2 + 1.6) * 1.9, { size: 2.2, rot: facing + 0.14 }],
+    ['ammo-crate', x + Math.cos(facing * Math.PI * 2 - 1.5) * 1.4,
+      z + Math.sin(facing * Math.PI * 2 - 1.5) * 1.4, { height: 0.42, rot: facing + 0.4 }],
+  ]);
 }
 
 // Angular rubble, built in code. The CC0 rock models in this kit ship Draco
@@ -430,6 +617,23 @@ export function createLevel(scene) {
   placeProps(group, APPROACH);
   placeProps(group, OUTSKIRTS);
 
+  // ------------------------------------------------------- the depot proper
+  // The magazine row, west of the compound and set well back. Doors face east
+  // onto the service road, which is why every one of them is turned a quarter
+  // turn: the builder puts the door at +z.
+  for (const [mx, mz, len] of [[-15.2, -9.0, 7.4], [-15.2, -1.4, 7.4], [-15.2, 6.2, 6.6]]) {
+    magazine(group, { x: mx, z: mz, rot: -Math.PI / 2, length: len });
+  }
+
+  placeProps(group, DEPOT_YARD);
+  placeProps(group, DEPOT_WEST);
+  placeProps(group, DEPOT_CHECKPOINT);
+
+  // Fighting positions covering the two ways in. Both sit off the squad's own
+  // approach corridor — they are there to be read, not to be fought over.
+  emplacement(group, { x: -8.8, z: 5.6, facing: 0.62 });
+  emplacement(group, { x: 9.8, z: 2.4, facing: 0.14 });
+
   // Practical lights. Four, unshadowed, matched to fixtures that are
   // actually in the scene — the two floodlights on the approach, the glow off
   // the terminal bank, and the relay mast. The beacon's own emissive is what
@@ -441,6 +645,14 @@ export function createLevel(scene) {
   // On the relay mast. Small radius, so it pools on the platform and marks the
   // objective from across the board without lighting the compound.
   addPractical(scene, { x: 5.5, y: 3.9, z: -5.5, color: 0x4ce0d8, intensity: 6, distance: 5.5 });
+
+  // The depot's own lighting, matched to the three floodlight props out there.
+  // Sodium rather than the compound's white: different era, different circuit,
+  // and it gives the handling yard and the magazine road their own pools of
+  // light instead of one even wash over the whole installation.
+  addPractical(scene, { x: 16.2, y: 3.0, z: 2.0, color: 0xffb066, intensity: 11, distance: 11 });
+  addPractical(scene, { x: -12.4, y: 3.0, z: -10.0, color: 0xffb066, intensity: 10, distance: 10 });
+  addPractical(scene, { x: -15.2, y: 3.0, z: 14.4, color: 0xffb066, intensity: 9, distance: 10 });
 
   scene.add(group);
   return { group, door, tower, beacon, generator: gen, relayConsole };

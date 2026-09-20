@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { triplanarMaterial } from './Textures.js';
 
 // Surface palette for the compound.
 //
@@ -11,36 +12,92 @@ import * as THREE from 'three';
 // model is ever shown. One table, applied once per loaded file, and every
 // prop in the level lands in the same cold concrete-and-steel range as the
 // hand-built geometry it is replacing.
+//
+// SURFACES ARE NOW TEXTURED. `tex` names a CC0 PBR set under
+// public/assets/textures and the surface becomes a triplanar material — the
+// kit geometry carries no UVs, so world-space projection is the only way to
+// get a real surface onto it. See Textures.js.
+//
+// `color` is a tint multiplied *into* the albedo map, so these are lifted well
+// above where they sat when they were the finished colour: a mid-grey texture
+// over the old 0x2c332f concrete lands at roughly a third the brightness it
+// needs. Untextured surfaces (the emissive ones) keep their original values.
 export const SURFACE = {
-  concrete:    { color: 0x2c332f, roughness: 0.95, metalness: 0.02 },
-  concreteDim: { color: 0x212724, roughness: 0.96, metalness: 0.02 },
-  steel:       { color: 0x39423f, roughness: 0.62, metalness: 0.55 },
-  steelDark:   { color: 0x252c2a, roughness: 0.70, metalness: 0.50 },
-  steelLight:  { color: 0x4b5652, roughness: 0.55, metalness: 0.60 },
+  concrete:    { color: 0x8e968c, roughness: 0.95, metalness: 0.02,
+                 tex: { set: 'concrete', scale: 0.34, roughLift: 0.05 } },
+  concreteDim: { color: 0x6c746c, roughness: 0.96, metalness: 0.02,
+                 tex: { set: 'concrete', scale: 0.30, roughLift: 0.05 } },
+  steel:       { color: 0x8a938f, roughness: 0.62, metalness: 0.55,
+                 tex: { set: 'metal-plate', scale: 0.75 } },
+  steelDark:   { color: 0x5e6764, roughness: 0.70, metalness: 0.50,
+                 tex: { set: 'metal-plate', scale: 0.75 } },
+  steelLight:  { color: 0xa5afaa, roughness: 0.55, metalness: 0.60,
+                 tex: { set: 'metal-plate', scale: 0.9 } },
   rubber:      { color: 0x14181a, roughness: 0.95, metalness: 0.02 },
   // Corrosion, pulled well down in saturation. The kit's safety orange is a
   // daylight colour; left anywhere near full strength it turns every pipe run
   // in the compound chocolate brown and drags the whole board warm.
-  rust:        { color: 0x463228, roughness: 0.95, metalness: 0.12 },
-  rustDark:    { color: 0x2e241c, roughness: 0.96, metalness: 0.10 },
-  hazard:      { color: 0x6a5228, roughness: 0.82, metalness: 0.20 },
-  paintRed:    { color: 0x452421, roughness: 0.90, metalness: 0.08 },
-  paintGreen:  { color: 0x28322a, roughness: 0.90, metalness: 0.08 },
-  wood:        { color: 0x33281f, roughness: 0.98, metalness: 0.00 },
+  rust:        { color: 0x9c7a62, roughness: 0.95, metalness: 0.12,
+                 tex: { set: 'metal-rust', scale: 1.0 } },
+  rustDark:    { color: 0x6e5745, roughness: 0.96, metalness: 0.10,
+                 tex: { set: 'metal-rust', scale: 1.0 } },
+  hazard:      { color: 0xb08a4c, roughness: 0.82, metalness: 0.20,
+                 tex: { set: 'metal-painted', scale: 0.9 } },
+  paintRed:    { color: 0x8c4a44, roughness: 0.90, metalness: 0.08,
+                 tex: { set: 'metal-painted', scale: 0.9 } },
+  paintGreen:  { color: 0x5a6b58, roughness: 0.90, metalness: 0.08,
+                 tex: { set: 'metal-painted', scale: 0.9 } },
+  // Weathered timber, not fresh pine. The kit's `LightWood` is what the guard
+  // towers and pallets are made of, and at full warmth a tower reads as
+  // playground equipment against a grey compound.
+  wood:        { color: 0x6a5842, roughness: 0.98, metalness: 0.00,
+                 tex: { set: 'wood-planks', scale: 0.95 } },
   glass:       { color: 0x1c2a2c, roughness: 0.25, metalness: 0.30, emissive: 0x0c2422, emissiveIntensity: 0.30 },
   // Squad and hostile chassis. Deliberately lighter than the compound around
   // them: a unit has to stay readable through fog and under a cone, and the
   // props are allowed to sink into the dark in a way the robots are not.
-  armour:      { color: 0x4a5752, roughness: 0.55, metalness: 0.42 },
-  armourDark:  { color: 0x333e3a, roughness: 0.64, metalness: 0.36 },
-  armourTrim:  { color: 0x66756e, roughness: 0.46, metalness: 0.55 },
+  //
+  // Object space, not world: a world-projected texture slides across a walking
+  // robot as it crosses the compound.
+  //
+  // Scale is in the MODEL FILE's units, which are not world units and not
+  // obvious — `squad-walker.glb` settles to a 1.29 x 0.91 x 0.89 box, so a
+  // scale of 3.2 puts about three repeats across the robot's height. Sub-1
+  // values here do not mean "subtle", they mean the whole chassis is covered
+  // by a fraction of one tile, which reads as a blotch.
+  armour:      { color: 0x939e99, roughness: 0.55, metalness: 0.42,
+                 tex: { set: 'metal-painted', scale: 3.2, space: 'object', normalScale: 0.7 } },
+  armourDark:  { color: 0x6b7672, roughness: 0.64, metalness: 0.36,
+                 tex: { set: 'metal-painted', scale: 3.2, space: 'object', normalScale: 0.7 } },
+  armourTrim:  { color: 0xb3c0ba, roughness: 0.46, metalness: 0.55,
+                 tex: { set: 'metal-plate', scale: 4.2, space: 'object', normalScale: 0.6 } },
   // Powered surfaces. The only things in the compound that give off light, so
   // they carry the eye — keep them rare, and keep them *dim*. Under ACES at
   // this exposure anything much above 0.5 on a saturated colour clips to flat
   // white and the prop stops reading as an object.
   screen:      { color: 0x16302f, roughness: 0.40, metalness: 0.20, emissive: 0x2f8f8a, emissiveIntensity: 0.42 },
   lamp:        { color: 0x6d6350, roughness: 0.45, metalness: 0.10, emissive: 0xe0aa72, emissiveIntensity: 0.85 },
-  signage:     { color: 0x5d6763, roughness: 0.80, metalness: 0.10 },
+  signage:     { color: 0x9aa39e, roughness: 0.80, metalness: 0.10,
+                 tex: { set: 'metal-painted', scale: 1.2, normalScale: 0.5 } },
+  // Sandbags. Coarse weave at a scale where a single bag reads as one bag —
+  // too fine and an emplacement turns into a tweed blanket.
+  sandbag:     { color: 0x9e8f6d, roughness: 1.0, metalness: 0.0,
+                 tex: { set: 'sandbag', scale: 1.7, normalScale: 1.0 } },
+  // The earth thrown up over a magazine. Same soil set as the terrain at a
+  // coarser repeat, so the berm is made of the ground it came out of without
+  // reading as a scaled copy of it. Kept a shade *under* the surrounding pan:
+  // a berm lit by the same sun should not be the brightest thing on the board,
+  // and at a tan tint these came out as three sand dunes that pulled the eye
+  // clean off the compound.
+  // Scale is the whole game here. At 0.2 one repeat spans five metres, the
+  // soil's grain is magnified into fibres and the berm reads as a haystack —
+  // which is a very specific kind of wrong on a military installation. Around
+  // 0.6 the grain is soil-sized, and the normal is held well back so the
+  // magnified relief does not corrugate it.
+  berm:        { color: 0x8d8268, roughness: 1.0, metalness: 0.0,
+                 tex: { set: 'ground-dirt', scale: 0.6, normalScale: 0.55, albedoMix: 0.75 } },
+  gravel:      { color: 0xb9ae99, roughness: 1.0, metalness: 0.0,
+                 tex: { set: 'ground-gravel', scale: 0.5, normalScale: 0.9 } },
   // Placeholder for anything the unit/drone code re-tints per instance. The
   // colour here is never seen — setStatus overwrites it on the first frame.
   tint:        { color: 0x4ce0d8, roughness: 0.40, metalness: 0.35, emissive: 0x4ce0d8, emissiveIntensity: 1.60 },
@@ -80,6 +137,37 @@ const KIT_SURFACE = {
   Glass: 'glass',
   Texture_Signs: 'signage',
   Eye: 'tint',
+  // depot kit — see public/assets/SOURCES.md §6
+  Sack: 'sandbag',
+  Wood_Light: 'wood',
+  Celing: 'steelDark',
+  'pavement.065': 'concreteDim',
+};
+
+// Kit materials that carry their own baked texture atlas.
+//
+// Remapping one of these to a flat surface throws away the only thing that
+// makes the prop legible: the stencilling on an ammunition box is what says
+// "ammunition", and a truck with its markings painted out is a grey wedge.
+// They keep their own material and are only knocked back to the scene's
+// roughness range so they do not read as showroom plastic.
+const KEEP_ORIGINAL = new Set([
+  'Atlas', 'Atlas.047', 'M_PCL_Flat_Palette', 'Headlights', 'BrakeLight',
+]);
+
+// ...but an atlas authored for a different game is still authored for a
+// different game. The truck's is a bright municipal yellow, which arrives as
+// the single hottest thing on the board and pulls the eye straight off the
+// compound. Multiplying the whole atlas by a drab tint keeps every region's
+// relationship to every other — cab still lighter than tyres, markings still
+// legible — while landing the vehicle in the same dust range as the ground it
+// is parked on.
+const KEEP_TINT = {
+  Atlas: 0x6f6b4e,              // military-truck — yellow to olive drab
+  Headlights: 0xb8b09a,
+  BrakeLight: 0x7a3a34,
+  'Atlas.047': 0x9c9384,        // gate-barrier — knocked back, stripes kept
+  M_PCL_Flat_Palette: 0xa9a08a, // ammo-crate — stencilling stays readable
 };
 
 // One THREE material per surface, shared by every mesh that asks for it.
@@ -93,17 +181,46 @@ export function surfaceMaterial(name, { flatShading = true } = {}) {
   if (hit) return hit;
 
   const spec = SURFACE[name] || SURFACE.concrete;
-  const mat = new THREE.MeshStandardMaterial({
-    color: spec.color,
-    roughness: spec.roughness,
-    metalness: spec.metalness,
-    emissive: spec.emissive ?? 0x000000,
-    emissiveIntensity: spec.emissiveIntensity ?? 0,
-    flatShading,
-  });
+
+  // A textured surface ignores `flatShading`: the triplanar normal replaces
+  // the interpolated one outright, so faceting it would only fight the map.
+  const mat = spec.tex
+    ? triplanarMaterial({
+      color: spec.color,
+      roughness: spec.roughness,
+      metalness: spec.metalness,
+      emissive: spec.emissive ?? 0x000000,
+      emissiveIntensity: spec.emissiveIntensity ?? 0,
+      ...spec.tex,
+    })
+    : new THREE.MeshStandardMaterial({
+      color: spec.color,
+      roughness: spec.roughness,
+      metalness: spec.metalness,
+      emissive: spec.emissive ?? 0x000000,
+      emissiveIntensity: spec.emissiveIntensity ?? 0,
+      flatShading,
+    });
+
   mat.name = `surface:${name}`;
   cache.set(key, mat);
   return mat;
+}
+
+// THREE.Material.clone() runs userData through JSON, which turns a texture
+// reference into a plain object, and it does not carry onBeforeCompile or
+// customProgramCacheKey across at all — so a cloned triplanar material comes
+// out silently untextured. Anything that needs its own copy of a surface has
+// to go through here.
+export function cloneSurface(material) {
+  const copy = material.clone();
+  const tri = material.userData?.tri;
+  if (tri) {
+    copy.userData.tri = tri;      // shared: the compile hook only reads it
+    copy.onBeforeCompile = material.onBeforeCompile;
+    copy.customProgramCacheKey = material.customProgramCacheKey;
+  }
+  return copy;
 }
 
 // Swap every material on a loaded model for its mapped surface.
@@ -122,13 +239,23 @@ export function retint(root, { overrides = {}, isolate = [], flatShading = true 
 
     const mapped = source.map((m) => {
       const kitName = m?.name || '';
+
+      // An atlas-textured material is left alone unless the caller asked for
+      // it by name. Done once on the shared source, so every clone inherits it.
+      if (m && KEEP_ORIGINAL.has(kitName) && !overrides[kitName]) {
+        m.roughness = Math.max(m.roughness ?? 1, 0.72);
+        m.metalness = Math.min(m.metalness ?? 0, 0.15);
+        if (KEEP_TINT[kitName]) m.color.setHex(KEEP_TINT[kitName]);
+        return m;
+      }
+
       const surface = overrides[kitName] || KIT_SURFACE[kitName] || 'concrete';
 
       if (isolateSet.has(kitName)) {
         // One copy per kit material name, not per mesh: a robot's eye is split
         // across several primitives and they must all tint together.
         if (!isolated[kitName]) {
-          const own = surfaceMaterial(surface, { flatShading }).clone();
+          const own = cloneSurface(surfaceMaterial(surface, { flatShading }));
           own.name = `tint:${kitName}`;
           isolated[kitName] = own;
         }

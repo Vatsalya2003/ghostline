@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { createSky } from './Sky.js';
 import { createTerrain } from './Terrain.js';
 import { createSeabed } from './Seabed.js';
+import { detectTier, renderTier, preloadTextures, triplanarMaterial } from './Textures.js';
 
 // 'day'   — late evening at a semi-arid installation: low sun, long shadows,
 //            warm key against a cool sky, practical lights doing real work.
@@ -124,6 +125,14 @@ export function createRenderer(canvas) {
   // Set again by createScene() once the environment is known — undersea runs
   // darker than anything on the surface.
   renderer.userData = { ...(renderer.userData || {}), baseExposure: renderer.toneMappingExposure };
+
+  // Has to happen before any material is built: the surface tier decides
+  // whether triplanar sampling compiles in at all.
+  detectTier(renderer);
+  preloadTextures([
+    'ground-dirt', 'ground-gravel', 'concrete', 'sandbag',
+    'metal-plate', 'metal-rust', 'metal-painted', 'wood-planks', 'rock',
+  ]);
   return renderer;
 }
 
@@ -162,17 +171,27 @@ export function createScene({ environment = ENVIRONMENT, renderer = null } = {})
   // to be a 30-unit slab — four times the footprint of the building — which
   // read as a giant flat plate with a hard diamond edge, and was the single
   // most artificial thing in the frame. Outside the wire is now soil.
-  const PAD = 15;
-  const ground = new THREE.Mesh(
-    new THREE.PlaneGeometry(PAD, PAD),
-    new THREE.MeshStandardMaterial({
-      map: makeGroundTexture(),
-      // Worn concrete, not fresh screed. Bright pads read as unused.
-      color: ENVIRONMENT === 'day' ? 0x9c917f : 0xa8b4ae,
-      roughness: 0.97,
-      metalness: 0.02,
-    })
-  );
+  // Sized to the compound it belongs to. At 15 it overhung the walls by two
+  // and a half metres on every side, and a pale slab with a hard diamond edge
+  // sitting proud of the building is the most artificial thing a flat-lit
+  // scene can contain.
+  const PAD = 12.4;
+  // Same two-scale idea as the terrain: the canvas map carries this slab's own
+  // history (wear patches, blast staining, expansion joints, the survey
+  // overlay) and never repeats, while the concrete set underneath carries the
+  // aggregate and the relief that makes it take light like a poured surface.
+  const padMaterial = triplanarMaterial({
+    set: 'concrete',
+    // Worn concrete, not fresh screed. Bright pads read as unused.
+    color: ENVIRONMENT === 'day' ? 0xcfc5b2 : 0xd8e2dc,
+    roughness: 0.97,
+    metalness: 0.02,
+    scale: 0.38,
+    normalScale: 0.8,
+    albedoMix: 0.5,      // the canvas map is the colour; see Terrain.js
+  });
+  padMaterial.map = makeGroundTexture();
+  const ground = new THREE.Mesh(new THREE.PlaneGeometry(PAD, PAD), padMaterial);
   ground.rotation.x = -Math.PI / 2;
   ground.position.set(3, 0, -3);   // centred on the compound, not the origin
   ground.receiveShadow = true;
@@ -192,13 +211,23 @@ export function createScene({ environment = ENVIRONMENT, renderer = null } = {})
   // shape. A high sun flattens terrain into a texture swatch.
   // Undersea: the only real light comes near-straight down from the surface,
   // cold and already half absorbed by the time it reaches 280 metres.
+  // Lit and unlit have to be different things, or the scene reads as a render
+  // of a place rather than as a place. The sun does the work and the fill is
+  // there only to keep the shadow side legible — it was carrying almost as
+  // much of the exposure as the key, which is what flattened the compound.
   const key = new THREE.DirectionalLight(
-    undersea ? 0xd6e6e0 : day ? 0xffd4a0 : 0xc2e4de,
-    undersea ? 1.55 : day ? 3.0 : 2.9);
+    undersea ? 0xd6e6e0 : day ? 0xffcf96 : 0xc2e4de,
+    undersea ? 1.55 : day ? 4.3 : 2.9);
   key.position.set(undersea ? 24 : day ? 26 : 8, undersea ? 56 : day ? 9 : 14,
                    undersea ? 32 : day ? 15 : 6);
   key.castShadow = true;
-  key.shadow.mapSize.set(day ? 3072 : 2048, day ? 3072 : 2048);
+  // A 3072 shadow map is re-rendered every frame with every caster in the
+  // compound in it. On a real GPU that is free; on a software rasteriser it is
+  // most of the frame, and it is the single biggest reason a headless run
+  // crawls. The low tier takes a quarter of the resolution — visibly softer
+  // up close, invisible at a tactical zoom, and several times the frame rate.
+  const shadowRes = renderTier() === 'low' ? 1024 : (day ? 3072 : 2048);
+  key.shadow.mapSize.set(shadowRes, shadowRes);
   key.shadow.camera.near = undersea ? 10 : 1;
   // The shadow frustum has to enclose everything the camera can see, or the
   // ground outside it samples the clamped edge of the shadow map and goes
@@ -221,7 +250,7 @@ export function createScene({ environment = ENVIRONMENT, renderer = null } = {})
   // the dark ground it is standing on.
   // Cool fill from the opposite side — sky light in the shadows, which is
   // what actually happens at dusk and what stops shadows reading as black.
-  const rim = new THREE.DirectionalLight(day ? 0x8fb0d8 : 0x9a7f5e, day ? 1.25 : 1.0);
+  const rim = new THREE.DirectionalLight(day ? 0x8fb0d8 : 0x9a7f5e, day ? 0.85 : 1.0);
   rim.position.set(-11, 7, -9);
   rim.name = 'rim-light';
   scene.add(rim);
@@ -233,14 +262,14 @@ export function createScene({ environment = ENVIRONMENT, renderer = null } = {})
   const bounce = undersea
     ? new THREE.HemisphereLight(0x4a93a6, 0x8a7550, 1.0)
     : day
-      ? new THREE.HemisphereLight(0xa8c4e4, 0xa08462, 2.1)
+      ? new THREE.HemisphereLight(0xa8c4e4, 0xa08462, 1.25)
       : new THREE.HemisphereLight(0x44635f, 0x0d1311, 1.45);
   scene.add(bounce);
 
   // Floor of ambient so nothing ever goes fully to black.
   // Deliberately low. Uniform ambient is what makes a scene read as a
   // render; the contrast between lit and unlit ground is the depth cue.
-  scene.add(new THREE.AmbientLight(undersea ? 0x2a555f : day ? 0x7b8892 : 0x22302d, undersea ? 0.30 : day ? 0.75 : 0.8));
+  scene.add(new THREE.AmbientLight(undersea ? 0x2a555f : day ? 0x7b8892 : 0x22302d, undersea ? 0.30 : day ? 0.30 : 0.8));
 
   let sky = null;
   let terrain = null;

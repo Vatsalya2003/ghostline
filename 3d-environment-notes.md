@@ -202,3 +202,160 @@ frame that runs long cannot skip straight past their visible window.
 Scene at rest is unchanged. During the loudest beat in the mission, combat
 adds roughly 40 short-lived meshes, all on shared geometry, none living past
 about 1.3 seconds, and zero additional lights.
+
+---
+
+# PASS 3 — REAL SURFACES, AND AN AMMUNITION DEPOT TO PUT THEM ON
+
+Two problems, one of which had been invisible because of the other. The
+compound was built out of flat-coloured materials, and the place it stood in
+was a relay station with no reason for the relay to be there.
+
+## 1. Why there were no textures: nothing has UVs
+
+This is the finding that shaped the whole pass, and it is worth stating plainly
+so nobody spends an afternoon rediscovering it.
+
+**The CC0 kit models carry no texture coordinates.** `barrel.glb`,
+`container.glb` and `supply-crate.glb` have position and normal attributes and
+nothing else. The character rigs are worse than missing — `squad-walker.glb`
+*has* a `TEXCOORD_0`, and all 928 vertices of its first primitive share the
+single UV `(0.0, 1.0)`. They are palette-atlas models: the colour was always
+meant to come from the material, never from a map.
+
+So UV-mapped textures are not an option anywhere in this project, and no
+amount of picking better textures would have changed that.
+
+**The answer is triplanar projection** — `src/render/Textures.js`. The surface
+is sampled in world space along all three cardinal planes and blended by face
+normal, so it lands correctly on any mesh whatever its author did or did not
+unwrap. It also fixes the terrain's own problem for free: a world-space
+projection does not stretch on a slope the way a planar UV does.
+
+Two projection spaces, because moving things need different treatment:
+
+| Space | Used by | Why |
+|---|---|---|
+| world | terrain, compound, every prop | adjacent objects share the grain; no repetition alignment between them |
+| object | the walkers | a world projection *slides* across a unit as it crosses the compound. Object space pins the texture to the model so it walks with it |
+
+Three things about it that are easy to get wrong:
+
+- **`material.clone()` silently destroys it.** Material.copy runs `userData`
+  through JSON — which turns a texture reference into a plain object — and does
+  not carry `onBeforeCompile` or `customProgramCacheKey` across at all. A
+  cloned triplanar material comes out untextured with no error anywhere. Use
+  `cloneSurface()` in `Materials.js`; both clone sites already do.
+- **`normalMatrix` is declared in the vertex prefix only.** The object-space
+  path needs it in the fragment shader and has to declare it there itself.
+- **The detail map must modulate, not replace.** A photographic albedo averages
+  about 0.35 luminance. Multiplied straight into a material that already has a
+  colour — and, on the terrain, into a macro map as well — you multiply two
+  albedos and land at a tenth of the intended brightness. That is what turned
+  the first textured build into brown mud. `albedoMix` mixes toward white
+  instead: 0.45 on the terrain, 0.8 on props.
+
+## 2. A depot, not a relay station with props around it
+
+The mission fiction is a relay, but the *installation* now reads as what a
+relay that size would actually be attached to. The signature is not crates, it
+is **earth-covered magazines**: concrete box, blast door at one end, spoil
+bermed over the top and flanks so a detonation vents through the open end.
+They are built well apart, in a row, for exactly that reason — and that
+spacing is the silhouette. Three of them, west of the wire, built in code
+(`magazine()` in `Level.js`) because no CC0 kit has the shape.
+
+Around them, three groups that each do a job rather than decorate:
+
+| Group | What it says |
+|---|---|
+| the magazine row | explosives storage, doors onto a service road, aprons scuffed where lorries turned |
+| the handling yard | pallets, crate stacks and a truck backed up to the stack it was loading |
+| the checkpoint | the road block, the tower that watched it, the sandbag position covering both |
+
+**The service track is what makes it one location.** It leaves the access road
+short of the gate, runs north past the magazine doors, crosses the top of the
+compound and comes down into the yard. Every group sits on it. It is cut into
+the height field, drawn into the macro texture with its own ruts, and masked
+out of the vegetation — so it is a real feature of the ground, not a stripe
+painted on it.
+
+## 3. Terrain and vegetation
+
+- Props are now placed at `terrainHeight(x, z)` rather than pinned to `y = 0`.
+  Inside the wire that changes nothing — the mask keeps the ground flat under
+  the slab — but the outermost dressing had been hanging above its own shadow.
+- The concrete pad was 15 units square around a 10-unit compound, overhanging
+  the walls by two and a half metres on every side. A pale slab with a hard
+  diamond edge standing proud of the building was the most artificial thing in
+  the frame. It is sized to the compound now.
+- Grass comes in two variants drawn from the same generator with different
+  seeds; one tuft repeated eight thousand times gives procedural scatter away
+  faster than placement ever does. Faceted-sphere shrubs are gone, replaced by
+  branching dead scrub on the same crossed-quad trick.
+
+## 4. Lighting
+
+The fill was carrying nearly as much of the exposure as the key, which is what
+flattened everything. Key up, hemisphere and ambient down, so lit and unlit
+are different things. The depot has its own sodium practicals on the three
+floodlight props out there — a different circuit from the compound's white,
+which gives the yard and the magazine road their own pools rather than one
+even wash.
+
+## 5. Cost
+
+| | |
+|---|---|
+| Textures | 10 CC0 sets, 22 MB on disk, all local |
+| Models | 9 new CC0 `.glb`, 1.6 MB, ~30k tris total |
+| Draw calls | vegetation is 6 instanced meshes; the depot adds ~45 props on the existing shared-material path |
+| Fragment cost | 9 texture fetches per fragment on the triplanar path |
+
+**Software WebGL gets a reduced tier automatically** (`detectTier`). It keeps
+the full three-axis projection — an earlier version dropped to a single planar
+sample and smeared vertically down every wall, which is not a trade worth
+making — and loses the normal and roughness maps, which is two thirds of the
+bytes and most of the cost. `?tier=high` / `?tier=low` forces it. This is not
+only about the test machine: it is what keeps time-to-first-frame sane on a
+laptop with no discrete GPU.
+
+## 6. Still weak
+
+- **Sensor cones and fog of war were tuned against flat ground.** They still
+  read, but nobody has looked at them specifically since the surfaces changed.
+- **`ground-sand` is downloaded and unused.** It is there for a future terrain
+  blend; delete it if that never happens.
+- **The magazine doors do not open** and nothing in the mission asks them to.
+- **No LOD.** Everything draws at full detail at every zoom. At this scene
+  size that is affordable; it would not be at twice the prop count.
+- **`metal-painted` and `ground-dirt` albedos were colour-corrected** away from
+  their upstream sea-green and temperate-moss originals. Both corrections are
+  documented in `public/assets/textures/SOURCES.md` with the filter strings.
+
+## 7. One cross-owner note, for whoever owns `Hazards.js`
+
+**Fires and scorch decals are placed at `y = 0`** — `this.group.position.set(x,
+0, z)` and `scorch.position.y = 0.012`.
+
+That is correct today and I have not changed it. Every position the mission
+actually ignites (the generator, the compound interior, unit positions) sits
+inside the compound mask, where the height field is flat at zero by
+construction, so the fires land on the ground exactly as intended.
+
+It becomes wrong the moment anything ignites **outside the wire** — a vehicle
+lost on the service track, a magazine cooking off, a hazard at the checkpoint.
+Out there the ground is real terrain and a decal at `y = 0.012` will either
+float above it or be buried under it.
+
+The fix, whenever that turn comes, is one import and one line:
+
+```js
+import { terrainHeight } from './Terrain.js';
+// ...
+this.group.position.set(x, Math.max(0, terrainHeight(x, z)), z);
+```
+
+`terrainHeight` is exported, pure, seeded and cheap — `Level.js` uses exactly
+this expression (`groundAt`) to stand its props on the ground. Flagging rather
+than changing it, since the hazard system is not mine.
