@@ -80,9 +80,24 @@ const keyLight = scene.children.find((o) => o.isDirectionalLight && o.castShadow
   || scene.children.find((o) => o.isDirectionalLight);
 updateCamera(camera, 0);
 
-const HOME = squad.all.map((u) => ({
-  unit: u, x: u.position.x, z: u.position.z, heading: u.heading,
-}));
+// Where each unit starts. A mission can override it with a `deploy` block,
+// because the engine's defaults are placed for mission 1's compound and mean
+// nothing on another map.
+const HOME = squad.all.map((u) => {
+  const d = mission1.deploy;
+  if (!d?.stand) return { unit: u, x: u.position.x, z: u.position.z, heading: u.heading };
+  const off = d.formation?.[u.id] || { side: 0, back: 0 };
+  // Offsets are in the frame of travel; at deploy the squad faces the route,
+  // which from the south rise is north-east.
+  const fx = 0.6, fz = -0.8;
+  const rx = -fz, rz = fx;
+  return {
+    unit: u,
+    x: d.stand[0] + off.side * rx - off.back * fx,
+    z: d.stand[1] + off.side * rz - off.back * fz,
+    heading: Math.atan2(fx, fz),
+  };
+});
 
 // ---------------------------------------------------------------- game
 const state = new GameState(mission1);
@@ -449,4 +464,4 @@ function tick() {
 tick();
 
 // Console handles for tuning and for the plan's step-5 check.
-window.OP = { state, turnManager, director, squad, camera, scene, fog, fx, screenFX, input, pauseMenu, audio, soundscape, mission: mission1, startMission };
+window.OP = { occlusion, state, turnManager, director, squad, camera, scene, fog, fx, screenFX, input, pauseMenu, audio, soundscape, mission: mission1, startMission };

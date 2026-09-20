@@ -128,6 +128,19 @@ export function createCamera() {
 export function applyCameraTransform(camera) {
   const d = camera.userData;
   camera.position.copy(d.focus).add(OFFSET).add(d.shake);
+  // Re-aim every frame. This was a no-op while the azimuth was a constant —
+  // an orthographic camera translated parallel to itself keeps its direction,
+  // so one lookAt at construction was enough. The moment the view could
+  // rotate, that stopped being true: the rig moved to the new azimuth and
+  // went on facing the old one, which put the board off screen entirely.
+  //
+  // Aimed down -OFFSET rather than at the focus, so shake stays a pure
+  // translation instead of counter-rotating the camera into the subject.
+  camera.lookAt(
+    camera.position.x - OFFSET.x,
+    camera.position.y - OFFSET.y,
+    camera.position.z - OFFSET.z
+  );
 }
 
 function applyProjection(camera, view) {

@@ -30,7 +30,7 @@
 // ---------------------------------------------------------------------------
 
 import { CALIBRATION } from './mission1.js';
-import { ZONES, PATHS, FORMATION } from './depot-layout.js';
+import { ZONES, PATHS, FORMATION, ZONE_STAND } from './depot-layout.js';
 
 // Turns name a ZONE; the layout owns the coordinates. That way the map can be
 // rebuilt without touching a line of mission content, and a turn can never
@@ -81,6 +81,12 @@ export const mission3 = {
 
   drones: 3,
   startHealth: 100,
+
+  // Where the squad stands when the mission opens. Without this they deploy
+  // at the engine's default home positions — which belong to a different map
+  // — and the first traversal walks them backwards up the hill to reach the
+  // start of the path before setting off properly.
+  deploy: { zone: 'OVERWATCH', stand: ZONE_STAND.OVERWATCH, formation: FORMATION },
 
   turns: [
     // ================================================== PHASE 1 — SCOUT

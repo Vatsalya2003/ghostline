@@ -130,7 +130,11 @@ export class FogOfWar {
             uColor: { value: new THREE.Color(0x0a2f38) },
             uEdgeColor: { value: new THREE.Color(0x67d4dc) },
           };
-          if (env === 'day') return {
+          // The depot is a daylight compound and uses the same curtain as
+          // the desert. Without this it falls through to the night values —
+          // 0.78 opacity of near-black — and every unswept metre of a sunlit
+          // map reads as a hole punched in the ground.
+          if (env === 'day' || env === 'depot') return {
             uUnknown: { value: 0.34 },
             uExplored: { value: 0.13 },
             uColor: { value: new THREE.Color(0xcfc0a6) },
