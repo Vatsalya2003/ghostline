@@ -30,6 +30,25 @@
 // ---------------------------------------------------------------------------
 
 import { CALIBRATION } from './mission1.js';
+import { ZONES, PATHS, FORMATION } from './depot-layout.js';
+
+// Turns name a ZONE; the layout owns the coordinates. That way the map can be
+// rebuilt without touching a line of mission content, and a turn can never
+// point the camera at a place that no longer exists — which is exactly what
+// happened when the compound was re-laid and every hardcoded camera position
+// in this file went stale at once.
+const at = (id) => {
+  const z = ZONES[id];
+  return { zone: id, camera: { x: z.anchor.x, z: z.anchor.z, zoom: z.zoom } };
+};
+// A pan beat to this turn's own zone.
+const panTo = (id, duration = 1.1) => {
+  const z = ZONES[id];
+  return { type: 'pan', x: z.anchor.x, z: z.anchor.z, zoom: z.zoom, duration };
+};
+// Squad traversal between zones, as authored waypoints. `formation` keeps
+// BETA-1 and BETA-2 on station rather than stacking on the lead.
+const travel = (from, to) => ({ waypoints: PATHS[`${from}>${to}`], formation: FORMATION });
 
 export const mission3 = {
   id: 'mission-3',
@@ -72,11 +91,11 @@ export const mission3 = {
       situation: 'Squad in cover on the south rise. Compound 14, two hundred metres, wall and gate in clear view.',
       task: 'Nothing is wrong yet. Accept the read, or spend something proving it.',
       objectiveNote: 'Establish the approach: wall, gate, and whether the alarm is live.',
-      camera: { x: -9, z: 9, zoom: 18 },
+      ...at('OVERWATCH'),
       statuses: { ALPHA: 'healthy', 'BETA-1': 'healthy', 'BETA-2': 'healthy' },
       telemetry: { range: '204 m', alarm: 'INACTIVE', visibility: 'GOOD', contact: null },
       intro: [
-        { type: 'pan', x: -9, z: 9, zoom: 18, duration: 1.2 },
+        panTo('OVERWATCH', 1.2),
         { type: 'log', text: 'SQUAD IN OVERWATCH — COMPOUND 14 — 204 M' },
       ],
       ai: {
@@ -99,11 +118,7 @@ export const mission3 = {
           log: 'Overwatch accepted. Squad moves to the treeline for the north read.',
           response: 'Moving. South approach is good.',
           fx: 'move',
-          moves: {
-            'ALPHA': [-6.5, 6.5],
-            'BETA-1': [-8.5, 5.5],
-            'BETA-2': [-5, 8],
-          },
+          ...travel('OVERWATCH', 'PERIMETER'),
           note: 'Three sensors agreed and the machine named its own boundary. Trusting that is correct and it costs you nothing.',
         },
         SEND_DRONE: {
@@ -135,11 +150,11 @@ export const mission3 = {
       situation: 'North face. A storage structure blocks two thirds of the wall from every angle the squad has.',
       task: 'VERITAS says it cannot see. Decide what to do about a machine admitting a gap.',
       objectiveNote: 'Pick the entry point. One side is read, one side is not.',
-      camera: { x: -3, z: 4, zoom: 16 },
+      ...at('OVERWATCH'),
       statuses: { ALPHA: 'healthy', 'BETA-1': 'healthy', 'BETA-2': 'healthy' },
       telemetry: { range: '96 m', alarm: 'UNKNOWN (N)', visibility: 'OBSTRUCTED', contact: null },
       intro: [
-        { type: 'pan', x: -3, z: 4, zoom: 16, duration: 1.1 },
+        panTo('OVERWATCH', 1.1),
         { type: 'log', text: 'NORTH FACE OBSTRUCTED — STRUCTURE IN LINE OF SIGHT' },
       ],
       ai: {
@@ -200,11 +215,11 @@ export const mission3 = {
       situation: 'Inside the wire. Two guards walking a fixed circuit across the yard, both in the open.',
       task: 'The pattern is fully observed. Decide whether to time it or force it.',
       objectiveNote: 'Cross the yard to the main building without raising the compound.',
-      camera: { x: 1, z: 3, zoom: 15 },
+      ...at('PERIMETER'),
       statuses: { ALPHA: 'healthy', 'BETA-1': 'healthy', 'BETA-2': 'healthy' },
       telemetry: { contacts: '2 · OPEN GROUND', alarm: 'INACTIVE', visibility: 'GOOD' },
       intro: [
-        { type: 'pan', x: 1, z: 3, zoom: 15, duration: 1.1 },
+        panTo('PERIMETER', 1.1),
         { type: 'alert', x: 3.5, z: 1.5 },
         { type: 'log', text: 'TWO PATROLS — FIXED CIRCUIT — 40 SECOND GAP' },
       ],
@@ -228,11 +243,7 @@ export const mission3 = {
           log: 'Squad crosses in the gap. No contact. Stacked on the main building.',
           response: 'Through clean. Nobody saw us.',
           fx: 'move',
-          moves: {
-            'ALPHA': [4, -1],
-            'BETA-1': [2.5, -2],
-            'BETA-2': [5.5, 0.5],
-          },
+          ...travel('PERIMETER', 'YARD'),
           note: 'Fully observed, three times, in the open. Acting on that is exactly the trust the reading earned.',
         },
         CONFIRM: {
@@ -241,11 +252,7 @@ export const mission3 = {
           log: 'Squad crosses in the gap. No contact. Stacked on the main building.',
           response: 'Through clean. Nobody saw us.',
           fx: 'move',
-          moves: {
-            'ALPHA': [4, -1],
-            'BETA-1': [2.5, -2],
-            'BETA-2': [5.5, 0.5],
-          },
+          ...travel('PERIMETER', 'YARD'),
           note: 'Fully observed, three times, in the open. Acting on that is exactly the trust the reading earned.',
         },
         FIRE: {
@@ -279,11 +286,11 @@ export const mission3 = {
       situation: 'A third figure at the east corner, standing behind a stack of crates. Only a shoulder and part of a head are exposed.',
       task: 'VERITAS says it has an identification. Work out whether it can actually have one.',
       objectiveNote: 'Clear the corner before the squad commits to the main door.',
-      camera: { x: 5, z: 0, zoom: 13 },
+      ...at('YARD'),
       statuses: { ALPHA: 'healthy', 'BETA-1': 'healthy', 'BETA-2': 'healthy' },
       telemetry: { contacts: '1 · PARTIAL', alarm: 'INACTIVE', visibility: 'PARTIAL' },
       intro: [
-        { type: 'pan', x: 5, z: 0, zoom: 13, duration: 1.0 },
+        panTo('YARD', 1.0),
         { type: 'alert', x: 7.5, z: -1.5 },
         { type: 'log', text: 'CONTACT AT EAST CORNER — PARTIALLY OCCLUDED' },
       ],
@@ -350,11 +357,11 @@ export const mission3 = {
       situation: 'Ground floor, west room. Six figures. Thermal and optical both clean through the doorway.',
       task: 'VERITAS has classified five of the six. Decide whether to act on the classification.',
       objectiveNote: 'Work out who is in the room before anything happens in it.',
-      camera: { x: 8, z: -5, zoom: 13 },
+      ...at('HOLDING'),
       statuses: { ALPHA: 'healthy', 'BETA-1': 'healthy', 'BETA-2': 'healthy' },
       telemetry: { contacts: '6 · 5 RESOLVED', alarm: 'INACTIVE', visibility: 'GOOD' },
       intro: [
-        { type: 'pan', x: 8, z: -5, zoom: 13, duration: 1.1 },
+        panTo('HOLDING', 1.1),
         { type: 'log', text: 'SIX FIGURES — WEST ROOM — FIVE RESOLVED' },
       ],
       ai: {
@@ -420,11 +427,11 @@ export const mission3 = {
       situation: 'The sixth figure. Behind a filing cabinet, bad angle, mostly hidden. Not moving.',
       task: 'The same machine that was right about five is now sure about one it cannot see. There is a person on the end of this.',
       objectiveNote: 'Resolve the sixth figure before the squad clears the room.',
-      camera: { x: 9, z: -7, zoom: 11 },
+      ...at('HOLDING'),
       statuses: { ALPHA: 'healthy', 'BETA-1': 'healthy', 'BETA-2': 'healthy' },
       telemetry: { contacts: '1 · OCCLUDED', alarm: 'INACTIVE', visibility: 'POOR' },
       intro: [
-        { type: 'pan', x: 9, z: -7, zoom: 11, duration: 1.0 },
+        panTo('HOLDING', 1.0),
         { type: 'alert', x: 10.5, z: -8 },
         { type: 'log', text: 'SIXTH FIGURE — BEHIND COVER — NOT RESOLVED' },
       ],
@@ -493,11 +500,11 @@ export const mission3 = {
       situation: 'Service corridor. Generator hall on one side, smoke pushing down from the yard fire on the other. Sensor returns are swinging.',
       task: 'The confidence number is moving on its own. Work out what that is worth.',
       objectiveNote: 'Move deeper toward the ammunition room.',
-      camera: { x: 12, z: -3, zoom: 13 },
+      ...at('CORRIDOR'),
       statuses: { ALPHA: 'healthy', 'BETA-1': 'glitch', 'BETA-2': 'healthy' },
       telemetry: { contacts: 'UNSTABLE', alarm: 'INACTIVE', visibility: 'SMOKE' },
       intro: [
-        { type: 'pan', x: 12, z: -3, zoom: 13, duration: 1.1 },
+        panTo('CORRIDOR', 1.1),
         { type: 'status', unit: 'BETA-1', status: 'glitch' },
         { type: 'log', text: 'EM INTERFERENCE + SMOKE — BETA-1 SENSOR UNSTABLE' },
       ],
@@ -560,11 +567,11 @@ export const mission3 = {
       situation: 'Ammunition room door. The fire has reached the roof of the east store. The stairwell the hostages are in runs along the blast face.',
       task: 'VERITAS says this decision is not its to make. It is right. Make it.',
       objectiveNote: 'Decide whether the squad proceeds with people still inside the blast radius.',
-      camera: { x: 15, z: -7, zoom: 13 },
+      ...at('CORRIDOR'),
       statuses: { ALPHA: 'healthy', 'BETA-1': 'glitch', 'BETA-2': 'healthy' },
       telemetry: { contacts: 'HOSTAGES IN STAIRWELL', alarm: 'INACTIVE', visibility: 'SMOKE' },
       intro: [
-        { type: 'pan', x: 15, z: -7, zoom: 13, duration: 1.1 },
+        panTo('CORRIDOR', 1.1),
         { type: 'log', text: 'AT THE AMMUNITION ROOM — FIRE ON THE EAST ROOF' },
       ],
       ai: {
@@ -627,11 +634,11 @@ export const mission3 = {
       situation: 'Charge on the ammunition stack. The fire is through the east store roof and moving along the roofline toward this room.',
       task: 'VERITAS proposes a fuse. Check it against what it does not know.',
       objectiveNote: 'Set the charge and get out before the fire does the job for you.',
-      camera: { x: 16, z: -9, zoom: 12 },
+      ...at('AMMO_ROOM'),
       statuses: { ALPHA: 'healthy', 'BETA-1': 'glitch', 'BETA-2': 'healthy' },
       telemetry: { charge: 'SET', fire: 'SPREADING', visibility: 'SMOKE' },
       intro: [
-        { type: 'pan', x: 16, z: -9, zoom: 12, duration: 1.1 },
+        panTo('AMMO_ROOM', 1.1),
         { type: 'log', text: 'CHARGE SET — FIRE ON THE ROOFLINE' },
       ],
       ai: {
@@ -694,11 +701,11 @@ export const mission3 = {
       situation: 'Fuse running. Service corridor filling with smoke. The south gate is the long way round and the yard is the short way.',
       task: 'Last call. VERITAS routes on distance. You know what the squad has left.',
       objectiveNote: 'Get the squad out before the charge goes.',
-      camera: { x: 8, z: -2, zoom: 16 },
+      ...at('AMMO_ROOM'),
       statuses: { ALPHA: 'healthy', 'BETA-1': 'glitch', 'BETA-2': 'healthy' },
       telemetry: { charge: 'RUNNING', fire: 'SPREADING', visibility: 'SMOKE' },
       intro: [
-        { type: 'pan', x: 8, z: -2, zoom: 16, duration: 1.2 },
+        panTo('AMMO_ROOM', 1.2),
         { type: 'log', text: 'FUSE RUNNING — EXTRACT' },
       ],
       ai: {

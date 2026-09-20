@@ -19,6 +19,8 @@ export const CONTROL = {
   NEXT_UNIT: 'nextUnit',
   ZOOM_OUT: 'zoomOut',
   ZOOM_IN: 'zoomIn',
+  ROTATE_LEFT: 'rotateLeft',
+  ROTATE_RIGHT: 'rotateRight',
   INFO: 'info',
   PAUSE: 'pause',
   NAV_UP: 'navUp',
@@ -39,12 +41,14 @@ export const STANDARD_BUTTONS = {
   1: CONTROL.CANCEL,       // B / circle
   2: CONTROL.CONTEXT,      // X / square
   3: CONTROL.TACTICAL,     // Y / triangle
-  4: CONTROL.PREV_UNIT,    // LB / L1
-  5: CONTROL.NEXT_UNIT,    // RB / R1
+  4: CONTROL.ROTATE_LEFT,  // LB / L1
+  5: CONTROL.ROTATE_RIGHT, // RB / R1
   6: CONTROL.ZOOM_OUT,     // LT / L2
   7: CONTROL.ZOOM_IN,      // RT / R2
   8: CONTROL.INFO,         // Back / Select / Share
   9: CONTROL.PAUSE,        // Start / Options
+  10: CONTROL.PREV_UNIT,   // L3 — displaced from L1 by the view rotation
+  11: CONTROL.NEXT_UNIT,   // R3
   12: CONTROL.NAV_UP,
   13: CONTROL.NAV_DOWN,
   14: CONTROL.NAV_LEFT,
@@ -55,6 +59,7 @@ export const STANDARD_BUTTONS = {
 // axes 0-3 are stable in a way face buttons are not.
 export const REMAP_ORDER = [
   CONTROL.CONFIRM, CONTROL.CANCEL, CONTROL.CONTEXT, CONTROL.TACTICAL,
+  CONTROL.ROTATE_LEFT, CONTROL.ROTATE_RIGHT,
   CONTROL.PREV_UNIT, CONTROL.NEXT_UNIT, CONTROL.ZOOM_OUT, CONTROL.ZOOM_IN,
   CONTROL.INFO, CONTROL.PAUSE,
 ];
@@ -68,6 +73,8 @@ export const CONTROL_NAME = {
   [CONTROL.NEXT_UNIT]: 'NEXT UNIT',
   [CONTROL.ZOOM_OUT]: 'ZOOM OUT',
   [CONTROL.ZOOM_IN]: 'ZOOM IN',
+  [CONTROL.ROTATE_LEFT]: 'ROTATE VIEW LEFT',
+  [CONTROL.ROTATE_RIGHT]: 'ROTATE VIEW RIGHT',
   [CONTROL.INFO]: 'MISSION INFO',
   [CONTROL.PAUSE]: 'PAUSE',
 };

@@ -1,27 +1,28 @@
 import * as THREE from 'three';
 import { spawnProp } from './AssetLoader.js';
-import { depotHeight, insideWire, WIRE, GATE } from './Depot.js';
+import { depotHeight } from './Depot.js';
+import {
+  WIRE, GATE, WALLS, ROOMS, OUTBUILDINGS, ZONES, FIRE_SOURCE,
+} from '../data/depot-layout.js';
 
 // ============================================================================
 // COMPOUND 14 — the installation
 // ============================================================================
 //
+// Built entirely from src/data/depot-layout.js. Nothing in here invents a
+// coordinate.
+//
 // Returns the same contract as createLevel() so the Director runs unchanged:
-// { group, door, tower, beacon, generator, relayConsole }. The roles are
-// re-cast for this mission —
+// { group, door, tower, beacon, generator, relayConsole }. Roles re-cast —
+//   tower / beacon  →  the ammunition stack and its charge indicator. Turn
+//                      10's `relay` FX fires on it: that beat IS the detonation.
+//   door            →  the holding room's door.
+//   generator       →  the plant in the corridor, the EM source for turn 7.
 //
-//   tower / beacon  →  the AMMUNITION BUNKER and its charge indicator. Turn
-//                      10's `relay` FX fires on it, which is exactly right:
-//                      that beat is the detonation.
-//   door            →  the main building's entry door, used by the breach beat.
-//   generator       →  the generator hall, the EM source behind turn 7.
-//   relayConsole    →  the charge panel on the bunker.
-//
-// The buildings are placed so the mission's ten camera positions walk a single
-// line through the compound from the gate to the bunker. Nothing is decorative
-// — the storage block exists because turn 2 needs something to hide a wall
-// behind, and the fuel store exists because turn 3 needs something to catch
-// fire.
+// Every wall and roof mesh is registered on `fadeables` so the camera can see
+// through them — see CameraOcclusion in main.js. They are built transparent
+// from the start: switching a material to transparent at runtime forces a
+// shader recompile and drops a frame exactly when the squad walks indoors.
 
 const rand = (n) => {
   const v = Math.sin(n * 127.1 + 311.7) * 43758.5453;
@@ -35,8 +36,6 @@ function onGround(object, x, z, { sink = 0, rotY = 0, tiltToSlope = true } = {})
   object.position.set(x, depotHeight(x, z) - sink, z);
   object.rotation.set(0, rotY, 0);
   if (tiltToSlope) {
-    // Wide baseline and clamped: a short sample straddles a single rut and
-    // reads its flank as a hillside, which stands props up at silly angles.
     const e = 2.0;
     const dx = depotHeight(x + e, z) - depotHeight(x - e, z);
     const dz = depotHeight(x, z + e) - depotHeight(x, z - e);
@@ -48,15 +47,23 @@ function onGround(object, x, z, { sink = 0, rotY = 0, tiltToSlope = true } = {})
 
 // ---------------------------------------------------------------- materials
 
+// Transparent from birth, opacity 1. See the note at the top.
+const fadeMat = (color, roughness = 0.94, metalness = 0.02) =>
+  new THREE.MeshStandardMaterial({
+    color, roughness, metalness, transparent: true, opacity: 1,
+    depthWrite: true,
+  });
+
 const MAT = {
-  concrete: new THREE.MeshStandardMaterial({ color: 0xa79d8c, roughness: 0.95, metalness: 0.02 }),
-  concreteDark: new THREE.MeshStandardMaterial({ color: 0x7e7668, roughness: 0.96, metalness: 0.02 }),
-  render: new THREE.MeshStandardMaterial({ color: 0xbcae95, roughness: 0.93, metalness: 0.02 }),
-  roof: new THREE.MeshStandardMaterial({ color: 0x6b6459, roughness: 0.88, metalness: 0.12 }),
-  metal: new THREE.MeshStandardMaterial({ color: 0x8b8578, roughness: 0.6, metalness: 0.55 }),
-  rust: new THREE.MeshStandardMaterial({ color: 0x9a6038, roughness: 0.92, metalness: 0.15 }),
-  dark: new THREE.MeshStandardMaterial({ color: 0x3a3833, roughness: 0.9, metalness: 0.2 }),
-  sand: new THREE.MeshStandardMaterial({ color: 0xc0b393, roughness: 0.98, metalness: 0 }),
+  wall: fadeMat(0xbcae95),
+  wallInner: fadeMat(0xa89c86),
+  concrete: fadeMat(0xa79d8c, 0.95),
+  concreteDark: fadeMat(0x7e7668, 0.96),
+  roof: fadeMat(0x6b6459, 0.88, 0.12),
+  metal: fadeMat(0x8b8578, 0.6, 0.55),
+  rust: fadeMat(0x9a6038, 0.92, 0.15),
+  dark: fadeMat(0x3a3833, 0.9, 0.2),
+  floor: fadeMat(0x8d8577, 0.97),
 };
 
 function box(w, h, d, mat, x, y, z, rotY = 0) {
@@ -67,185 +74,236 @@ function box(w, h, d, mat, x, y, z, rotY = 0) {
   return m;
 }
 
-// A building with real walls and a doorway, not a solid block. The camera sits
-// at 45 degrees and looks over the near wall, so the inside is visible and has
-// to actually be a room — turns 5 and 6 happen in one.
-function shed(group, {
-  x, z, w, d, h, rotY = 0, mat = MAT.render, roofMat = MAT.roof,
-  door = null, open = false, name = 'building',
-}) {
-  const b = new THREE.Group();
-  b.name = name;
-  const t = 0.22;                              // wall thickness
-  const y = depotHeight(x, z);
+// ---------------------------------------------------------------- walls
 
-  const wall = (ww, dd, px, pz) => {
-    const m = box(ww, h, dd, mat, px, h / 2, pz);
-    b.add(m);
-    return m;
+const WALL_H = 3.4, WALL_T = 0.3;
+
+// One authored segment becomes a run of panels with the doorways left out and
+// a lintel dropped over each. Panels rather than one long box because a real
+// wall is precast sections, and the joints are what make it read as built.
+//
+// A box is long on local +x, so aligning it to the run needs atan2(-dz, dx).
+// Using atan2(dx, dz) puts every panel *across* the wall — that is exactly
+// how the first version of this came out, as a zigzag of notches.
+function buildWall(group, seg, fadeables, height = WALL_H, mat = MAT.wall) {
+  // One material per wall RUN, not per panel and not shared across the whole
+  // compound. Shared would fade every wall in the building when one of them
+  // blocks the camera; per-panel would pop a single section out of a wall and
+  // read as a hole. A run is the unit the eye already treats as one thing.
+  const runMat = mat.clone();
+  const capMatRun = MAT.concreteDark.clone();
+  const meshes = [];
+
+  const [ax, az] = seg.a, [bx, bz] = seg.b;
+  const dx = bx - ax, dz = bz - az;
+  const len = Math.hypot(dx, dz);
+  if (len < 0.01) return;
+  const ang = Math.atan2(-dz, dx);
+
+  // Turn the door fractions into keep-out spans along the run.
+  const gaps = (seg.doors || []).map((d) => {
+    const c = d.at * len;
+    return [c - d.width / 2, c + d.width / 2, d];
+  }).sort((p, q) => p[0] - q[0]);
+
+  const spans = [];
+  let cursor = 0;
+  for (const [g0, g1] of gaps) {
+    if (g0 > cursor) spans.push([cursor, Math.min(g0, len)]);
+    cursor = Math.max(cursor, g1);
+  }
+  if (cursor < len) spans.push([cursor, len]);
+
+  const put = (from, to, h, yBase) => {
+    const l = to - from;
+    if (l <= 0.02) return;
+    const mid = (from + to) / 2;
+    const px = ax + (dx / len) * mid;
+    const pz = az + (dz / len) * mid;
+    const m = box(l, h, WALL_T, runMat, px, depotHeight(px, pz) + yBase + h / 2, pz, ang);
+    group.add(m);
+    meshes.push(m);
   };
 
-  // Back and two sides always. The front wall gets a doorway cut into it by
-  // building it as two piers and a lintel.
-  wall(w, t, 0, -d / 2);
-  wall(t, d, -w / 2, 0);
-  wall(t, d, w / 2, 0);
+  for (const [s0, s1] of spans) put(s0, s1, height, 0);
 
-  const doorW = door?.width ?? 1.6;
-  const doorH = door?.height ?? Math.min(2.2, h - 0.3);
-  const off = door?.offset ?? 0;
-  const leftW = (w / 2 + off) - doorW / 2;
-  const rightW = (w / 2 - off) - doorW / 2;
-  if (leftW > 0.05) wall(leftW, t, -w / 2 + leftW / 2, d / 2);
-  if (rightW > 0.05) wall(rightW, t, w / 2 - rightW / 2, d / 2);
-  const lintel = box(doorW, h - doorH, t, mat, off, doorH + (h - doorH) / 2, d / 2);
-  b.add(lintel);
-
-  // Roof, unless the mission needs to see in from above.
-  if (!open) {
-    const roof = box(w + 0.35, 0.22, d + 0.35, roofMat, 0, h + 0.11, 0);
-    b.add(roof);
-    // A parapet reads as a real roof rather than a lid.
-    b.add(box(w + 0.45, 0.3, 0.16, mat, 0, h + 0.32, -(d / 2 + 0.14)));
-    b.add(box(w + 0.45, 0.3, 0.16, mat, 0, h + 0.32, d / 2 + 0.14));
+  // Lintel over each doorway, so the gap reads as a door and not a hole.
+  for (const [g0, g1, d] of gaps) {
+    const head = d.height ?? 2.3;
+    put(g0, g1, height - head, head);
   }
 
-  // Floor slab, so an open building is not a hole in the ground.
-  b.add(box(w, 0.1, d, MAT.concreteDark, 0, 0.05, 0));
+  // Capping course along the whole run, doorways included.
+  const capMid = len / 2;
+  const cx = ax + (dx / len) * capMid, cz = az + (dz / len) * capMid;
+  const cap = box(len, 0.16, WALL_T + 0.1, capMatRun,
+                  cx, depotHeight(cx, cz) + height + 0.08, cz, ang);
+  group.add(cap);
+  meshes.push(cap);
 
-  b.position.set(x, y, z);
-  b.rotation.y = rotY;
-  group.add(b);
-  return b;
+  fadeables.push({ id: seg.tag || 'wall', materials: [runMat, capMatRun], meshes });
 }
 
 // ---------------------------------------------------------------- perimeter
 
-// The wall, built as panels with posts between them. Panels, not one long
-// box: a compound wall is precast sections and the joints are what make it
-// read as built rather than extruded.
-function perimeter(group) {
-  const wall = new THREE.Group();
-  wall.name = 'perimeter';
-  const H = 2.6, T = 0.3, PANEL = 3.0;
-
-  const run = (ax, az, bx, bz, skip = null) => {
-    const len = Math.hypot(bx - ax, bz - az);
-    const n = Math.max(1, Math.round(len / PANEL));
-    const ang = Math.atan2(-(bz - az), bx - ax);
-    for (let i = 0; i < n; i++) {
-      const t0 = (i + 0.5) / n;
-      const px = ax + (bx - ax) * t0;
-      const pz = az + (bz - az) * t0;
-      if (skip && Math.hypot(px - skip.x, pz - skip.y) < skip.r) continue;
-      const seg = box(len / n - 0.1, H, T, MAT.concrete, 0, 0, 0);
-      seg.position.set(px, depotHeight(px, pz) + H / 2 - 0.1, pz);
-      seg.rotation.y = ang;
-      wall.add(seg);
-      // Capping course, a shade darker.
-      const cap = box(len / n - 0.05, 0.14, T + 0.12, MAT.concreteDark, 0, 0, 0);
-      cap.position.set(px, depotHeight(px, pz) + H - 0.03, pz);
-      cap.rotation.y = ang;
-      wall.add(cap);
-    }
-    // Posts at the panel joints.
-    for (let i = 0; i <= n; i++) {
-      const t0 = i / n;
-      const px = ax + (bx - ax) * t0;
-      const pz = az + (bz - az) * t0;
-      if (skip && Math.hypot(px - skip.x, pz - skip.y) < skip.r) continue;
-      const post = box(0.42, H + 0.25, 0.42, MAT.concreteDark, 0, 0, 0);
-      post.position.set(px, depotHeight(px, pz) + (H + 0.25) / 2 - 0.1, pz);
-      post.rotation.y = ang;
-      wall.add(post);
-    }
-  };
-
+function perimeter(group, fadeables) {
+  const H = 2.8;
   const { minX, maxX, minZ, maxZ } = WIRE;
-  run(minX, maxZ, maxX, maxZ);                              // north
-  run(maxX, maxZ, maxX, minZ);                              // east
-  run(maxX, minZ, minX, minZ);                              // south
-  run(minX, minZ, minX, maxZ, { x: GATE.x, y: GATE.y, r: 2.4 });   // west, with the gate
 
-  // The gate itself: two sliding leaves, one pushed open.
-  const leaf = (px, pz, rot) => {
-    const l = new THREE.Group();
-    const frame = box(0.12, 2.3, 2.2, MAT.metal, 0, 1.15, 0);
-    l.add(frame);
-    for (let i = 0; i < 6; i++) l.add(box(0.07, 2.0, 0.07, MAT.dark, 0, 1.15, -0.95 + i * 0.38));
-    l.position.set(px, depotHeight(px, pz), pz);
-    l.rotation.y = rot;
-    wall.add(l);
-    return l;
-  };
-  leaf(GATE.x, GATE.y + 1.5, 0.0);
-  leaf(GATE.x - 0.3, GATE.y - 2.0, 0.45);
+  // West face, split around the service gate — the only way in.
+  const gateLo = GATE.z - GATE.width / 2;
+  const gateHi = GATE.z + GATE.width / 2;
+
+  const runs = [
+    { a: [minX, maxZ], b: [maxX, maxZ] },        // north
+    { a: [maxX, maxZ], b: [maxX, minZ] },        // east
+    { a: [maxX, minZ], b: [minX, minZ] },        // south
+    { a: [minX, minZ], b: [minX, gateLo] },      // west, below the gate
+    { a: [minX, gateHi], b: [minX, maxZ] },      // west, above the gate
+  ];
+  for (const r of runs) buildWall(group, { ...r, doors: [] }, fadeables, H, MAT.concrete);
+
+  // Posts at the corners and along the runs.
+  for (const r of runs) {
+    const [ax, az] = r.a, [bx, bz] = r.b;
+    const len = Math.hypot(bx - ax, bz - az);
+    const n = Math.max(1, Math.round(len / 4.0));
+    for (let i = 0; i <= n; i++) {
+      const t = i / n;
+      const px = ax + (bx - ax) * t, pz = az + (bz - az) * t;
+      const post = box(0.46, H + 0.3, 0.46, MAT.concreteDark,
+                       px, depotHeight(px, pz) + (H + 0.3) / 2, pz);
+      group.add(post);
+    }
+  }
+
+  // The gate: two leaves, one pushed open.
+  for (const [dz, rot] of [[GATE.width / 2 - 0.4, 0.0], [-GATE.width / 2 + 0.4, 0.5]]) {
+    const leaf = new THREE.Group();
+    leaf.add(box(0.12, 2.4, GATE.width / 2 - 0.2, MAT.metal, 0, 1.2, 0));
+    for (let i = 0; i < 5; i++) {
+      leaf.add(box(0.07, 2.1, 0.07, MAT.dark, 0, 1.2, -0.7 + i * 0.35));
+    }
+    onGround(leaf, GATE.x, GATE.z + dz, { rotY: rot, tiltToSlope: false });
+    group.add(leaf);
+  }
 
   // Guard tower on the north-west corner, overlooking the gate.
   const tower = new THREE.Group();
-  const tx = minX + 1.4, tz = maxZ - 1.4;
-  for (const [lx, lz] of [[-0.7, -0.7], [0.7, -0.7], [-0.7, 0.7], [0.7, 0.7]]) {
-    tower.add(box(0.22, 4.2, 0.22, MAT.metal, lx, 2.1, lz));
+  for (const [lx, lz] of [[-0.8, -0.8], [0.8, -0.8], [-0.8, 0.8], [0.8, 0.8]]) {
+    tower.add(box(0.22, 4.4, 0.22, MAT.metal, lx, 2.2, lz));
   }
-  tower.add(box(2.2, 0.16, 2.2, MAT.concreteDark, 0, 4.2, 0));
+  tower.add(box(2.4, 0.16, 2.4, MAT.concreteDark, 0, 4.4, 0));
   for (let i = 0; i < 4; i++) {
     const a = i * Math.PI / 2;
-    tower.add(box(2.2, 0.9, 0.12, MAT.metal, Math.sin(a) * 1.05, 4.7, Math.cos(a) * 1.05, a));
+    tower.add(box(2.4, 0.9, 0.12, MAT.metal, Math.sin(a) * 1.15, 4.9, Math.cos(a) * 1.15, a));
   }
-  tower.add(box(2.6, 0.14, 2.6, MAT.roof, 0, 5.6, 0));
-  for (const [lx, lz] of [[-1.0, -1.0], [1.0, 1.0]]) tower.add(box(0.1, 0.9, 0.1, MAT.metal, lx, 5.1, lz));
-  onGround(tower, tx, tz, { tiltToSlope: false });
-  wall.add(tower);
-
-  group.add(wall);
-  return wall;
+  tower.add(box(2.8, 0.14, 2.8, MAT.roof, 0, 5.8, 0));
+  onGround(tower, minX + 2.0, maxZ - 2.0, { tiltToSlope: false });
+  group.add(tower);
 }
 
-// ---------------------------------------------------------------- fire
+// ---------------------------------------------------------------- rooms
 
-// The fire. Starts as scenery in phase 2, degrades the sensors in phase 4 and
-// is a clock in phase 5 — so it is built once, parked at zero, and turned up
-// by the mission rather than spawned and despawned.
-function fireSource(group, x, z) {
-  const fire = new THREE.Group();
-  fire.name = 'compound-fire';
-  fire.visible = false;
+function roomFloorAndRoof(group, room, fadeables, roofs) {
+  const { minX, maxX, minZ, maxZ } = room.bounds;
+  const cx = (minX + maxX) / 2, cz = (minZ + maxZ) / 2;
+  const w = maxX - minX, d = maxZ - minZ;
+  const y = depotHeight(cx, cz);
 
-  const COUNT = 260;
+  const floor = box(w, 0.12, d, MAT.floor, cx, y + 0.06, cz);
+  floor.receiveShadow = true;
+  floor.castShadow = false;
+  group.add(floor);
+
+  const roofMat = MAT.roof.clone();
+  const roof = box(w + 0.4, 0.26, d + 0.4, roofMat, cx, y + room.height + 0.13, cz);
+  group.add(roof);
+  const roofMeshes = [roof];
+  const entry = { zone: room.zone, bounds: room.bounds, materials: [roofMat], meshes: roofMeshes };
+  roofs.push(entry);
+
+  // Parapet, so the roof reads as a roof and not a lid.
+  for (const [pw, pd, px, pz] of [
+    [w + 0.5, 0.18, cx, minZ - 0.2], [w + 0.5, 0.18, cx, maxZ + 0.2],
+    [0.18, d + 0.5, minX - 0.2, cz], [0.18, d + 0.5, maxX + 0.2, cz],
+  ]) {
+    const p = box(pw, 0.34, pd, roofMat, px, y + room.height + 0.4, pz);
+    group.add(p);
+    roofMeshes.push(p);
+  }
+}
+
+// A free-standing outbuilding in the yard: four walls with a door in one.
+function outbuilding(group, spec, fadeables) {
+  const { minX, maxX, minZ, maxZ } = spec.bounds;
+  const sides = {
+    N: { a: [minX, maxZ], b: [maxX, maxZ] },
+    S: { a: [minX, minZ], b: [maxX, minZ] },
+    W: { a: [minX, minZ], b: [minX, maxZ] },
+    E: { a: [maxX, minZ], b: [maxX, maxZ] },
+  };
+  for (const [name, seg] of Object.entries(sides)) {
+    const doors = (spec.doors || []).filter((d) => d.wall === name)
+      .map((d) => ({ at: d.at, width: d.width }));
+    buildWall(group, { ...seg, doors }, fadeables, spec.height, MAT.wall);
+  }
+  const cx = (minX + maxX) / 2, cz = (minZ + maxZ) / 2;
+  const y = depotHeight(cx, cz);
+  const roofMat = MAT.roof.clone();
+  const roof = box(maxX - minX + 0.4, 0.24, maxZ - minZ + 0.4, roofMat,
+                   cx, y + spec.height + 0.12, cz);
+  group.add(roof);
+  fadeables.push({ id: `${spec.id}-roof`, materials: [roofMat], meshes: [roof] });
+  group.add(box(maxX - minX, 0.1, maxZ - minZ, MAT.floor, cx, y + 0.05, cz));
+}
+
+// ---------------------------------------------------------------- hazard
+
+// Fire and smoke. One particle system; the mission moves it and turns it up.
+// Visual only — no mechanic hangs off it. It is the storyline's clock, made
+// something you can see closing on the ammunition room.
+function hazard(group) {
+  const root = new THREE.Group();
+  root.name = 'compound-hazard';
+
+  const COUNT = 420;
   const geo = new THREE.BufferGeometry();
   const pos = new Float32Array(COUNT * 3);
   const seed = new Float32Array(COUNT);
   const kind = new Float32Array(COUNT);        // 0 flame, 1 smoke
   for (let i = 0; i < COUNT; i++) {
-    seed[i] = rand(i + 5) ;
-    kind[i] = i < COUNT * 0.42 ? 0 : 1;
-    pos[i * 3] = (rand(i + 31) - 0.5) * 2.4;
-    pos[i * 3 + 1] = rand(i + 61) * 6;
-    pos[i * 3 + 2] = (rand(i + 91) - 0.5) * 2.4;
+    seed[i] = rand(i + 7);
+    kind[i] = i < COUNT * 0.3 ? 0 : 1;
+    pos[i * 3] = (rand(i + 31) - 0.5) * 2.0;
+    pos[i * 3 + 1] = rand(i + 61) * 4;
+    pos[i * 3 + 2] = (rand(i + 91) - 0.5) * 2.0;
   }
   geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
   geo.setAttribute('seed', new THREE.BufferAttribute(seed, 1));
   geo.setAttribute('kind', new THREE.BufferAttribute(kind, 1));
 
   const material = new THREE.ShaderMaterial({
-    uniforms: { uTime: { value: 0 }, uIntensity: { value: 0 }, uScale: { value: 700 } },
+    uniforms: {
+      uTime: { value: 0 }, uIntensity: { value: 0 },
+      uSpread: { value: 3.0 }, uScale: { value: 700 },
+    },
     vertexShader: `
       attribute float seed; attribute float kind;
-      uniform float uTime, uIntensity, uScale;
+      uniform float uTime, uIntensity, uSpread, uScale;
       varying float vKind; varying float vLife;
       void main() {
-        float speed = mix(2.2, 1.1, kind);
-        float life = fract(seed + uTime * speed * 0.16);
+        float speed = mix(2.0, 0.85, kind);
+        float life = fract(seed + uTime * speed * 0.14);
         vLife = life; vKind = kind;
         vec3 p = position;
-        // Rise, spread as it cools, and lean downwind.
-        p.y = mix(0.2, mix(7.0, 16.0, kind), life) * (0.55 + uIntensity * 0.45);
-        float spread = life * mix(1.6, 5.0, kind);
-        p.x += sin(seed * 31.0 + uTime * 0.7) * spread + life * 2.6;
-        p.z += cos(seed * 17.0 + uTime * 0.5) * spread + life * 1.1;
+        p.y = mix(0.15, mix(5.0, 11.0, kind), life) * (0.6 + uIntensity * 0.4);
+        float spread = life * uSpread * mix(0.5, 1.6, kind);
+        p.x += sin(seed * 31.0 + uTime * 0.6) * spread;
+        p.z += cos(seed * 17.0 + uTime * 0.45) * spread;
         vec4 mv = modelViewMatrix * vec4(p, 1.0);
         gl_Position = projectionMatrix * mv;
-        float size = mix(0.5, 2.4, kind) * (0.4 + life * 1.4) * (0.5 + uIntensity * 0.5);
+        float size = mix(0.45, 2.6, kind) * (0.35 + life * 1.5) * (0.5 + uIntensity * 0.5);
         gl_PointSize = size * uScale * projectionMatrix[1][1] * 0.1;
       }`,
     fragmentShader: `
@@ -255,41 +313,41 @@ function fireSource(group, x, z) {
         vec2 d = gl_PointCoord - 0.5;
         float a = smoothstep(0.5, 0.05, length(d));
         if (a < 0.02) discard;
-        // Flame runs white-hot at the base through orange to red as it rises.
-        vec3 flame = mix(vec3(1.0, 0.92, 0.62), vec3(0.92, 0.26, 0.08), vLife);
-        vec3 smoke = mix(vec3(0.32, 0.30, 0.29), vec3(0.16, 0.15, 0.15), vLife);
+        vec3 flame = mix(vec3(1.0, 0.90, 0.58), vec3(0.92, 0.26, 0.08), vLife);
+        vec3 smoke = mix(vec3(0.34, 0.32, 0.31), vec3(0.15, 0.14, 0.14), vLife);
         vec3 c = mix(flame, smoke, vKind);
-        float fade = mix(1.0 - vLife, (1.0 - vLife) * 0.5, vKind);
-        gl_FragColor = vec4(c, a * fade * uIntensity * mix(0.9, 0.42, vKind));
+        float fade = mix(1.0 - vLife, (1.0 - vLife) * 0.55, vKind);
+        gl_FragColor = vec4(c, a * fade * uIntensity * mix(0.9, 0.38, vKind));
       }`,
     transparent: true, depthWrite: false,
-    blending: THREE.NormalBlending,
   });
-  // Flames add light; smoke must not. Two draws would be tidier, but the
-  // kind attribute already separates them and additive smoke glows.
+
   const points = new THREE.Points(geo, material);
   points.frustumCulled = false;
-  fire.add(points);
+  root.add(points);
 
-  // The fire throws real light on the compound once it is going.
   const light = new THREE.PointLight(0xff7a2a, 0, 26, 2);
   light.position.set(0, 2.4, 0);
-  fire.add(light);
+  root.add(light);
 
-  onGround(fire, x, z, { tiltToSlope: false });
-  group.add(fire);
+  root.visible = false;
+  onGround(root, FIRE_SOURCE.x, FIRE_SOURCE.z, { tiltToSlope: false });
+  group.add(root);
 
   return {
-    group: fire,
+    group: root,
     material,
     light,
-    // 0 = out, 1 = the fuel store is alight, 2 = it is through the roofline.
-    setLevel(level) {
-      const v = Math.max(0, Math.min(2, level));
-      fire.visible = v > 0;
-      material.uniforms.uIntensity.value = v * 0.5;
-      light.intensity = v * 26;
-      light.distance = 20 + v * 14;
+    // level 0 = out. 1 = the fuel store alight, back in the yard.
+    // 2 = smoke has reached the corridor. 3 = it is on the ammunition room.
+    setStage(level, at, spread = 3.0, density = 1) {
+      root.visible = level > 0;
+      if (!root.visible) return;
+      if (at) onGround(root, at.x, at.z, { tiltToSlope: false });
+      material.uniforms.uIntensity.value = Math.min(1, 0.45 + density * 0.55);
+      material.uniforms.uSpread.value = spread;
+      light.intensity = level >= 2 ? 10 : 24;
+      light.distance = 18 + spread * 2;
     },
     update(dt, t) { material.uniforms.uTime.value = t; },
   };
@@ -298,46 +356,43 @@ function fireSource(group, x, z) {
 // ---------------------------------------------------------------- props
 
 const PROPS = [
-  // --- the yard: things that get delivered and parked
-  ['container', 6.0, 4.6, { size: 2.6, rot: 0.1 }],
-  ['container', 9.4, 4.2, { size: 2.6, rot: 0.08 }],
-  ['supply-crate', 4.6, 0.4, { height: 1.0, rot: 0.25 }],
-  ['supply-crate', 5.4, -0.6, { height: 0.9, rot: 0.6 }],
-  ['supply-crate', 5.0, 1.3, { height: 0.8, rot: 0.1 }],
-  ['barrel', 6.4, -0.2, { height: 0.95, rot: 0.4 }],
-  ['barrel', 6.9, 0.7, { height: 0.95, rot: 0.9 }],
-  ['drum', 3.2, 2.1, { height: 1.0, rot: 0.2 }],
-
-  // --- the fuel store, east side of the yard. Turn 3 sets this alight.
-  ['storage-tank', 8.6, 3.4, { height: 3.2, rot: 0.0 }],
-  ['propane-tank', 7.2, 4.4, { height: 1.6, rot: 0.5 }],
-  ['fuel-can', 6.6, 3.0, { height: 0.6, rot: 0.3 }],
-  ['sign-hazard', 7.0, 2.2, { size: 1.1, rot: 0.4 }],
+  // --- the yard
+  ['container', -6.5, 2.0, { size: 2.6, rot: 0.08 }],
+  ['container', -6.2, -1.2, { size: 2.6, rot: 0.05 }],
+  ['supply-crate', 0.5, 6.0, { height: 1.0, rot: 0.25 }],
+  ['supply-crate', 1.6, 5.2, { height: 0.9, rot: 0.6 }],
+  ['barrel', 2.6, 6.6, { height: 0.95, rot: 0.4 }],
+  ['barrel', 3.2, 5.6, { height: 0.95, rot: 0.9 }],
+  ['drum', -2.0, 3.6, { height: 1.0, rot: 0.2 }],
+  ['sign-hazard', 4.2, 7.2, { size: 1.1, rot: 0.4 }],
+  ['fuel-can', 4.4, 9.4, { height: 0.6, rot: 0.3 }],
+  ['propane-tank', 6.8, 9.6, { height: 1.6, rot: 0.5 }],
+  ['storage-tank', 7.4, 7.0, { height: 3.2, rot: 0.0 }],
 
   // --- the gate
-  ['floodlight', -1.2, 7.4, { height: 4.2, rot: 2.6 }],
-  ['sign-hazard', -1.4, 3.6, { size: 1.0, rot: 1.2 }],
-  ['fence', 0.6, 7.8, { size: 2.2, rot: 0.0 }],
+  ['floodlight', -7.4, 10.5, { height: 4.2, rot: 2.6 }],
+  ['sign-hazard', -7.6, 4.5, { size: 1.0, rot: 1.2 }],
 
-  // --- generator hall: the EM source behind turn 7
-  ['ac-stacked', 12.6, -1.4, { height: 1.8, rot: 0.2 }],
-  ['ac-unit', 13.8, -0.6, { height: 1.2, rot: 0.6 }],
-  ['pipe-bundle', 11.4, -2.6, { size: 2.2, rot: 0.3 }],
-  ['pipe-straight', 13.6, -4.6, { size: 2.6, rot: 1.2 }],
-  ['cable-thick', 12.0, -5.4, { height: 1.0, rot: 0.5, anchor: 'top' }],
-  ['antenna-mast', 14.6, 1.2, { height: 5.0, rot: 0.1 }],
+  // --- the holding room (inside)
+  ['terminal', 5.4, -8.6, { height: 1.1, rot: 1.1 }],
+  ['supply-crate', 13.4, -1.6, { height: 0.8, rot: 0.3 }],
 
-  // --- the bunker apron
-  ['crate', 14.4, -10.4, { height: 0.9, rot: 0.2 }],
-  ['supply-crate', 18.2, -10.0, { height: 1.0, rot: 0.5 }],
-  ['barrel', 18.6, -6.6, { height: 0.95, rot: 0.2 }],
-  ['floodlight', 13.4, -11.0, { height: 4.0, rot: 5.1 }],
-  ['sign-hazard', 15.0, -6.2, { size: 1.2, rot: 3.3 }],
+  // --- the corridor: the plant that throws the EM
+  ['ac-stacked', 20.2, -6.2, { height: 1.7, rot: 0.2 }],
+  ['pipe-straight', 17.0, -9.2, { size: 2.6, rot: 0.0 }],
+  ['cable-thick', 19.0, -9.3, { height: 0.9, rot: 0.1, anchor: 'top' }],
 
-  // --- the main building approach
-  ['terminal', 6.4, -3.2, { height: 1.1, rot: 1.1 }],
-  ['vent', 10.6, -7.4, { height: 0.8, rot: 0.2 }],
-  ['railing', 6.0, -8.6, { size: 2.4, rot: 0.0 }],
+  // --- the ammunition room
+  ['supply-crate', 24.5, -17.0, { height: 1.1, rot: 0.1 }],
+  ['supply-crate', 26.2, -17.4, { height: 1.0, rot: 0.4 }],
+  ['supply-crate', 28.0, -16.6, { height: 1.1, rot: 0.2 }],
+  ['crate', 29.4, -13.0, { height: 0.9, rot: 0.5 }],
+  ['barrel', 30.2, -18.2, { height: 0.95, rot: 0.2 }],
+  ['sign-hazard', 23.2, -5.4, { size: 1.2, rot: 3.3 }],
+
+  // --- outside the wire
+  ['antenna-mast', -13.0, -6.0, { height: 5.0, rot: 0.1 }],
+  ['railing', -12.0, 16.0, { size: 2.4, rot: 0.2 }],
 ];
 
 function placeProps(group, table) {
@@ -353,9 +408,6 @@ function placeProps(group, table) {
         if (!child.isMesh) return;
         child.castShadow = true;
         child.receiveShadow = true;
-        // Dust settles on everything in a dry compound. Pushing the props
-        // toward the ground's own colour is what stops them reading as
-        // clean kit dropped onto a photograph.
         if (child.material && child.material.color) {
           child.material.color.lerp(new THREE.Color(0xb3a68c), 0.22);
           child.material.roughness = Math.min(1, (child.material.roughness ?? 0.7) + 0.18);
@@ -371,113 +423,91 @@ function placeProps(group, table) {
 export function createDepotLevel(scene) {
   const group = new THREE.Group();
   group.name = 'compound-14';
+  const fadeables = [];
+  const roofs = [];
 
-  perimeter(group);
+  perimeter(group, fadeables);
 
-  // --- turn 2: the storage block. It exists to occlude the north wall, and
-  // the service door with the live alarm contact is on its far side.
-  shed(group, { x: 2.5, z: 6.4, w: 7.0, d: 4.2, h: 3.4, rotY: 0.04,
-                mat: MAT.concrete, name: 'storage-block',
-                door: { width: 1.4, offset: 2.0 } });
-  const serviceDoor = box(1.3, 2.1, 0.14, MAT.rust, 0, 0, 0);
-  onGround(serviceDoor, 2.2, 8.35, { tiltToSlope: false });
-  serviceDoor.position.y += 1.05;
-  serviceDoor.name = 'service-door';
-  group.add(serviceDoor);
+  // The building complex, from the shared wall list. Built once each, so
+  // HOLDING and CORRIDOR genuinely share an edge rather than having two walls
+  // a few centimetres apart with a seam between them.
+  for (const seg of WALLS) {
+    const room = ROOMS.find((r) => seg.tag && seg.tag.startsWith(r.zone.toLowerCase().split('_')[0]));
+    buildWall(group, seg, fadeables, room?.height ?? 3.4, MAT.wall);
+  }
+  for (const room of ROOMS) roomFloorAndRoof(group, room, fadeables, roofs);
+  for (const spec of OUTBUILDINGS) outbuilding(group, spec, fadeables);
 
-  // --- turns 5-6: the main building. Open-roofed, because the hostage room
-  // is inside it and the whole mission turns on being able to see in.
-  const main = shed(group, { x: 9.0, z: -6.0, w: 11.0, d: 7.5, h: 3.2, rotY: 0.02,
-                             mat: MAT.render, open: true, name: 'main-building',
-                             door: { width: 2.0, offset: -3.2 } });
-  // An internal partition making the west room a room. Turn 5's six figures
-  // are in the west half; the corridor to the generator hall runs east.
-  main.add(box(0.2, 3.2, 5.4, MAT.render, 0.6, 1.6, -0.6));
-  main.add(box(0.2, 1.0, 2.0, MAT.render, 0.6, 2.7, 2.4));   // doorway head
+  // The holding room door — the Director's breach beat reaches for this.
+  const holdingDoor = box(2.2, 2.3, 0.16, MAT.metal, 0, 0, 0);
+  onGround(holdingDoor, 7.3, 0, { tiltToSlope: false });
+  holdingDoor.position.y += 1.15;
+  holdingDoor.name = 'holding-door';
+  holdingDoor.material = MAT.metal.clone();
+  holdingDoor.material.emissive = new THREE.Color(0x4ce0d8);
+  holdingDoor.material.emissiveIntensity = 0.18;
+  group.add(holdingDoor);
+  fadeables.push({ id: 'holding-door', materials: [holdingDoor.material], meshes: [holdingDoor] });
 
-  // The filing cabinet the sixth figure is behind. It is small, and it is the
-  // most important object on the map.
-  const cabinet = box(0.9, 1.5, 0.6, MAT.dark, 0, 0, 0);
-  onGround(cabinet, 10.2, -8.0, { rotY: 0.3, tiltToSlope: false });
+  // The filing cabinet the sixth figure is behind. Small, and the most
+  // important object in the mission.
+  const cabinet = box(1.0, 1.5, 0.7, MAT.dark, 0, 0, 0);
+  onGround(cabinet, 11.8, -7.4, { rotY: 0.3, tiltToSlope: false });
   cabinet.position.y += 0.75;
   cabinet.name = 'cabinet';
   group.add(cabinet);
 
-  const mainDoor = box(2.0, 2.3, 0.16, MAT.metal, 0, 0, 0);
-  onGround(mainDoor, 5.8, -2.3, { rotY: 0.02, tiltToSlope: false });
-  mainDoor.position.y += 1.15;
-  mainDoor.name = 'main-door';
-  mainDoor.material = MAT.metal.clone();
-  mainDoor.material.emissive = new THREE.Color(0x4ce0d8);
-  mainDoor.material.emissiveIntensity = 0.18;
-  group.add(mainDoor);
-
-  // --- turn 7: the generator hall. Closed, humming, and the reason BETA-1's
-  // sidescan cannot be trusted in the corridor beside it.
-  const genHall = shed(group, { x: 13.5, z: -2.0, w: 5.6, d: 4.6, h: 3.0, rotY: -0.05,
-                                mat: MAT.concrete, name: 'generator-hall',
-                                door: { width: 1.5, offset: -1.4 } });
-  const genUnit = box(2.4, 1.4, 1.6, MAT.metal, 0, 0, 0);
-  onGround(genUnit, 12.2, 0.6, { rotY: 0.2 });
-  genUnit.position.y += 0.7;
+  // The generator plant in the corridor — turn 7's EM source.
+  const genUnit = box(2.4, 1.5, 1.4, MAT.metal, 0, 0, 0);
+  onGround(genUnit, 20.4, -8.6, { rotY: 0.1 });
+  genUnit.position.y += 0.75;
   genUnit.name = 'generator';
   group.add(genUnit);
 
-  // --- turns 8-9: the ammunition bunker. Half-buried, earth-bermed, blast
-  // wall across the door. It should read as the hardest thing on the map.
-  const bunker = new THREE.Group();
-  bunker.name = 'ammunition-bunker';
-  bunker.add(box(9.0, 3.6, 6.4, MAT.concreteDark, 0, 1.8, 0));
-  // Earth berm banked up the sides.
-  for (const s of [-1, 1]) {
-    const berm = new THREE.Mesh(new THREE.BoxGeometry(9.6, 2.4, 2.2), MAT.sand);
-    berm.position.set(0, 1.1, s * 3.9);
-    berm.rotation.x = s * 0.30;
-    berm.castShadow = berm.receiveShadow = true;
-    bunker.add(berm);
+  // The ammunition stack and its charge indicator. `tower` and `beacon` in
+  // the level contract, so turn 10's `relay` FX detonates exactly here.
+  const stack = new THREE.Group();
+  stack.name = 'ammunition-stack';
+  for (let i = 0; i < 10; i++) {
+    const row = i % 5, tier = Math.floor(i / 5);
+    stack.add(box(1.5, 0.85, 1.1, MAT.concreteDark,
+                  -2.6 + row * 1.3, 0.45 + tier * 0.9, 0));
   }
-  bunker.add(box(9.8, 0.5, 7.2, MAT.concrete, 0, 3.75, 0));      // roof slab
-  bunker.add(box(3.4, 0.4, 7.6, MAT.sand, 0, 4.15, 0));          // earth cover
-  // Blast wall standing off the door, which is how these are actually built.
-  bunker.add(box(0.5, 3.0, 4.4, MAT.concreteDark, -5.4, 1.5, 0.6));
-  const blastDoor = box(0.3, 2.6, 2.6, MAT.metal, -4.6, 1.3, -0.8);
-  bunker.add(blastDoor);
-  onGround(bunker, 16.5, -9.0, { rotY: 0.06, tiltToSlope: false });
-  group.add(bunker);
+  stack.add(box(7.4, 0.14, 1.5, MAT.metal, 0, 1.86, 0));
+  onGround(stack, 27, -13.5, { rotY: 0.04, tiltToSlope: false });
+  group.add(stack);
 
-  // The charge indicator. Turn 10's `relay` FX pulses on this — the detonation.
   const beacon = new THREE.Mesh(
-    new THREE.SphereGeometry(0.2, 12, 9),
+    new THREE.SphereGeometry(0.22, 12, 9),
     new THREE.MeshStandardMaterial({
       color: 0xffb08a, emissive: 0xe0524c, emissiveIntensity: 1.4,
     })
   );
-  beacon.position.set(-4.4, 2.9, -0.8);
+  beacon.position.set(0, 2.3, 0);
   beacon.name = 'charge-indicator';
-  bunker.add(beacon);
+  stack.add(beacon);
 
-  const chargePanel = box(0.8, 1.0, 0.24, MAT.dark, -4.9, 1.0, 1.4);
+  const chargePanel = box(0.8, 1.0, 0.24, MAT.dark, -3.6, 0.5, 0.8);
   chargePanel.name = 'charge-panel';
-  bunker.add(chargePanel);
+  stack.add(chargePanel);
 
-  // --- the fuel store fire, parked at zero until the mission lights it.
-  const fire = fireSource(group, 8.4, 3.4);
-
+  const fire = hazard(group);
   placeProps(group, PROPS);
 
   scene.add(group);
-  console.log('[depot] Compound 14 built — wall, gate, tower, 4 structures, bunker, fire');
+  console.log(`[depot] Compound 14 — ${WALLS.length} shared wall runs, ${ROOMS.length} rooms, `
+    + `${OUTBUILDINGS.length} outbuildings, ${fadeables.length} fadeable meshes`);
 
   return {
     group,
-    door: mainDoor,
-    tower: bunker,
+    door: holdingDoor,
+    tower: stack,
     beacon,
     generator: genUnit,
     relayConsole: chargePanel,
     fire,
-    serviceDoor,
-    storageBlock: group.getObjectByName('storage-block'),
-    genHall,
+    fadeables,
+    roofs,
+    zones: ZONES,
   };
 }

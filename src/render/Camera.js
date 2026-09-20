@@ -13,12 +13,59 @@ export const VIEW_SIZE = 18;
 const DIST = 40;
 const ELEV = THREE.MathUtils.degToRad(45);
 const AZIM = THREE.MathUtils.degToRad(45);
+const QUARTER = Math.PI / 2;
+const TURN_TIME = 0.4;
 
-export const OFFSET = new THREE.Vector3(
-  DIST * Math.cos(ELEV) * Math.sin(AZIM),
-  DIST * Math.sin(ELEV),
-  DIST * Math.cos(ELEV) * Math.cos(AZIM)
-);
+// Azimuth is the ONLY thing the player can rotate. Orthographic projection
+// and the 45 degree elevation are fixed, because the whole tactical read —
+// cone shapes, unit spacing, how far things are from each other — depends on
+// the board being drawn the same way every time. Free rotation would let a
+// player put themselves in a view where the game is unreadable and then
+// report that as a bug.
+let azimuth = AZIM;
+let azimuthFrom = AZIM;
+let azimuthTo = AZIM;
+let turnT = 1;
+
+// Mutated in place, never reassigned: everything that imported this before
+// the view could rotate still sees the live value.
+export const OFFSET = new THREE.Vector3();
+
+function recomputeOffset() {
+  OFFSET.set(
+    DIST * Math.cos(ELEV) * Math.sin(azimuth),
+    DIST * Math.sin(ELEV),
+    DIST * Math.cos(ELEV) * Math.cos(azimuth)
+  );
+}
+recomputeOffset();
+
+// Snap the view a quarter turn. Anything that needs to know which way the
+// screen is pointing must ask — `cameraBasis()` — rather than assuming
+// screen-right is +x,-z, which is only true at the default azimuth.
+export function rotateView(dir = 1) {
+  if (turnT < 1) return false;          // ignore input mid-turn
+  azimuthFrom = azimuth;
+  azimuthTo = azimuth + Math.sign(dir) * QUARTER;
+  turnT = 0;
+  return true;
+}
+
+export const viewAzimuth = () => azimuth;
+
+// Screen basis in the xz plane. `forward` is into the screen, `right` is
+// screen-right, both flat.
+export function cameraBasis() {
+  const len = Math.hypot(OFFSET.x, OFFSET.z) || 1;
+  const fwd = { x: -OFFSET.x / len, z: -OFFSET.z / len };
+  return { forward: fwd, right: { x: -fwd.z, z: fwd.x } };
+}
+
+export function resetView() {
+  azimuth = azimuthFrom = azimuthTo = AZIM;
+  turnT = 1;
+  recomputeOffset();
+}
 
 // Critically damped spring. Reaches the target without overshoot and, unlike a
 // tween, survives being retargeted mid-flight — a second pan blends out of the
@@ -106,6 +153,16 @@ export function updateCamera(camera, dt, t = 0) {
   d.punch = smoothDamp(d.punch, 0, d.vel, 'punch', 0.28, step);
   d.wide = smoothDamp(d.wide, d.wideTarget, d.vel, 'wide', 0.22, step);
 
+  // Quarter-turn snap. Eased by hand rather than tweened so it stays
+  // deterministic and cannot be left half-finished by a paused timeline.
+  if (turnT < 1) {
+    turnT = Math.min(1, turnT + step / TURN_TIME);
+    const k = turnT * turnT * (3 - 2 * turnT);      // smoothstep
+    azimuth = azimuthFrom + (azimuthTo - azimuthFrom) * k;
+    if (turnT >= 1) azimuth = azimuthTo;
+    recomputeOffset();
+  }
+
   // Shake decays on trauma squared, so it falls away fast and never lingers
   // as a low-level wobble. Deterministic sinusoids, no Math.random — the demo
   // has to play back identically every time.
@@ -159,6 +216,9 @@ export function cutCamera(camera, x, z, view = null) {
   d.punch = 0;
   d.trauma = 0;
   d.wide = d.wideTarget = 0;
+  // A restart must not inherit a half-finished quarter turn.
+  azimuthFrom = azimuthTo = azimuth;
+  turnT = 1;
   applyProjection(camera, d.view);
   applyCameraTransform(camera);
 }

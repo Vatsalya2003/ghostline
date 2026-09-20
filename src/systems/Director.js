@@ -166,6 +166,33 @@ export class Director {
     return wait(duration + 0.05);
   }
 
+  // Walk the squad along an authored path, in formation. The waypoints and
+  // the offsets both come from mission data — nothing in here knows what the
+  // map looks like, which is the same rule the rest of the spine follows.
+  //
+  // Duration scales with path length so a long traverse does not sprint and a
+  // short one does not crawl, and the camera travels with the lead so the
+  // player is not left watching the place the squad has left.
+  async travelSquad(waypoints, formation = {}, { run = false } = {}) {
+    if (!waypoints || waypoints.length < 2) return;
+    let length = 0;
+    for (let i = 1; i < waypoints.length; i++) {
+      length += Math.hypot(waypoints[i][0] - waypoints[i - 1][0],
+                           waypoints[i][1] - waypoints[i - 1][1]);
+    }
+    const duration = Math.min(5.5, Math.max(1.4, length * (run ? 0.13 : 0.2)));
+
+    // Follow the lead rather than cutting to the destination: the whole point
+    // of the traversal is that the player sees one continuous place.
+    const [lastX, lastZ] = waypoints[waypoints.length - 1];
+    panCamera(this.camera, lastX, lastZ, duration * 0.9);
+
+    const walks = this.squad.all.map((u) =>
+      u.followPath(waypoints, { duration, run, offset: formation[u.id] || null }));
+    await Promise.all(walks);
+    await wait(0.1);
+  }
+
   async enterTurn(turn) {
     this.busy = true;
     this.ui.commandBar.setLocked(true);
@@ -423,6 +450,9 @@ export class Director {
     this.ui.hud.setHealth(this.state.health);
     this.ui.hud.setDrones(this.state.drones);
 
+    if (outcome.waypoints) {
+      await this.travelSquad(outcome.waypoints, outcome.formation, { run: !!outcome.urgent });
+    }
     if (outcome.moves) await this.moveSquad(outcome.moves, 0.85, { run: !!outcome.urgent });
     await wait(0.25);
 

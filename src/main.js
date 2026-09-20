@@ -7,6 +7,8 @@ import { createLevel } from './render/Level.js';
 import { createSeabedLevel } from './render/SeabedLevel.js';
 import { createDepotLevel } from './render/DepotLevel.js';
 import { attachSurveyLights } from './render/Seabed.js';
+import { createOcclusion } from './render/Occlusion.js';
+import { FIRE_SOURCE, SMOKE_STAGES } from './data/depot-layout.js';
 import { createSquad } from './render/Units.js';
 import { FX } from './render/FX.js';
 import { UnitMarkers } from './render/UnitMarkers.js';
@@ -62,6 +64,12 @@ const squad = createSquad(scene);
 // parent to the unit groups, so they travel with the fleet for free — and the
 // pool of warm light they carry is the only reason the seabed has any colour.
 if (mission1.environment === 'undersea') attachSurveyLights(squad.all);
+// Roofs lift and walls fade while the squad is inside a building. Turns 5 and
+// 6 of Ammunition Depot are decided on what is visible in one room, so this is
+// the difference between a playable turn and a guess.
+const occlusion = level.fadeables
+  ? createOcclusion({ fadeables: level.fadeables, roofs: level.roofs, units: squad.all })
+  : null;
 const fx = new FX(scene);
 const markers = new UnitMarkers(scene, squad.all);
 // Objectives as places on the board, not just rows in the corner.
@@ -234,6 +242,7 @@ function startMission() {
   zoomCamera(camera, 15, 1.7);
   fog.clear();
   fog.lift(1.6);
+  occlusion?.reset();
   screenFX.reset();
   screenFX.deploySweep();
   input?.clearUnitSelection();
@@ -396,10 +405,22 @@ function updateFire(dt, t) {
   if (!fire) return;
   fire.update(dt, t);
   const turn = turnManager.turn?.id ?? 0;
-  const wanted = !state.fireStarted ? 0 : turn >= 8 ? 2 : 1;
-  if (fire.level !== wanted) {
-    fire.level = wanted;
-    fire.setLevel(wanted);
+
+  // Stage 1 is the fuel store in the yard, lit by the player's own round.
+  // Stages 2 and 3 are the smoke reaching the corridor and then the
+  // ammunition room — the storyline's clock, made something you can see
+  // closing rather than a number in a log line.
+  let stage = 0, at = null, spread = 3.0, density = 0.6;
+  if (state.fireStarted) { stage = 1; at = FIRE_SOURCE; spread = 3.0; density = 0.6; }
+  for (const s of SMOKE_STAGES) {
+    if (turn >= s.fromTurn) {
+      stage = stage === 0 ? 2 : stage + 1;
+      at = s.at; spread = s.spread; density = s.density;
+    }
+  }
+  if (fire.stage !== stage) {
+    fire.stage = stage;
+    fire.setStage(stage, at, spread, density);
   }
 }
 
@@ -419,6 +440,7 @@ function tick() {
   soundscape.update(dt);
   terrain?.dust.update(dt, t);
   updateFire(dt, t);
+  occlusion?.update(dt);
   input.poll(dt);
   updateCamera(camera, dt, t);
   renderer.render(scene, camera);

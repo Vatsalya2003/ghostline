@@ -391,6 +391,52 @@ export class Unit {
     this.idleForStatus();
   }
 
+  // Walk an authored waypoint list, facing each next point before moving to
+  // it. No pathfinding anywhere in this project: a solver that picks a
+  // different route on a slow frame is exactly what ruins a rehearsed run.
+  //
+  // Returns a promise that settles when the last leg lands, so the Director
+  // can hold the beat without depending on tween callbacks firing.
+  async followPath(points, { duration = 2.4, run = false, offset = null } = {}) {
+    if (!points || points.length < 2) return;
+    // Leg time proportional to leg length, so the pace is even rather than
+    // each leg taking the same time regardless of how far it is.
+    const legs = [];
+    let total = 0;
+    for (let i = 1; i < points.length; i++) {
+      const [px, pz] = points[i - 1], [qx, qz] = points[i];
+      const len = Math.hypot(qx - px, qz - pz);
+      legs.push({ to: points[i], from: points[i - 1], len });
+      total += len;
+    }
+    if (total < 0.001) return;
+
+    const clip = run && this.clips?.Run && this.status !== STATUS.DAMAGED ? 'Run' : 'Walk';
+    this.play(clip, { fade: 0.2, timeScale: this.status === STATUS.DAMAGED ? 0.6 : 1.15 });
+
+    for (const leg of legs) {
+      // Formation offset is applied in the frame of the leg, so the flankers
+      // stay left and right of the direction of travel round a corner rather
+      // than swapping sides.
+      const [qx, qz] = leg.to;
+      const dx = qx - leg.from[0], dz = qz - leg.from[1];
+      const len = Math.hypot(dx, dz) || 1;
+      const fx = dx / len, fz = dz / len;
+      const rx = -fz, rz = fx;
+      const tx = qx + (offset ? offset.side * rx - offset.back * fx : 0);
+      const tz = qz + (offset ? offset.side * rz - offset.back * fz : 0);
+
+      this.faceTowards(tx, tz, 0.22);
+      const legTime = Math.max(0.12, duration * (leg.len / total));
+      await new Promise((resolve) => {
+        gsap.to(this.group.position, {
+          x: tx, z: tz, duration: legTime, ease: 'none', onComplete: resolve,
+        });
+      });
+    }
+    if (!this.down) this.idleForStatus();
+  }
+
   // Signature unchanged — main.js calls update(t) with elapsed seconds — so
   // the frame delta the mixer needs is derived here rather than plumbed
   // through the render loop.

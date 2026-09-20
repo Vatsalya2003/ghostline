@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { WIRE, GATE, FIRE_SOURCE } from '../data/depot-layout.js';
 
 // ============================================================================
 // COMPOUND 14 — the ground, built for AMMUNITION DEPOT
@@ -52,19 +53,20 @@ const clamp = THREE.MathUtils.clamp;
 
 // ---------------------------------------------------------------- geography
 
-// The wire. Everything inside this rectangle is compound; everything outside
-// is the hillside the squad walked in over.
-export const WIRE = { minX: -2.5, maxX: 21, minZ: -15, maxZ: 8.5 };
-export const GATE = new THREE.Vector2(-2.5, 5.5);
+// The wire and the gate come from the layout data — one source of truth, so
+// the ground's hardstanding edge and the wall that stands on it cannot drift
+// apart.
+export { WIRE, GATE };
 
-// Vehicle tracks: gate to yard, yard to the bunker, yard to the fuel store.
-// Regular, worn, and going somewhere — the thing that says "this place is
-// used" rather than "this place was generated".
+// Vehicle tracks: gate to yard, yard to the building complex, yard to the
+// fuel store. Regular, worn, and going somewhere — the thing that says "this
+// place is used" rather than "this place was generated".
 export const TRACKS = [
-  [new THREE.Vector2(-9, 5.5), new THREE.Vector2(-2.5, 5.5),
-   new THREE.Vector2(3, 3.5), new THREE.Vector2(9, 1.5)],
-  [new THREE.Vector2(9, 1.5), new THREE.Vector2(13, -3), new THREE.Vector2(16.5, -8)],
-  [new THREE.Vector2(9, 1.5), new THREE.Vector2(7.5, 3.5)],
+  [new THREE.Vector2(-18, 8), new THREE.Vector2(GATE.x, GATE.z),
+   new THREE.Vector2(-3, 5), new THREE.Vector2(3, 2)],
+  [new THREE.Vector2(3, 2), new THREE.Vector2(10, -1.5), new THREE.Vector2(19, -2.5),
+   new THREE.Vector2(27, -3)],
+  [new THREE.Vector2(3, 2), new THREE.Vector2(FIRE_SOURCE.x, FIRE_SOURCE.z)],
 ];
 
 // How far inside the wire a point is. Negative outside, positive inside.
@@ -111,6 +113,11 @@ export function depotHeight(x, z) {
   const inside = insideWire(x, z);
   const pad = smoothstep(inside, -1.4, 1.6);
   h = h * (1 - pad) + 0.18 * pad;
+
+  // The gate apron stays flat right through the wall line, so vehicles are
+  // not driving up a step to get in.
+  const gd = Math.hypot(x - GATE.x, z - GATE.z);
+  h = h * (1 - Math.exp(-Math.pow(gd / 4.0, 2)) * 0.85) + Math.exp(-Math.pow(gd / 4.0, 2)) * 0.85 * 0.18;
 
   // Spoil berm thrown up along the outside of the cut.
   h += Math.exp(-Math.pow((inside + 1.6) / 1.5, 2)) * 0.55 * smoothstep(-inside, -2.5, 1.0);
@@ -209,7 +216,7 @@ function makeGroundTexture(px = 2048) {
 
   // Oil and fuel staining where vehicles stand. Clustered at the gate, the
   // fuel store and the bunker apron, because that is where things park.
-  for (const [cx, cz, count, spread] of [[-1, 5.5, 60, 4], [8, 1.5, 90, 6], [16, -8, 60, 5]]) {
+  for (const [cx, cz, count, spread] of [[GATE.x + 2, GATE.z, 60, 4], [3, 2, 90, 6], [26, -3, 60, 5]]) {
     for (let i = 0; i < count; i++) {
       const s = rand(i + cx * 31 + cz * 17);
       const a = rand(i + 700 + cx) * Math.PI * 2;

@@ -1,6 +1,6 @@
 import { PadReader, CONTROL } from './Gamepad.js';
 import { KEY_TO_CONTROL, HOLD_CONTROLS, CAMERA_BINDING, SELECT_BINDING } from '../ui/Prompts.js';
-import { OFFSET, nudgeCamera, nudgeZoom, setWideView, focusOn } from '../render/Camera.js';
+import { cameraBasis, nudgeCamera, nudgeZoom, setWideView, focusOn, rotateView } from '../render/Camera.js';
 import { isPaused } from './Pause.js';
 import { audio } from './Audio.js';
 
@@ -10,20 +10,19 @@ import { audio } from './Audio.js';
 // router can never disagree with what is actually on screen — which matters
 // when other code shows and hides screens without telling us.
 
-// Camera basis in the xz plane, derived from the rig's own offset so the
-// stick pushes the view the way the screen points, not the way the axes do.
-const FWD = (() => {
-  const len = Math.hypot(OFFSET.x, OFFSET.z) || 1;
-  return { x: -OFFSET.x / len, z: -OFFSET.z / len };
-})();
-const RIGHT = { x: -FWD.z, z: FWD.x };
+// Camera basis in the xz plane, so the stick pushes the view the way the
+// screen points rather than the way the axes do. Asked for per frame: the
+// player can rotate the board a quarter turn and a cached basis would send
+// W north-east for the rest of the mission.
 
 const PAN_SPEED = 13;      // world units/sec at the default view size
 const ZOOM_SPEED = 13;     // view units/sec at full trigger
 const KEY_PAN = { w: [0, 1], a: [-1, 0], s: [0, -1], d: [1, 0] };
 // Zoom is analog on the triggers, so the keys have to be held rather than
 // tapped — otherwise Q and E would step the view once and stop.
-const KEY_ZOOM = { q: -1, e: 1 };
+const KEY_ZOOM = { '-': -1, '=': 1 };
+// Q/E snap the view a quarter turn. Tapped, not held — they fire on keydown.
+const KEY_ROTATE = { q: -1, e: 1 };
 
 export class Input {
   constructor({
@@ -94,6 +93,13 @@ export class Input {
 
       // Held keys drive the camera; poll() integrates them every frame.
       if (KEY_PAN[key] || KEY_ZOOM[key]) { this.heldKeys.add(key); e.preventDefault(); return; }
+
+      // A quarter turn is a discrete thing — held Q must not spin the board.
+      if (KEY_ROTATE[key]) {
+        e.preventDefault();
+        if (!e.repeat) this.rotateBoard(KEY_ROTATE[key]);
+        return;
+      }
 
       if (e.repeat && !KEY_TO_CONTROL.has(key)) return;
 
@@ -250,13 +256,20 @@ export class Input {
 
     if (px || py) {
       const scale = PAN_SPEED * dt * (this.camera.userData.view / 18);
+      const { forward, right } = cameraBasis();
       nudgeCamera(
         this.camera,
-        (RIGHT.x * px + FWD.x * py) * scale,
-        (RIGHT.z * px + FWD.z * py) * scale,
+        (right.x * px + forward.x * py) * scale,
+        (right.z * px + forward.z * py) * scale,
       );
     }
     if (zoom) nudgeZoom(this.camera, zoom * ZOOM_SPEED * dt);
+  }
+
+  // Quarter-turn the board. Refused while a turn is already in flight, so a
+  // mashed key cannot leave the view at 23 degrees.
+  rotateBoard(dir) {
+    if (rotateView(dir)) audio.hover();
   }
 
   // ---------------------------------------------------------------- units
@@ -315,6 +328,8 @@ export class Input {
             self.onAction?.('ASK_WHY'); return true;
           case CONTROL.PREV_UNIT: self.cycleUnit(-1); return true;
           case CONTROL.NEXT_UNIT: self.cycleUnit(1); return true;
+          case CONTROL.ROTATE_LEFT: self.rotateBoard(-1); return true;
+          case CONTROL.ROTATE_RIGHT: self.rotateBoard(1); return true;
           case CONTROL.PAUSE: self.onPause?.('menu'); return true;
           case CONTROL.INFO: self.onPause?.('intel'); return true;
           default: return false;
@@ -334,6 +349,7 @@ export class Input {
           { control: CONTROL.CONFIRM, label: 'CONFIRM' },
           { control: CONTROL.CONTEXT, label: 'ASK WHY' },
           { control: CONTROL.NEXT_UNIT, label: 'UNITS' },
+          { control: CONTROL.ROTATE_RIGHT, label: 'ROTATE' },
           { glyph: CAMERA_BINDING, label: 'CAMERA' },
           { control: CONTROL.TACTICAL, label: 'TACTICAL' },
           { control: CONTROL.PAUSE, label: 'PAUSE' },
