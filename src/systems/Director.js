@@ -454,6 +454,15 @@ export class Director {
       await this.travelSquad(outcome.waypoints, outcome.formation, { run: !!outcome.urgent });
     }
     if (outcome.moves) await this.moveSquad(outcome.moves, 0.85, { run: !!outcome.urgent });
+
+    // Turn-level traversal: whichever command the player picked, the squad
+    // still has to walk to wherever the next turn happens. Putting this on
+    // the outcome meant remembering it on all four of them, and forgetting
+    // one left the squad standing in the yard for the rest of the mission.
+    const advance = resolution.turn?.advance;
+    if (advance?.waypoints && !outcome.endsMission) {
+      await this.travelSquad(advance.waypoints, advance.formation, { run: !!outcome.urgent });
+    }
     await wait(0.25);
 
     if (outcome.response) {

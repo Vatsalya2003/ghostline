@@ -110,6 +110,7 @@ export const mission3 = {
         confidence: 'HIGH',
         truth: 'Correct, and honestly scoped: it says "on this side", which is exactly as far as its data goes.',
       },
+      advance: travel('OVERWATCH', 'PERIMETER'),
       actions: ['CONFIRM', 'ASK_WHY', 'SEND_DRONE', 'FALL_BACK'],
       outcomes: {
         ASK_WHY: {
@@ -124,7 +125,6 @@ export const mission3 = {
           log: 'Overwatch accepted. Squad moves to the treeline for the north read.',
           response: 'Moving. South approach is good.',
           fx: 'move',
-          ...travel('OVERWATCH', 'PERIMETER'),
           note: 'Three sensors agreed and the machine named its own boundary. Trusting that is correct and it costs you nothing.',
         },
         SEND_DRONE: {
@@ -134,7 +134,7 @@ export const mission3 = {
           log: 'Drone flown on the south wall. Findings: wall and gate as reported, alarm bus dead.',
           response: 'Drone recovered. Findings match my read exactly. Two drones remaining.',
           fx: 'scan',
-          reveal: { x: -3, z: 7 },
+          reveal: { x: -7.5, z: 6.5 },
           note: 'You verified a reading that three agreeing sensors already had. You will want that drone at the north wall in about ninety seconds.',
         },
         FALL_BACK: {
@@ -156,7 +156,7 @@ export const mission3 = {
       situation: 'North face. A storage structure blocks two thirds of the wall from every angle the squad has.',
       task: 'VERITAS says it cannot see. Decide what to do about a machine admitting a gap.',
       objectiveNote: 'Pick the entry point. One side is read, one side is not.',
-      ...at('OVERWATCH'),
+      ...at('PERIMETER'),
       statuses: { ALPHA: 'healthy', 'BETA-1': 'healthy', 'BETA-2': 'healthy' },
       telemetry: { range: '96 m', alarm: 'UNKNOWN (N)', visibility: 'OBSTRUCTED', contact: null },
       intro: [
@@ -184,7 +184,7 @@ export const mission3 = {
           log: 'Drone flown behind the storage block. Service door found — alarm contact LIVE. Entry re-planned to the south gate.',
           response: 'Drone has it. There is a service door back there with a live contact on it. If we had gone in that way we would have brought the whole compound down on us. Two drones remaining.',
           fx: 'scan',
-          reveal: { x: 4, z: -1 },
+          reveal: { x: 1.0, z: 9.5 },
           setsFlag: 'northRead',
           note: 'The machine told you where its knowledge stopped and you spent a drone exactly there. That is what the drones are for.',
         },
@@ -226,7 +226,7 @@ export const mission3 = {
       telemetry: { contacts: '2 · OPEN GROUND', alarm: 'INACTIVE', visibility: 'GOOD' },
       intro: [
         panTo('PERIMETER', 1.1),
-        { type: 'alert', x: 3.5, z: 1.5 },
+        { type: 'alert', x: 1.5, z: 5.0 },
         { type: 'log', text: 'TWO PATROLS — FIXED CIRCUIT — 40 SECOND GAP' },
       ],
       ai: {
@@ -235,6 +235,7 @@ export const mission3 = {
         confidence: 'HIGH',
         truth: 'Correct. Observed three times, both targets in clear line of sight the whole circuit. This is what an earned HIGH looks like.',
       },
+      advance: travel('PERIMETER', 'YARD'),
       actions: ['CONFIRM', 'ASK_WHY', 'BREACH_QUIET', 'FIRE', 'SEND_DRONE'],
       outcomes: {
         ASK_WHY: {
@@ -249,7 +250,6 @@ export const mission3 = {
           log: 'Squad crosses in the gap. No contact. Stacked on the main building.',
           response: 'Through clean. Nobody saw us.',
           fx: 'move',
-          ...travel('PERIMETER', 'YARD'),
           note: 'Fully observed, three times, in the open. Acting on that is exactly the trust the reading earned.',
         },
         CONFIRM: {
@@ -258,7 +258,6 @@ export const mission3 = {
           log: 'Squad crosses in the gap. No contact. Stacked on the main building.',
           response: 'Through clean. Nobody saw us.',
           fx: 'move',
-          ...travel('PERIMETER', 'YARD'),
           note: 'Fully observed, three times, in the open. Acting on that is exactly the trust the reading earned.',
         },
         FIRE: {
@@ -278,7 +277,7 @@ export const mission3 = {
           log: 'Drone flown on the patrol circuit. Findings: two guards, fixed circuit, as reported.',
           response: 'Drone confirms what I already gave you. One drone remaining.',
           fx: 'scan',
-          reveal: { x: 3.5, z: 1.5 },
+          reveal: { x: 1.5, z: 5.0 },
           note: 'A third confirmation of something watched three times. That aircraft had a job waiting for it in the hostage room.',
         },
       },
@@ -297,7 +296,7 @@ export const mission3 = {
       telemetry: { contacts: '1 · PARTIAL', alarm: 'INACTIVE', visibility: 'PARTIAL' },
       intro: [
         panTo('YARD', 1.0),
-        { type: 'alert', x: 7.5, z: -1.5 },
+        { type: 'alert', x: 4.2, z: 0.6 },
         { type: 'log', text: 'CONTACT AT EAST CORNER — PARTIALLY OCCLUDED' },
       ],
       ai: {
@@ -306,6 +305,7 @@ export const mission3 = {
         confidence: 'HIGH',
         truth: 'It is a guard. But VERITAS has a shoulder and a partial head, and it has produced a HIGH from a silhouette — the same output it would produce for a hostage in a coat. The answer is right and the confidence is unearned, which is the most dangerous combination in the mission.',
       },
+      advance: travel('YARD', 'HOLDING'),
       actions: ['CONFIRM', 'ASK_WHY', 'MARK_TARGET', 'SEND_DRONE', 'FIRE'],
       outcomes: {
         ASK_WHY: {
@@ -329,7 +329,7 @@ export const mission3 = {
           log: 'Drone repositioned for an angle past the crates. Rifle confirmed. Contact engaged on verified identification.',
           response: 'Drone has the angle — rifle, chest rig, confirmed hostile. Engaging on that, not on my guess.',
           fx: 'scan',
-          reveal: { x: 7.5, z: -1.5 },
+          reveal: { x: 4.2, z: 0.6 },
           note: 'Expensive and completely sound. You bought an actual look instead of a match score.',
         },
         CONFIRM: {
@@ -399,7 +399,7 @@ export const mission3 = {
           log: 'Thermal sweep run across the room. Confirms the classification and picks up the sixth figure behind the furniture.',
           response: 'Sweep confirms all five. And there is a sixth behind the cabinet I could not resolve before — hold on that one.',
           fx: 'scan',
-          reveal: { x: 9, z: -7 },
+          reveal: { x: 9.5, z: -5.5 },
           setsFlag: 'hostagesFound',
           note: 'Free verification of a sound reading, and it surfaced the figure the mission actually turns on.',
         },
@@ -410,7 +410,7 @@ export const mission3 = {
           log: 'Drone flown into the west room. Findings: four bound civilians, one armed hostile — as reported.',
           response: 'Drone confirms exactly what I gave you. Commander, I had restraints in frame.',
           fx: 'scan',
-          reveal: { x: 8, z: -6 },
+          reveal: { x: 9.0, z: -4.5 },
           setsFlag: 'hostagesFound',
           note: 'You spent an aircraft confirming a reading built on visible restraints and a visible rifle. There is a figure in that room you have not resolved yet.',
         },
@@ -438,7 +438,7 @@ export const mission3 = {
       telemetry: { contacts: '1 · OCCLUDED', alarm: 'INACTIVE', visibility: 'POOR' },
       intro: [
         panTo('HOLDING', 1.0),
-        { type: 'alert', x: 10.5, z: -8 },
+        { type: 'alert', x: 12.2, z: -7.8 },
         { type: 'log', text: 'SIXTH FIGURE — BEHIND COVER — NOT RESOLVED' },
       ],
       ai: {
@@ -447,6 +447,7 @@ export const mission3 = {
         confidence: 'HIGH',
         truth: 'It is a hostage. A fifth civilian who broke away and hid when the shooting started, crouched, arms wrapped round their knees. That posture reads as "braced combatant" to a template matcher. VERITAS has produced the same HIGH it produced for five fully visible figures, from almost nothing — and the cone on the ground shows it.',
       },
+      advance: travel('HOLDING', 'CORRIDOR'),
       actions: ['CONFIRM', 'ASK_WHY', 'HOLD_FIRE', 'SEND_DRONE', 'FIRE'],
       outcomes: {
         ASK_WHY: {
@@ -471,7 +472,7 @@ export const mission3 = {
           log: 'Drone flown for an angle behind the cabinet. Unarmed civilian, crouched. Recovered with the others.',
           response: 'Drone has her — no weapon, civilian clothing, she is hiding. I was going to have you shoot her, Commander.',
           fx: 'scan',
-          reveal: { x: 10.5, z: -8 },
+          reveal: { x: 12.2, z: -7.8 },
           setsFlag: 'hostagesSafe',
           note: 'You spent your last aircraft on the one question in the mission that could not be taken back. Correct.',
         },
@@ -534,7 +535,7 @@ export const mission3 = {
           log: 'ALPHA\'s acoustic array cross-checked against BETA-1\'s unstable feed. Corridor confirmed clear on an instrument the interference does not touch.',
           response: 'ALPHA\'s acoustic is clean — it does not care about EM. Corridor is clear and now we know it from something that works.',
           fx: 'scan',
-          reveal: { x: 14, z: -4 },
+          reveal: { x: 19.0, z: -7.5 },
           note: 'A degraded instrument is not an unanswerable question. You went and got a different instrument.',
         },
         NIGHT_VISION: {
@@ -559,7 +560,7 @@ export const mission3 = {
           log: 'Drone flown down the service corridor. Corridor clear, one dropped conduit mapped and avoided.',
           response: 'Drone has the corridor. Clear, and there is a conduit down at the midpoint — route around it.',
           fx: 'scan',
-          reveal: { x: 14, z: -4 },
+          reveal: { x: 19.0, z: -7.5 },
           note: 'A sound answer to a degraded sensor, if an expensive one. There was a free instrument on ALPHA that would have done the same job.',
         },
       },
@@ -586,6 +587,7 @@ export const mission3 = {
         confidence: 'NONE',
         truth: 'Completely correct, and the most useful thing it says all mission. It is not refusing to work; it is refusing to launder a moral decision as a confidence value.',
       },
+      advance: travel('CORRIDOR', 'AMMO_ROOM'),
       actions: ['OVERRIDE', 'ASK_WHY', 'EVAC_HOSTAGES', 'CONFIRM', 'ABORT'],
       outcomes: {
         ASK_WHY: {
