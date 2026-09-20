@@ -43,6 +43,20 @@ export const ZONES = {
     bounds: { minX: -9, maxX: 8, minZ: -4, maxZ: 13 },
     interior: false,
   },
+  // Stacked on the outside of the holding room door. Turns 5 and 6 happen
+  // here: the squad has not gone in yet, which is the entire premise of
+  // sensing the room rather than looking at it.
+  DOORWAY: {
+    id: 'DOORWAY',
+    label: 'WEST ROOM DOOR',
+    // Framed to hold the squad on the door AND the far corner of the room
+    // at once. At 15 the second soldier — the one the whole turn is about —
+    // sat just off the right edge.
+    anchor: { x: 9.5, z: -3.0 },
+    zoom: 18,
+    bounds: { minX: 4, maxX: 15, minZ: -2, maxZ: 5 },
+    interior: false,
+  },
   HOLDING: {
     id: 'HOLDING',
     label: 'HOLDING ROOM',
@@ -142,6 +156,10 @@ export const PATHS = {
   // where the forty-second gap is — so "crosses in the gap, no contact" has
   // to be a route that visibly stays away from them.
   'PERIMETER>YARD': [[-9.6, 7.5], [-6.5, 6.6], [-2.5, 4.0], [1.0, 2.2], [3.5, 1.5]],
+  // Up to the door and no further. Going through it is turn 6's decision,
+  // not a side effect of turn 4 ending.
+  'YARD>DOORWAY': [[3.5, 1.5], [5.6, 1.6], [7.3, 1.7]],
+  'DOORWAY>HOLDING': [[7.3, 1.7], [7.3, -0.9], [8.2, -2.6], [8.6, -4]],
   'YARD>HOLDING': [[3.5, 1.5], [6.2, 1.6], [7.3, 0.8], [7.3, -1.6], [8.6, -4]],
   'HOLDING>CORRIDOR': [[8.6, -4], [11.5, -6], [13.8, -7.5], [16.6, -7.5]],
   'CORRIDOR>AMMO_ROOM': [[16.6, -7.5], [20.5, -7.5], [23.2, -8.4], [25.5, -11.5]],
@@ -169,6 +187,7 @@ export const ZONE_STAND = {
   OVERWATCH: [-18, 14],
   PERIMETER: [-9.6, 7.5],
   YARD: [3.5, 1.5],
+  DOORWAY: [7.3, 1.7],
   HOLDING: [8.6, -4],
   CORRIDOR: [16.6, -7.5],
   AMMO_ROOM: [25.5, -11.5],

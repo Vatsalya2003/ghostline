@@ -166,6 +166,10 @@ events.on(GAME_EVENT.TURN_END, ({ turn, outcome }) => {
   // of the next one — otherwise the player reads "six bodies in there" and
   // is looking at an empty room until they press something else.
   actors?.showForTurn(turn.id, state);
+  // …and the roof comes off, because the squad is sensing that room from
+  // outside a shut door. Without this the sweep populates a room the player
+  // still cannot see into.
+  if (state.roomSensed) occlusion?.reveal('HOLDING');
 });
 
 // Being seen. The compound reacts, the hostages are moved off the board the

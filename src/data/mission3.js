@@ -344,7 +344,7 @@ export const mission3 = {
         confidence: 'HIGH',
         truth: 'It is a maintenance worker on the night shift, crouched over a fuel line with a wrench. VERITAS has a shoulder and a partial head and has produced a HIGH from a silhouette — the same output it would produce for a guard, a worker or a hostage in a coat. The shape it read as a slung rifle is the wrench.',
       },
-      advance: travel('YARD', 'HOLDING'),
+      advance: travel('YARD', 'DOORWAY'),
       actions: ['MARK_TARGET', 'ASK_WHY', 'SEND_DRONE', 'CONFIRM', 'FIRE'],
       outcomes: {
         ASK_WHY: {
@@ -410,11 +410,11 @@ export const mission3 = {
       situation: 'Stacked outside the west room. Door shut, no window, no angle. Whatever is in there, nobody has seen it.',
       task: 'You cannot look into that room. You can put sensors on the wall and reason about what comes back.',
       objectiveNote: 'Find out what is in the room before anyone opens the door.',
-      ...at('HOLDING'),
+      ...at('DOORWAY'),
       statuses: { ALPHA: 'healthy', 'BETA-1': 'healthy', 'BETA-2': 'healthy' },
       telemetry: { contacts: 'UNKNOWN', alarm: 'INACTIVE', visibility: 'NONE' },
       intro: [
-        panTo('HOLDING', 1.1),
+        panTo('DOORWAY', 1.1),
         { type: 'log', text: 'STACKED ON THE WEST ROOM — NO VISUAL' },
       ],
       ai: {
@@ -483,11 +483,11 @@ export const mission3 = {
       situation: 'On the door. Six bodies inside — four low and still, two upright in the corners and armed.',
       task: 'Two armed men are standing between you and four people who cannot move. Decide what you are opening that door to do.',
       objectiveNote: 'Take the room.',
-      ...at('HOLDING'),
+      ...at('DOORWAY'),
       statuses: { ALPHA: 'healthy', 'BETA-1': 'healthy', 'BETA-2': 'healthy' },
       telemetry: { contacts: '6 · 2 ARMED', alarm: 'INACTIVE', visibility: 'SENSED' },
       intro: [
-        panTo('HOLDING', 1.0),
+        panTo('DOORWAY', 1.0),
         { type: 'alert', x: 5.4, z: -1.6 },
         { type: 'log', text: 'TWO ARMED IN THE CORNERS — FOUR RESTRAINED' },
       ],
@@ -497,6 +497,7 @@ export const mission3 = {
         confidence: 'HIGH',
         truth: 'Completely correct, and built on a sweep the player paid nothing for. The guards are the only thing in the room that can act; the hostages cannot. Going to the people first is not compassion, it is arithmetic done backwards.',
       },
+      advance: travel('DOORWAY', 'HOLDING'),
       actions: ['ENTER_ENGAGE', 'ASK_WHY', 'CHECK_HOSTAGES', 'FALL_BACK'],
       outcomes: {
         ASK_WHY: {
@@ -533,6 +534,7 @@ export const mission3 = {
         FALL_BACK: {
           tag: CALIBRATION.DISUSE,
           healthDelta: -8,
+          holdsPosition: true,
           log: 'Squad withdraws from the door. The room stays as it is.',
           response: 'Off the door. Those six are still in there, Commander, and two of them are armed.',
           fx: 'none',
@@ -587,7 +589,8 @@ export const mission3 = {
           FALL_BACK: {
             tag: CALIBRATION.MISTRUST,
             healthDelta: -8,
-            log: 'Squad withdraws from the door without ever reading the room.',
+            holdsPosition: true,
+          log: 'Squad withdraws from the door without ever reading the room.',
             response: 'Off the door. We still do not know what is in there, Commander.',
             fx: 'none',
             note: 'Backing off an unknown is defensible. Leaving it unknown when the sweep was free is not.',
