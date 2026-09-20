@@ -623,7 +623,7 @@ export const mission3 = {
         ABORT: {
           tag: CALIBRATION.DISTRUST,
           healthDelta: 0,
-          endsMission: true,
+          endsMission: 'aborted',
           log: 'Squad withdraws. The depot is intact and the fire is still spreading through the compound.',
           response: 'Pulling out. The depot is still standing, Commander, and it is on fire with people inside it.',
           fx: 'none',
@@ -731,7 +731,6 @@ export const mission3 = {
         OVERRIDE: {
           tag: CALIBRATION.CALIBRATED,
           healthDelta: 0,
-          endsMission: true,
           log: 'Squad routed out via the south gate, clear of the fuel store. Charge detonates on schedule. Ammunition room destroyed.',
           response: 'South gate — clear of the fire. All three out. — Charge has gone, Commander. The depot is down.',
           fx: 'relay',
@@ -742,7 +741,6 @@ export const mission3 = {
         FALL_BACK: {
           tag: CALIBRATION.CALIBRATED,
           healthDelta: 0,
-          endsMission: true,
           log: 'Squad withdraws by the south gate, clear of the fuel store. Charge detonates on schedule. Ammunition room destroyed.',
           response: 'South gate. All three out, and the depot is down behind us.',
           fx: 'relay',
@@ -753,7 +751,6 @@ export const mission3 = {
         CONFIRM: {
           tag: CALIBRATION.COMPLACENCY,
           healthDelta: -18,
-          endsMission: true,
           altIfHealthAbove: {
             threshold: 82,
             tag: CALIBRATION.CALIBRATED,

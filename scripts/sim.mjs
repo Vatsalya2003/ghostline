@@ -29,4 +29,4 @@ for (const action of plan) {
   if (!res) { console.log(`   !! ${action} unavailable this turn`); }
   if (!state.missionOver && res && !res.probe) tm.advanceTurn();
 }
-if (!state.missionOver) tm.endMission(state.relayOnline ? 'complete' : 'partial');
+if (!state.missionOver) tm.endMission(tm.primaryObjectiveMet() ? 'complete' : 'partial');

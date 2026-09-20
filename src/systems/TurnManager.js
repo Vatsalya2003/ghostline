@@ -218,12 +218,20 @@ export class TurnManager {
     }
   }
 
-  // The first objective carrying a `flag` is the one that decides whether a
-  // surviving run counts as complete or partial.
+  // EVERY objective carrying a `flag` has to be met for a surviving run to
+  // count as complete. This used to check only the first one, which was
+  // indistinguishable from correct while every mission had exactly one — and
+  // wrong the moment one had two. Ammunition Depot has both a depot to
+  // destroy and hostages to account for, and under the old rule a player who
+  // flattened the depot after shooting an unarmed civilian was told MISSION
+  // COMPLETE, which is the precise opposite of what that mission teaches.
+  //
+  // Single-flag missions are unaffected: every() over one element is that
+  // element.
   primaryObjectiveMet() {
-    const flagged = (this.mission.objectives || []).find((o) => o.flag);
-    if (!flagged) return true;
-    return !!this.state[flagged.flag];
+    const flagged = (this.mission.objectives || []).filter((o) => o.flag);
+    if (!flagged.length) return true;
+    return flagged.every((o) => !!this.state[o.flag]);
   }
 
   endMission(outcome) {

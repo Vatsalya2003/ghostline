@@ -1,7 +1,8 @@
 // Exhaustive walk of the turn spine. Enumerates every committing-action path
 // through the mission, exercises every probe, and asserts the invariants the
 // demo depends on. Pure logic — no DOM, no Three.js. Run:  node scripts/verify.mjs
-import { mission1, CALIBRATION, ACTION_LABELS, CONFIDENCE } from '../src/data/mission1.js';
+import { CALIBRATION, ACTION_LABELS, CONFIDENCE } from '../src/data/mission1.js';
+import { MISSIONS } from '../src/data/missions.js';
 import { GameState } from '../src/systems/GameState.js';
 import { TurnManager } from '../src/systems/TurnManager.js';
 import { events, GAME_EVENT } from '../src/systems/Events.js';
@@ -21,8 +22,8 @@ function ok(cond, msg) {
 // ---------------------------------------------------------------- data shape
 // Content errors are the cheapest thing to catch and the most likely thing a
 // new mission introduces, so they are checked before any path is walked.
-function checkData() {
-  const m = mission1;
+function checkData(mission) {
+  const m = mission;
   ok(m.turns.length > 0, 'mission has turns');
   ok(typeof m.objective === 'string' && m.objective, 'mission has an objective');
   ok(m.turns.some((t) => t.id === m.keyTurn), `keyTurn ${m.keyTurn} names a real turn`);
@@ -91,9 +92,9 @@ function checkData() {
 // a machine with no speech engine is silence. Cheapest possible guard: every
 // spoken line must still resolve to a clip.
 //   Re-bake after any dialogue edit:  node scripts/build-voice.mjs
-function spokenLines() {
+function spokenLines(mission) {
   const out = [];
-  for (const turn of mission1.turns) {
+  for (const turn of mission.turns) {
     out.push({ where: `turn ${turn.id} AI line`, text: turn.ai.line });
     for (const [action, o] of Object.entries(turn.outcomes)) {
       for (const [label, variant] of [['', o], ['/high', o.altIfHealthAbove], ['/low', o.altIfHealthBelow]]) {
@@ -106,7 +107,7 @@ function spokenLines() {
   return out;
 }
 
-function checkVoice() {
+function checkVoice(mission) {
   const manifestPath = new URL('../public/voice/manifest.json', import.meta.url);
   let manifest;
   try {
@@ -117,12 +118,23 @@ function checkVoice() {
     return;
   }
   const have = new Set(Object.keys(manifest.lines || {}));
-  const lines = spokenLines();
+  const lines = spokenLines(mission);
+  const baked = lines.filter(({ text }) => have.has(text)).length;
+
+  // A mission with no clips at all is an unbaked mission, not a broken one —
+  // it runs on Web Speech and captions, which is a supported path. Asserting
+  // per line would turn "we have not baked mission 3 yet" into 78 failures
+  // and bury anything real. A PARTIALLY baked mission is the dangerous case:
+  // it means a line was edited after the bake and its clip is now orphaned.
+  if (baked === 0) {
+    console.log(`    voice             not baked — Web Speech + captions`);
+    return;
+  }
   let missing = 0;
   for (const { where, text } of lines) {
     if (!ok(have.has(text), `${where}: has a baked voice clip — re-run scripts/build-voice.mjs`)) missing += 1;
   }
-  console.log(`  voice             ${lines.length - missing} / ${lines.length} lines baked`);
+  console.log(`    voice             ${lines.length - missing} / ${lines.length} lines baked`);
 }
 
 // ---------------------------------------------------------------- path walk
@@ -132,9 +144,9 @@ const seenOutcomes = new Set();
 let paths = 0;
 let deepestHealth = 100;
 
-function walk(plan) {
-  const state = new GameState(mission1);
-  const tm = new TurnManager(mission1, state);
+function walk(mission, plan) {
+  const state = new GameState(mission);
+  const tm = new TurnManager(mission, state);
 
   // Listen on the shared bus so the integration hooks are exercised on every
   // path, not just asserted to exist.
@@ -165,12 +177,18 @@ function walk(plan) {
       ok(tm.choose(probe.action) === null, `${where}: ${probe.action} cannot be spent twice`);
     }
 
-    // The extraction turn must not claim the relay is handled when it is dark.
+    // A turn with variants must not describe a world it is not in — the
+    // extraction turn cannot claim the relay is handled when it is dark. The
+    // flag being tested comes from the variant's own `unless`, so this holds
+    // for any mission rather than only for the one that has a relay.
     if (turn.variants) {
-      const raw = mission1.turns.find((t) => t.id === turn.id);
+      const raw = mission.turns.find((t) => t.id === turn.id);
       const swapped = turn.situation !== raw.situation || turn.task !== raw.task;
-      ok(swapped === !state.relayOnline,
-        `${where}: turn text matches mission state (relayOnline=${state.relayOnline})`);
+      const flag = raw.variants.find((v) => v.unless)?.unless;
+      if (flag) {
+        ok(swapped === !state[flag],
+          `${where}: turn text matches mission state (${flag}=${!!state[flag]})`);
+      }
     }
 
     const before = { drones: state.drones, graded: state.calibration.length };
@@ -192,9 +210,17 @@ function walk(plan) {
 
     if (!state.missionOver) tm.advanceTurn();
   }
-  if (!state.missionOver) tm.endMission(state.relayOnline ? 'complete' : 'partial');
+  // The walk can stop short of the last turn when a plan is truncated. End it
+  // the way advanceTurn would, from the mission's own primary objective.
+  if (!state.missionOver) tm.endMission(tm.primaryObjectiveMet() ? 'complete' : 'partial');
 
   // ------------------------------------------------------------ the summary
+  // summary() only carries mission 1's relayOnline flag by name, so every
+  // flag-based assertion below reads the live state instead. Keeping that out
+  // of GameState is deliberate: the turn spine is correct and this is a
+  // property of the test, not of the game.
+  const flags = Object.fromEntries(
+    (mission.objectives || []).filter((o) => o.flag).map((o) => [o.flag, !!state[o.flag]]));
   const s = state.summary();
   const trail = `[${plan.join(' > ')}]`;
   ok(ENDINGS.has(s.outcome), `${trail}: ends with a known outcome (got "${s.outcome}")`);
@@ -215,24 +241,35 @@ function walk(plan) {
   }
 
   // The mission names turn 3 as its lesson. Failing it must be flagged.
-  const keyEntry = s.decisions.find((d) => d.turn === mission1.keyTurn);
+  const keyEntry = s.decisions.find((d) => d.turn === mission.keyTurn);
   const keyFailed = !!keyEntry && keyEntry.tag !== CALIBRATION.CALIBRATED;
-  ok(s.keyTurnFailed === keyFailed, `${trail}: key-turn flag matches what happened on turn ${mission1.keyTurn}`);
+  ok(s.keyTurnFailed === keyFailed, `${trail}: key-turn flag matches what happened on turn ${mission.keyTurn}`);
   ok(!!s.keyTurnLine === keyFailed, `${trail}: key-turn callout present exactly when the key turn failed`);
 
-  // Surviving is not the same as succeeding: only a live relay completes.
-  if (s.outcome === 'complete') ok(s.relayOnline, `${trail}: MISSION COMPLETE implies the relay came up`);
+  // Surviving is not the same as succeeding: only the primary objective
+  // completes a run. Which flag that is comes from the mission, so this holds
+  // for a relay, a resolved anomaly or a flattened depot alike.
+  const primary = (mission.objectives || []).find((o) => o.flag);
+  if (s.outcome === 'complete' && primary) {
+    ok(flags[primary.flag],
+      `${trail}: MISSION COMPLETE implies ${primary.id} (${primary.flag}) is set`);
+  }
   if (s.outcome === 'lost') ok(s.health === 0, `${trail}: SQUAD LOST implies zero integrity`);
 
   // ------------------------------------------------------------ objectives
   const objectives = Object.fromEntries(s.objectives.map((o) => [o.id, o.state]));
-  ok(s.objectives.length === mission1.objectives.length, `${trail}: every objective is reported`);
-  ok(objectives.relay === (s.relayOnline ? 'done' : 'failed'),
-    `${trail}: relay objective matches the relay (${objectives.relay}, online=${s.relayOnline})`);
-  ok(objectives.extract === (s.outcome === 'lost' ? 'failed' : 'done'),
-    `${trail}: extraction objective matches the ending (${objectives.extract}, outcome=${s.outcome})`);
+  ok(s.objectives.length === mission.objectives.length, `${trail}: every objective is reported`);
+  // Every flagged objective must agree with the state flag that drives it.
+  for (const o of (mission.objectives || []).filter((x) => x.flag)) {
+    ok(objectives[o.id] === (flags[o.flag] ? 'done' : 'failed'),
+      `${trail}: objective "${o.id}" matches flag ${o.flag} (${objectives[o.id]}, flag=${flags[o.flag]})`);
+  }
+  // …and every survive-based objective with whether the squad came home.
+  const survivor = (mission.objectives || []).find((x) => x.survive);
+  if (survivor) ok(objectives[survivor.id] === (s.outcome === 'lost' ? 'failed' : 'done'),
+    `${trail}: "${survivor.id}" matches the ending (${objectives[survivor.id]}, outcome=${s.outcome})`);
   ok(s.objectives.every((o) => o.state !== 'pending'), `${trail}: no objective is left pending`);
-  // MISSION COMPLETE must mean both objectives met, and nothing less.
+  // MISSION COMPLETE must mean every objective met, and nothing less.
   ok((s.outcome === 'complete') === s.objectives.every((o) => o.state === 'done'),
     `${trail}: MISSION COMPLETE agrees with the objective board`);
 
@@ -245,7 +282,7 @@ function walk(plan) {
   ok((heard[GAME_EVENT.TURN_START] || 0) === (heard[GAME_EVENT.AI_RECOMMENDATION] || 0),
     `${trail}: every turn carried an AI recommendation`);
   ok((heard[GAME_EVENT.OBJECTIVE_COMPLETED] || 0) + (heard[GAME_EVENT.OBJECTIVE_FAILED] || 0)
-     === mission1.objectives.length,
+     === mission.objectives.length,
     `${trail}: each objective resolved exactly once`);
   for (const off of offs) off();
 
@@ -254,35 +291,93 @@ function walk(plan) {
   paths += 1;
 }
 
-function enumerate(index, plan) {
-  const turn = mission1.turns[index];
-  if (!turn) return walk(plan);
+// Full enumeration is 3^n-ish in the number of turns. Six turns is 1,344
+// paths and runs in two seconds; ten turns is about a quarter of a million and
+// would run for minutes, which means nobody would run it. So: enumerate up to
+// a budget, and then guarantee the coverage assertions separately by walking
+// one targeted path per outcome. The invariants the demo rests on — every
+// outcome reachable, every ending reachable, every grade reachable — stay
+// genuinely proven rather than sampled.
+let truncated = false;
+
+function enumerate(mission, index, plan) {
+  if (paths >= PATH_BUDGET) { truncated = true; return; }
+  const turn = mission.turns[index];
+  if (!turn) return walk(mission, plan);
   const committing = turn.actions.filter((a) => turn.outcomes[a].consumesTurn !== false);
   for (const action of committing) {
-    if (turn.outcomes[action].endsMission) walk([...plan, action]);
-    else enumerate(index + 1, [...plan, action]);
+    if (paths >= PATH_BUDGET) { truncated = true; return; }
+    if (turn.outcomes[action].endsMission) walk(mission, [...plan, action]);
+    else enumerate(mission, index + 1, [...plan, action]);
+  }
+}
+
+// The cheapest committing action on a turn — used to build a filler route to
+// whichever turn we actually want to test.
+function defaultAction(turn) {
+  const committing = turn.actions.filter((a) => turn.outcomes[a].consumesTurn !== false);
+  return committing.find((a) => !turn.outcomes[a].endsMission) || committing[0];
+}
+
+// One walk per outcome: fill the turns before it with defaults, take the
+// outcome under test, then fill the rest. Guarantees outcome, ending and
+// grade coverage regardless of whether enumeration was truncated.
+function coverEveryOutcome(mission) {
+  for (let i = 0; i < mission.turns.length; i++) {
+    const turn = mission.turns[i];
+    const committing = turn.actions.filter((a) => turn.outcomes[a].consumesTurn !== false);
+    for (const action of committing) {
+      const plan = [];
+      for (let j = 0; j < i; j++) plan.push(defaultAction(mission.turns[j]));
+      plan.push(action);
+      if (!turn.outcomes[action].endsMission) {
+        for (let j = i + 1; j < mission.turns.length; j++) plan.push(defaultAction(mission.turns[j]));
+      }
+      walk(mission, plan);
+    }
   }
 }
 
 // ---------------------------------------------------------------- run
-checkData();
-enumerate(0, []);
-
-const totalOutcomes = mission1.turns.reduce(
-  (n, t) => n + t.actions.filter((a) => t.outcomes[a].consumesTurn !== false).length, 0);
+const PATH_BUDGET = Number(process.env.GHOSTLINE_PATHS || 40000);
 
 console.log(`\nGHOSTLINE — turn spine verification`);
-console.log(`  paths walked      ${paths}`);
-console.log(`  assertions        ${checks}`);
-console.log(`  outcomes covered  ${seenOutcomes.size} / ${totalOutcomes}`);
-console.log(`  lowest health     ${deepestHealth}%`);
-console.log(`  endings reached   ${Object.entries(endings).map(([k, v]) => `${k}:${v}`).join('  ')}`);
-checkVoice();
-console.log(`  grades scored     ${Object.entries(tagTotals).map(([k, v]) => `${k}:${v}`).join('  ')}`);
 
-ok(seenOutcomes.size === totalOutcomes, `every turn-ending outcome is reachable`);
-for (const ending of ENDINGS) ok(endings[ending] > 0, `ending "${ending}" is reachable`);
-for (const tag of TAGS) ok(tagTotals[tag] > 0, `grade "${tag}" is reachable`);
+for (const entry of MISSIONS) {
+  const mission = entry.mission;
+  const before = { paths, checks };
+  truncated = false;
+  seenOutcomes.clear();
+  Object.keys(endings).forEach((k) => delete endings[k]);
+  Object.keys(tagTotals).forEach((k) => delete tagTotals[k]);
+  deepestHealth = 100;
+
+  checkData(mission);
+  enumerate(mission, 0, []);
+  coverEveryOutcome(mission);
+
+  const totalOutcomes = mission.turns.reduce(
+    (n, t) => n + t.actions.filter((a) => t.outcomes[a].consumesTurn !== false).length, 0);
+
+  console.log(`\n  ${entry.name}  (${mission.turns.length} turns)`);
+  console.log(`    paths walked      ${paths - before.paths}${truncated ? ` (capped at ${PATH_BUDGET})` : ''}`);
+  console.log(`    assertions        ${checks - before.checks}`);
+  console.log(`    outcomes covered  ${seenOutcomes.size} / ${totalOutcomes}`);
+  console.log(`    lowest health     ${deepestHealth}%`);
+  console.log(`    endings reached   ${Object.entries(endings).map(([k, v]) => `${k}:${v}`).join('  ')}`);
+  checkVoice(mission);
+  console.log(`    grades scored     ${Object.entries(tagTotals).map(([k, v]) => `${k}:${v}`).join('  ')}`);
+
+  ok(seenOutcomes.size === totalOutcomes, `${entry.name}: every turn-ending outcome is reachable`);
+  for (const tag of TAGS) ok(tagTotals[tag] > 0, `${entry.name}: grade "${tag}" is reachable`);
+  // Not every mission can reach every ending — a mission with no ABORT cannot
+  // be aborted — so this asserts the ones its own data actually offers.
+  for (const ending of ENDINGS) {
+    const offered = ending !== 'aborted'
+      || mission.turns.some((t) => Object.values(t.outcomes).some((o) => o.endsMission && o.tag));
+    if (offered) ok(endings[ending] > 0, `${entry.name}: ending "${ending}" is reachable`);
+  }
+}
 
 if (failures.length) {
   const shown = [...new Set(failures)].slice(0, 25);
@@ -291,4 +386,4 @@ if (failures.length) {
   if (new Set(failures).size > shown.length) console.error(`  · …and ${new Set(failures).size - shown.length} more`);
   process.exit(1);
 }
-console.log(`\nPASS — ${checks} assertions, no failures.\n`);
+console.log(`\nPASS — ${checks} assertions across ${MISSIONS.length} missions, no failures.\n`);
