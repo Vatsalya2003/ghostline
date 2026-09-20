@@ -119,25 +119,37 @@ warning you will ever get. Spend your drone exactly there.
 
 **BETA-1 says — confidence HIGH:**
 > "Two guards, fixed circuit, both in open ground the whole way round. I have
-> watched three full laps. There is a forty second gap at the north end, every
-> lap, no variation. They stay paired — neither of them is ever alone."
+> watched three full laps. There is no window where that yard is unobserved —
+> at the north end they are furthest apart, eleven metres, and that is the
+> best it gets. They stay paired. Neither of them is ever alone."
 
 **What's actually true:** correct and earned — three laps, both targets
 unobstructed throughout. The pairing is the part that matters: take one and
-the other is looking straight at it.
+the other is looking straight at it, so **the only way through this yard is
+both of them going down on the same count.**
+
+> ⚠️ **This turn has no zero-cost answer.** Every option takes something. That
+> is deliberate — see the note under the table.
 
 | Option | What happens | Legit? | Continues? |
 |---|---|---|---|
 | 🆓 **ASK WHY** | Gives the lap timings and confirms the pair never separates | — | Yes, free |
-| ✅ **BREACH QUIET** | Crosses in the gap. Both patrols pass, neither turns. **Nobody dies** | Yes. You used the gap the observation bought you | Yes, 100% |
-| ⚠️ **QUIET TAKEDOWN** | BETA-2 and ALPHA take both on the same count. Neither reaches the wall panel. **Both down, no alarm. −10%** | Yes, and it is deliberately tight — a pair who never separate had to be taken simultaneously | Yes, 90% |
+| ⚠️ **QUIET TAKEDOWN** | BETA-2 and ALPHA take both on the same count. Neither reaches the wall panel. **Both down, no alarm. −10%** | Yes — the best available outcome, and still not free | Yes, 90% |
 | ❌🚨 **FIRE** | Both down, but gunfire in an enclosed compound. **−18%, COMPOUND ALERTED** | Yes. You had forty seconds of open ground | **Yes, but the squad is lost entering turn 8** |
-| ❌ **FALL BACK** | The gap closes and the circuit resets. **−6%** | Yes — safe, and it cost the one thing the observation bought | Yes, 94% |
+| ❌ **FALL BACK** | The circuit resets. They are still out there and you are still on the wrong side of the wire. **−6%** | Yes — safe, and it spends the timing the observation bought | Yes, 94% |
 
 > **On the takedown.** It kills **both** visible guards and does **not** raise
-> the alarm. If you are checking an older build: it used to kill one and alarm,
-> which read as a bug because the board showed two men down while the text said
-> one was running. The current text says what the board shows.
+> the alarm. It is the right play and it is still graded `misuse`, because
+> three laps of observation ended in two bodies.
+
+> **⚠️ Design note — turn 3 has no calibrated option.** `BREACH QUIET`, the
+> zero-cost path that crossed the yard in the patrol gap, has been removed.
+> What the observation buys is now *timing* — the eleven-metre mark where a
+> paired watch can be taken silently — not a way round. Every path through
+> this turn costs health or the compound, and the debrief will never award a
+> ✅ for it. **This is intentional, but it means turn 3 is the one turn in the
+> mission that cannot be played perfectly.** Watch for players reading that as
+> a bug.
 
 ---
 
