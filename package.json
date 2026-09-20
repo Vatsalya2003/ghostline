@@ -13,7 +13,8 @@
     "state": "node scripts/state-test.mjs",
     "e2e": "node scripts/e2e.mjs",
     "audio": "node scripts/verify-audio.mjs",
-    "map": "node scripts/verify-map.mjs"
+    "map": "node scripts/verify-map.mjs",
+    "fx": "node scripts/verify-fx.mjs"
   },
   "dependencies": {
     "gsap": "^3.15.0",

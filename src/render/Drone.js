@@ -160,7 +160,14 @@ export class Drone {
   //
   // Returns a promise that settles when the drone is back on the deck — or
   // immediately, if the sortie is aborted by a restart.
-  sweep(from, to, { onScan = null, hold = 1.4 } = {}) {
+  // `onScan` fires when it is on station and the beam opens — the moment it
+  // starts reading. `onRead` fires when it has finished reading and before it
+  // turns for home, which is when its findings are worth anything: a report
+  // that arrives before the aircraft has looked is not a report.
+  // `hold` is how long it reads the ground for. Long enough to be a scan
+  // rather than a flyby, short enough that a six-turn mission with two sorties
+  // in it does not outgrow the pitch slot.
+  sweep(from, to, { onScan = null, onRead = null, hold = 1.15 } = {}) {
     if (this.flying) return Promise.resolve();
     this.flying = true;
     this.target = to.key || null;
@@ -221,6 +228,7 @@ export class Drone {
     tl.call(() => { if (onScan) onScan(); }, null, arrive + 0.35);
 
     const leave = arrive + hold;
+    tl.call(() => { if (onRead) onRead(); }, null, leave);
     tl.call(() => { this.inspecting = false; }, null, leave);
     tl.to(this.gimbal.rotation, { x: 0, duration: 0.45, ease: 'power2.inOut' }, leave);
     tl.to(this.lamp, { intensity: 0, duration: 0.5 }, leave);

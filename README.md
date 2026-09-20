@@ -299,8 +299,16 @@ For a real check rather than a spot check:
 
 ```bash
 npm run verify   # ~2s  — walks all 1344 paths through the mission
+npm run fx       # ~1m  — recon sorties, gunfire, fire and vehicle loss, in a browser
 npm run e2e      # ~2m  — plays full missions in a real browser
 ```
+
+`fx` checks that what the player is meant to *see* happened where it should
+have: the drone flew to the ground the mission named, its findings landed only
+once it had read it, the generator caught fire at the generator, the fire got
+worse turn on turn, and a lost vehicle went down and stayed on the board.
+`npm run fx -- --shots` leaves PNGs in `/tmp` to look at. Details in
+`drone-combat-notes.md`.
 
 `verify` asserts the things the demo rests on: every outcome reachable, all four
 endings reachable, drones never negative, debrief counts matching the decisions

@@ -269,6 +269,38 @@ export class CombatFX {
 
     this.debris(p, { count: debris, spread: radius * 0.75 });
     this.sparks(p, { count: 10, color: 0xffd9a0, spread: radius * 0.5 });
+    this.smokeCloud(p, { count: Math.max(3, Math.round(radius * 1.6)), radius });
+  }
+
+  // What is left in the air afterwards. Short — a couple of seconds — because
+  // this is the one-shot layer; a fire that keeps smoking for the rest of the
+  // mission belongs to Hazards, which is lit deliberately and escalates.
+  smokeCloud(at, { count = 5, radius = 3, life = 2.3 } = {}) {
+    const origin = at.isVector3 ? at : new THREE.Vector3(at.x, at.y ?? 0.4, at.z);
+    for (let i = 0; i < count; i++) {
+      const s = ++this.seed;
+      const a = (i / count) * Math.PI * 2 + rand(s) * 1.1;
+      const reach = radius * (0.25 + rand(s + 3) * 0.4);
+
+      const puff = new THREE.Mesh(SHARED.shell, new THREE.MeshBasicMaterial({
+        color: 0x4a4f49, transparent: true, opacity: 0.34, depthWrite: false,
+      }));
+      puff.position.copy(origin);
+      puff.scale.setScalar(radius * 0.22);
+      puff.renderOrder = 8;
+      this.track(puff, life, [puff.material]);
+
+      gsap.to(puff.position, {
+        x: origin.x + Math.sin(a) * reach,
+        y: origin.y + 0.9 + rand(s + 7) * 0.8,
+        z: origin.z + Math.cos(a) * reach,
+        duration: life, ease: 'power1.out',
+      });
+      gsap.to(puff.scale, {
+        x: radius * 0.55, y: radius * 0.5, z: radius * 0.55, duration: life, ease: 'power1.out',
+      });
+      gsap.to(puff.material, { opacity: 0, duration: life * 0.8, delay: life * 0.2, ease: 'power1.in' });
+    }
   }
 
   // Thrown chunks with a bounce. Deterministic fan, not a random spray.

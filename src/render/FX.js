@@ -3,6 +3,9 @@ import gsap from 'gsap';
 import { PALETTE } from './Scene.js';
 import { Drone } from './Drone.js';
 import { CombatFX } from './CombatFX.js';
+import { Hazards } from './Hazards.js';
+import { ReconMarker } from './ReconSites.js';
+import { playVehicleLoss, restoreVehicle, markCritical } from './VehicleLoss.js';
 import { spawnModel, preload } from './AssetLoader.js';
 
 // Impacts, drone scans, hostile markers. Deterministic — every burst uses a
@@ -17,6 +20,12 @@ export class FX {
     // because all of it is positional and none of it is about a unit's own
     // materials, which is what the methods below deal in.
     this.combat = new CombatFX(scene);
+    // What the board remembers: fires that grow turn on turn, the smoke off
+    // them, and the scars they leave. Everything above is an event; this is
+    // state.
+    this.hazards = new Hazards(scene);
+    // Where the next sortie is going, painted before it leaves.
+    this.recon = new ReconMarker(scene);
     // Hostiles are not revealed until the ambush, five turns in. Fetching a
     // 695 KB rig at that exact moment would stall the beat the mission turns
     // on, so it is warmed now while the title card is still up.
@@ -34,21 +43,61 @@ export class FX {
   // not when the order is given: that is the moment the sweep's consequences
   // (fog lifting, contacts painting) should land, so what the player sees is
   // caused by the aircraft rather than coincident with it.
-  droneSweep(from, to, { color = PALETTE.cyan, radius = 7, onArrive = null } = {}) {
+  // Returns both halves of the sortie, because the turn cares about them
+  // separately: `read` is when the aircraft has finished looking and its
+  // findings are allowed to land, `home` is when it is back on the deck. The
+  // turn waits for the first and lets the flight home play out underneath it.
+  droneSweep(from, to, { color = PALETTE.cyan, radius = 7, onArrive = null, tasking = '' } = {}) {
     this.drone.setColor(color);
-    return this.drone.sweep(from, to, {
+    this.recon.task(to, tasking);
+
+    let settle = null;
+    const read = new Promise((resolve) => { settle = resolve; });
+
+    const home = this.drone.sweep(from, to, {
+      // On station: the ground lights up and the marker says it is being read.
       onScan: () => {
+        this.recon.setState('scanning');
         this.ring(to.x, to.z, { color, radius, duration: 1.1 });
         if (onArrive) onArrive(to);
       },
+      // Finished reading: only now is there anything to report.
+      onRead: () => settle(to),
     });
+    // A sortie killed by a restart never reaches either callback. Settling on
+    // the way home as well means nothing can be left awaiting an aircraft that
+    // no longer exists.
+    home.then(() => settle(null));
+
+    return { read, home };
   }
+
+  // The sortie's findings have landed. Marks the ground as read.
+  reconResult(caption = null) { this.recon.complete({ linger: 2.6, caption }); }
 
   // ---- combat, forwarded so callers only need the one fx handle ----------
   gunfire(from, to, opts) { this.combat.gunfire(from, to, opts); }
   grenade(from, to, opts) { return this.combat.grenade(from, to, opts); }
   explosion(at, opts) { this.combat.explosion(at, opts); }
   unitHit(at, opts) { this.combat.unitHit(at, opts); }
+
+  // ---- the world reacting, same one handle -------------------------------
+  //
+  // A fire is lit by something that happened at a place: rounds into a
+  // generator, a charge on a door, ordnance in a room. Never decoratively.
+  ignite(x, z, opts) { return this.hazards.ignite(x, z, opts); }
+  escalateHazards() { return this.hazards.escalate(); }
+
+  // A vehicle going down, as a sequence the player can watch. Returns a
+  // promise that settles once the wreck has come to rest.
+  vehicleLoss(unit, opts = {}) {
+    return playVehicleLoss(unit, { hazards: this.hazards, combat: this.combat, ...opts });
+  }
+
+  // Hurt but still in the fight: it smokes from here on.
+  markCritical(unit) { return markCritical(unit, { hazards: this.hazards, combat: this.combat }); }
+
+  restoreVehicle(unit) { restoreVehicle(unit); }
 
   burst(x, z, { color = PALETTE.red, count = 22, spread = 2.2, life = 0.75 } = {}) {
     const geo = new THREE.BufferGeometry();
@@ -161,10 +210,14 @@ export class FX {
     }
   }
 
-  // Called on mission restart alongside clearHostiles.
+  // Called on mission restart alongside clearHostiles. Everything this layer
+  // has put in the world goes with it — a replay must not start with last
+  // run's fires still burning or its recon marker still on the ground.
   resetDrone() {
     this.drone.reset();
     this.combat.clear();
+    this.hazards.clear();
+    this.recon.clear();
   }
 
   clearHostiles() {
@@ -186,6 +239,8 @@ export class FX {
     this.clock += dt;
     this.drone.update(dt, this.clock);
     this.combat.update(dt);
+    this.hazards.update(dt, this.clock);
+    this.recon.update(dt, this.clock);
 
     for (let i = this.active.length - 1; i >= 0; i--) {
       const p = this.active[i];
