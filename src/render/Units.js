@@ -94,6 +94,19 @@ function mat(color, { emissive = 0.3 } = {}) {
 // of this, landing the walker at ~1.74 world units — the same on-screen mass
 // the hand-built chassis had, so camera framing and cone geometry are
 // unaffected by the swap.
+// Where the ground is. Units used to be pinned at y = 0, which is correct on
+// mission 1's flat compound pad and wrong everywhere else: on the depot the
+// terrain runs from +1.3 at the overwatch rise to -3.0 in the ammunition
+// room, so the squad started the mission buried inside a hill — badges and
+// sensor cones visible, robots not — and would have finished it hovering
+// three metres over the floor.
+//
+// main.js hands this over once the environment is known. Missions with no
+// terrain keep y = 0 exactly as before.
+let groundSampler = null;
+export function setGroundSampler(fn) { groundSampler = typeof fn === 'function' ? fn : null; }
+export const groundAt = (x, z) => (groundSampler ? groundSampler(x, z) : 0);
+
 const MODEL_HEIGHT = 1.45;
 const UNIT_MODEL = 'squad-walker';
 
@@ -179,7 +192,7 @@ export class Unit {
 
     this.badge = buildBadge(UNIT_BADGE[id] || '?', STATUS_COLOR[STATUS.HEALTHY]);
     this.group.add(this.badge);
-    this.group.position.set(x, 0, z);
+    this.group.position.set(x, groundAt(x, z), z);
     this.group.scale.setScalar(1.2);
     this.group.rotation.y = heading;
     this.group.name = id;
@@ -270,6 +283,15 @@ export class Unit {
 
   get position() { return this.group.position; }
 
+  // Put a unit somewhere, on the ground. Used by deploy and by the mission
+  // restart, both of which used to drop units at y = 0 regardless.
+  placeAt(x, z, heading = this.heading) {
+    this.group.position.set(x, groundAt(x, z), z);
+    this.group.rotation.y = heading;
+    this.heading = heading;
+    this.cone.mesh.rotation.y = heading;
+  }
+
   // Marks this unit as the one under discussion: brighter cone border, and
   // the marker ring (if UnitMarkers is running) opens up around it.
   setFocus(on) {
@@ -350,7 +372,7 @@ export class Unit {
     const clip = run && this.clips?.Run && this.status !== STATUS.DAMAGED ? 'Run' : 'Walk';
     this.play(clip, { fade: 0.18, timeScale: this.status === STATUS.DAMAGED ? 0.6 : 1.15 });
     return gsap.to(this.group.position, {
-      x, z, duration, ease: 'power2.inOut',
+      x, y: groundAt(x, z), z, duration, ease: 'power2.inOut',
       onComplete: () => this.idleForStatus(),
     });
   }
@@ -430,7 +452,8 @@ export class Unit {
       const legTime = Math.max(0.12, duration * (leg.len / total));
       await new Promise((resolve) => {
         gsap.to(this.group.position, {
-          x: tx, z: tz, duration: legTime, ease: 'none', onComplete: resolve,
+          x: tx, y: groundAt(tx, tz), z: tz,
+          duration: legTime, ease: 'none', onComplete: resolve,
         });
       });
     }

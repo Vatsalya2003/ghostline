@@ -287,3 +287,37 @@ alone deliberately rather than silently reshaping a rehearsed map.
 | P2 | The depot's graded platform still shows a straight edge where it meets the hillside |
 | P2 | Residual soft diagonal banding on open seabed sediment (mission 2, unregistered) |
 | P2 | `sim.mjs` still runs mission 1 only |
+
+---
+
+# FIXED — people on the board, and the squad on the ground
+
+| # | Sev | What | Cause |
+|---|---|---|---|
+| 1 | **P0** | Robots invisible at turn 1 — badges, rings and sensor cones showing, no robots | Units were pinned at `y = 0`. Correct on mission 1's flat compound pad, wrong everywhere else: the depot terrain runs from **+1.32** at the overwatch rise to **−3.05** in the ammunition room, so the squad started the mission buried inside a hill and would have finished it hovering three metres above the floor. `Units.js` now takes a ground sampler and every placement, walk and traversal leg sets `y` from it |
+| 2 | **P0** | No enemies and no hostages anywhere | They were never modelled. The mission described six figures in a room, gave the player a filing cabinet to look at, and asked them to decide whether to shoot one — which is not a decision, it is a guess about a sentence |
+| 3 | P2 | A body vanished the turn after it went down | `showForTurn` hid anything marked down. Bodies now stay on the board for the rest of the mission — the point of putting people there is that a decision leaves something behind |
+| 4 | P2 | The unresolved sixth figure was entirely hidden behind the cabinet | Its marker was shorter than the 1.5-unit cabinet it was standing behind. Now spans 0.55–2.25 so the upper bars clear cover |
+| 5 | P2 | Only five figures countable on turn 5 while the line says six | The sixth was shown from turn 6. It is on the board from turn 5 as an unresolved contact |
+
+**The actors.** `src/render/Actors.js`, procedural like everything else — no
+downloaded meshes. Two kinds, built to be tellable apart from across a room at
+tactical zoom, because that is the entire mechanic:
+
+- **HOSTILE** — dark gear, red band, rifle held across the body, standing
+  square, red ground ring.
+- **CIVILIAN** — pale clothing, no rifle, wrists bound, seated or crouched,
+  amber ring. Half the height of a standing figure.
+
+Colour alone would not carry it — cyan/amber/red already mean something about
+the player's own squad — so the **silhouettes** differ too. A rifle is a shape;
+a seated figure is half a standing one.
+
+**UNRESOLVED** is the important state. The sixth figure is drawn as pulsing
+amber bars, not as a person, because the whole point of turn 6 is that you do
+not know what it is yet. Resolving it swaps the marker for a body, which *is*
+the reveal.
+
+Placement lives in `depot-layout.js` (`ACTORS`); consequences are mission data
+(`dropActors`, `resolveActors` on an outcome), so the engine stays ignorant of
+who is in the room.

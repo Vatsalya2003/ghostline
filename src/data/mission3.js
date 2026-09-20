@@ -269,6 +269,7 @@ export const mission3 = {
           impactUnit: 'BETA-2',
           setsFlag: 'fireStarted',
           note: 'You had a forty second gap and a silent way through. Shooting solved a problem you did not have and started one you did not need.',
+          dropActors: ['guard-a', 'guard-b'],
         },
         SEND_DRONE: {
           tag: CALIBRATION.MISTRUST,
@@ -321,6 +322,7 @@ export const mission3 = {
           response: 'Tracking — he is stepping out. Rifle confirmed. He is a guard, and now we know it instead of guessing it. Taken down quiet.',
           fx: 'move',
           note: 'You made the machine wait for evidence instead of accepting a silhouette. Same outcome, and this time it was a fact.',
+          dropActors: ['guard-cover'],
         },
         SEND_DRONE: {
           tag: CALIBRATION.CALIBRATED,
@@ -331,6 +333,7 @@ export const mission3 = {
           fx: 'scan',
           reveal: { x: 4.2, z: 0.6 },
           note: 'Expensive and completely sound. You bought an actual look instead of a match score.',
+          dropActors: ['guard-cover'],
         },
         CONFIRM: {
           tag: CALIBRATION.COMPLACENCY,
@@ -341,6 +344,7 @@ export const mission3 = {
           impactUnit: 'BETA-2',
           setsFlag: 'fireStarted',
           note: 'It was a guard. You were still wrong: you accepted HIGH confidence built from a shoulder, and it cost you the noise and the fire. Being right by luck is not calibration.',
+          dropActors: ['guard-cover'],
         },
         FIRE: {
           tag: CALIBRATION.COMPLACENCY,
@@ -351,6 +355,7 @@ export const mission3 = {
           impactUnit: 'BETA-2',
           setsFlag: 'fireStarted',
           note: 'You fired on a silhouette. It happened to be a guard. Next room it will be a person in a chair.',
+          dropActors: ['guard-cover'],
         },
       },
     },
@@ -392,6 +397,7 @@ export const mission3 = {
           fx: 'move',
           setsFlag: 'hostagesFound',
           note: 'Five figures in clean frame with restraints and weapons visible. That HIGH was built on objects, not outlines. Believing it is the correct call.',
+          dropActors: ['room-hostile'],
         },
         THERMAL_SWEEP: {
           tag: CALIBRATION.CALIBRATED,
@@ -402,6 +408,7 @@ export const mission3 = {
           reveal: { x: 9.5, z: -5.5 },
           setsFlag: 'hostagesFound',
           note: 'Free verification of a sound reading, and it surfaced the figure the mission actually turns on.',
+          dropActors: ['room-hostile'],
         },
         SEND_DRONE: {
           tag: CALIBRATION.MISTRUST,
@@ -413,6 +420,7 @@ export const mission3 = {
           reveal: { x: 9.0, z: -4.5 },
           setsFlag: 'hostagesFound',
           note: 'You spent an aircraft confirming a reading built on visible restraints and a visible rifle. There is a figure in that room you have not resolved yet.',
+          dropActors: ['room-hostile'],
         },
         FALL_BACK: {
           tag: CALIBRATION.DISUSE,
@@ -464,6 +472,7 @@ export const mission3 = {
           fx: 'move',
           setsFlag: 'hostagesSafe',
           note: 'The whole mission is this turn. Same HIGH, a tenth of the evidence — and a person behind it. You made the machine prove it.',
+          resolveActors: { sixth: { kind: 'civilian', pose: 'stand' } },
         },
         SEND_DRONE: {
           tag: CALIBRATION.CALIBRATED,
@@ -475,6 +484,7 @@ export const mission3 = {
           reveal: { x: 12.2, z: -7.8 },
           setsFlag: 'hostagesSafe',
           note: 'You spent your last aircraft on the one question in the mission that could not be taken back. Correct.',
+          resolveActors: { sixth: { kind: 'civilian', pose: 'crouch' } },
         },
         CONFIRM: {
           tag: CALIBRATION.COMPLACENCY,
@@ -485,6 +495,8 @@ export const mission3 = {
           impactUnit: 'ALPHA',
           setsFlag: 'hostageKilled',
           note: 'A confidence number is a statement about a model. It is never a statement about a person. This is the turn the mission was built around and you took the number.',
+          resolveActors: { sixth: { kind: 'civilian', pose: 'crouch' } },
+          dropActors: ['sixth'],
         },
         FIRE: {
           tag: CALIBRATION.COMPLACENCY,
@@ -495,6 +507,8 @@ export const mission3 = {
           impactUnit: 'ALPHA',
           setsFlag: 'hostageKilled',
           note: 'You had a free HOLD FIRE and a drone on the rack. You used neither, on the one call in this mission that cannot be undone.',
+          resolveActors: { sixth: { kind: 'civilian', pose: 'crouch' } },
+          dropActors: ['sixth'],
         },
       },
     },

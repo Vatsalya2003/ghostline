@@ -180,3 +180,39 @@ export const SMOKE_STAGES = [
   { fromTurn: 7, at: { x: 18.5, z: -7.5 }, spread: 5.5, density: 0.55 },
   { fromTurn: 9, at: { x: 23.5, z: -9.5 }, spread: 7.5, density: 1.0 },
 ];
+
+// ---------------------------------------------------------------- the people
+
+// Who is on the board, where, and on which turns. Placed against the zones
+// above, so they land in the rooms the mission actually talks about.
+//
+// The guards in the yard are on turns 3-4 because that is the security phase;
+// the room is populated for 5-6 and the hostages stay visible afterwards,
+// because "where did the hostages end up" is exactly what turn 8 asks the
+// player to weigh and they should be able to look.
+//
+// `unresolved` is the sixth figure. It is deliberately NOT a civilian until
+// the player resolves it — drawing a person there would answer the question
+// the turn is asking.
+export const ACTORS = [
+  // --- the yard patrol, turn 3. Both in the open: that is what makes
+  // VERITAS's HIGH on turn 3 an earned one.
+  { id: 'guard-a', kind: 'hostile', at: [1.5, 6.2], face: 2.3, turns: [3, 4] },
+  { id: 'guard-b', kind: 'hostile', at: [-2.4, 4.0], face: 0.7, turns: [3, 4] },
+
+  // --- turn 4: the contact at the east corner, half behind the crates.
+  { id: 'guard-cover', kind: 'hostile', at: [4.4, 0.9], face: 3.6, turns: [4] },
+
+  // --- the holding room, turns 5-6. One armed hostile walking between four
+  // bound civilians.
+  { id: 'room-hostile', kind: 'hostile', at: [12.6, -2.2], face: 3.9, turns: [5, 6] },
+  { id: 'hostage-1', kind: 'civilian', pose: 'seated', at: [6.4, -6.6], face: 1.1, turns: [5, 6, 7, 8, 9, 10] },
+  { id: 'hostage-2', kind: 'civilian', pose: 'seated', at: [7.4, -7.6], face: 1.0, turns: [5, 6, 7, 8, 9, 10] },
+  { id: 'hostage-3', kind: 'civilian', pose: 'seated', at: [6.2, -8.5], face: 0.8, turns: [5, 6, 7, 8, 9, 10] },
+  { id: 'hostage-4', kind: 'civilian', pose: 'seated', at: [7.8, -9.0], face: 0.9, turns: [5, 6, 7, 8, 9, 10] },
+
+  // --- THE SIXTH FIGURE. Behind the filing cabinet at (11.8, -7.4), shown as
+  // an unresolved contact until the player earns the answer.
+  { id: 'sixth', kind: 'civilian', state: 'unresolved', pose: 'crouch',
+    at: [12.9, -6.6], face: 2.6, turns: [5, 6, 7, 8, 9, 10] },
+];

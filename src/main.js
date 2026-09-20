@@ -8,8 +8,9 @@ import { createSeabedLevel } from './render/SeabedLevel.js';
 import { createDepotLevel } from './render/DepotLevel.js';
 import { attachSurveyLights } from './render/Seabed.js';
 import { createOcclusion } from './render/Occlusion.js';
-import { FIRE_SOURCE, SMOKE_STAGES } from './data/depot-layout.js';
-import { createSquad } from './render/Units.js';
+import { createActors } from './render/Actors.js';
+import { FIRE_SOURCE, SMOKE_STAGES, ACTORS } from './data/depot-layout.js';
+import { createSquad, setGroundSampler } from './render/Units.js';
 import { FX } from './render/FX.js';
 import { UnitMarkers } from './render/UnitMarkers.js';
 import { ObjectiveMarkers } from './render/ObjectiveMarkers.js';
@@ -59,6 +60,8 @@ const fog = createFogOfWar(scene, mission1.environment === 'undersea'
 const level = mission1.environment === 'undersea' ? createSeabedLevel(scene)
   : mission1.environment === 'depot' ? createDepotLevel(scene)
   : createLevel(scene);
+// Tell the units where the ground is before anything places them.
+setGroundSampler(terrain?.height || null);
 const squad = createSquad(scene);
 // At 240 metres nothing is lit until a vehicle lights it. The survey lights
 // parent to the unit groups, so they travel with the fleet for free — and the
@@ -70,6 +73,10 @@ if (mission1.environment === 'undersea') attachSurveyLights(squad.all);
 const occlusion = level.fadeables
   ? createOcclusion({ fadeables: level.fadeables, roofs: level.roofs, units: squad.all })
   : null;
+// The guards and the hostages. Ammunition Depot asks the player to decide who
+// is in a room; until these existed the room was empty and the decision was a
+// guess about a sentence.
+const actors = mission1.environment === 'depot' ? createActors(scene, ACTORS) : null;
 const fx = new FX(scene);
 const markers = new UnitMarkers(scene, squad.all);
 // Objectives as places on the board, not just rows in the corner.
@@ -161,6 +168,15 @@ events.on(GAME_EVENT.TURN_START, ({ turn }) => {
   // for the better part of ten seconds, and leaving the last answer sitting in
   // the comms panel through a breach reads as the squad still talking.
   ui.comms.reset?.();
+  // Show exactly the people this turn declares — nobody lingers into a room
+  // they were never in.
+  actors?.showForTurn(turn.id);
+});
+
+// What a command did to the people on the board. Driven off the outcome so
+// the mission owns it, the same as every other consequence.
+events.on(GAME_EVENT.TURN_END, ({ outcome }) => {
+  if (outcome) actors?.applyOutcome(outcome);
 });
 
 events.on(GAME_EVENT.MISSION_START, () => {
@@ -255,10 +271,7 @@ function startMission() {
   ui.log.clear();
   debrief.hide();
   for (const h of HOME) {
-    h.unit.group.position.set(h.x, 0, h.z);
-    h.unit.group.rotation.y = h.heading;
-    h.unit.heading = h.heading;
-    h.unit.cone.mesh.rotation.y = h.heading;
+    h.unit.placeAt(h.x, h.z, h.heading);
     h.unit.setStatus('healthy', { animate: false });
   }
   // Mission 1's breach door. Missions set somewhere without one hand back a
@@ -276,6 +289,7 @@ function startMission() {
   fog.clear();
   fog.lift(1.6);
   occlusion?.reset();
+  actors?.reset();
   screenFX.reset();
   screenFX.deploySweep();
   input?.clearUnitSelection();
@@ -488,6 +502,7 @@ function tick() {
   terrain?.dust.update(dt, t);
   updateFire(dt, t);
   occlusion?.update(dt);
+  actors?.update(t);
   input.poll(dt);
   updateCamera(camera, dt, t);
   renderer.render(scene, camera);
@@ -496,4 +511,4 @@ function tick() {
 tick();
 
 // Console handles for tuning and for the plan's step-5 check.
-window.OP = { occlusion, screens, ui, state, turnManager, director, squad, camera, scene, fog, fx, screenFX, input, pauseMenu, audio, soundscape, mission: mission1, startMission };
+window.OP = { occlusion, actors, screens, ui, state, turnManager, director, squad, camera, scene, fog, fx, screenFX, input, pauseMenu, audio, soundscape, mission: mission1, startMission };
