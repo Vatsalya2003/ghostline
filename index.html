@@ -18,6 +18,8 @@
       <div id="ui">
         <!-- ============ HUD ============ -->
         <div id="hud">
+          <button id="log-open" type="button"
+                  title="Pause the mission and read the full log">LOG</button>
           <div class="panel" id="turn-box">
             <div class="label">Objective</div>
             <div id="objective">—</div>
@@ -59,13 +61,10 @@
               <div id="task-text">—</div>
             </div>
           </div>
-          <div class="panel" id="log">
-            <div id="log-head">
-              <span class="label">Mission log</span>
-              <button id="log-open" type="button" title="Pause and read the full log">FULL LOG</button>
-            </div>
-            <div id="log-lines"></div>
-          </div>
+          <!-- Off-screen store, not a panel. PauseMenu.renderLog() reads its
+               children, so the element has to exist even though nothing on
+               the HUD draws it. -->
+          <div id="log"><div id="log-lines"></div></div>
         </div>
 
         <!-- ============ COMMS + COMMANDS ============ -->
