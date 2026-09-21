@@ -106,9 +106,7 @@ export function createRenderer(canvas) {
   const stage = document.getElementById('stage');
   renderer.setSize(stage?.clientWidth || window.innerWidth,
                    stage?.clientHeight || window.innerHeight, false);
-  // Shadows off: cheaper, and the compound reads better without a hard
-  // raking shadow lying across every figure the player has to identify.
-  renderer.shadowMap.enabled = false;
+  renderer.shadowMap.enabled = true;
   // PCFSoftShadowMap is gone in three r186 — the renderer warns and silently
   // uses PCFShadowMap anyway. Naming it is the same picture with a clean
   // console. VSM is the real soft option and costs more than this demo needs.
@@ -221,7 +219,7 @@ export function createScene({ environment = ENVIRONMENT, renderer = null } = {})
   key.position.set(undersea ? 24 : depot ? 62 : day ? 26 : 8,
                    undersea ? 56 : depot ? 44 : day ? 9 : 14,
                    undersea ? 32 : depot ? 38 : day ? 15 : 6);
-  key.castShadow = false;
+  key.castShadow = true;
   // A 3072 shadow map is re-rendered every frame with every caster in the
   // compound in it. On a real GPU that is free; on a software rasteriser it is
   // most of the frame, and it is the single biggest reason a headless run
