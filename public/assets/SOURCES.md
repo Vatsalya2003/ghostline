@@ -8,7 +8,7 @@ redistribute.
 The upstream licence text, exactly as it ships with the packs, is reproduced
 at [`LICENSE-quaternius.txt`](LICENSE-quaternius.txt).
 
-**Total: 45 `.glb` files, 6.0 MB.** No external fonts, no CDN. The game runs
+**Total: 46 `.glb` files, 6.5 MB.** No external fonts, no CDN. The game runs
 fully offline once cloned. (PBR texture sets are documented separately in
 [`textures/SOURCES.md`](textures/SOURCES.md).)
 
@@ -20,7 +20,7 @@ fully offline once cloned. (PBR texture sets are documented separately in
 |---|---|
 | **Author** | Quaternius — <https://quaternius.com> |
 | **Licence** | CC0 1.0 Universal · <https://creativecommons.org/publicdomain/zero/1.0/> |
-| **Packs used** | Cyberpunk Game Kit · Ultimate Modular Sci-Fi Pack · Survival Pack · Modular Men · Modular Women · Modular Sci-Fi Guns |
+| **Packs used** | Cyberpunk Game Kit · Ultimate Modular Sci-Fi Pack · Survival Pack · Mech Pack · Modular Men · Modular Women · Modular Sci-Fi Guns |
 
 ### Why the files came from a mirror
 
@@ -56,11 +56,25 @@ names are given so anything here can be traced back.
 
 | File | Original | Pack | Size | Used for |
 |---|---|---|---|---|
-| `squad-walker.glb` | `Enemy_2Legs_Gun` | Cyberpunk | 317 KB | ALPHA, BETA-1, BETA-2. One download, three clones. |
+| `squad-mech.glb` | `George` | Mech | 807 KB | ALPHA, BETA-1, BETA-2. One download, three clones, three liveries. |
+| `squad-rifle.glb` | `AR_5` | Modular Sci-Fi Guns | 64 KB | The rifle in the squad's right hand. One download, three clones. |
 | `hostile-heavy.glb` | `Enemy_Large_Gun` | Cyberpunk | 695 KB | Hostile contacts revealed on the ambush beat. |
 
-Both carry a skeletal rig with Idle / Walk / Run / Attack / Shoot / Jump /
-Death clips. GHOSTLINE drives Idle and Walk.
+`squad-mech.glb` is a genuine humanoid robot — head, torso, shoulders, two
+arms with four-fingered hands, pelvis, two legs — on a 47-bone rig. It
+replaced `Enemy_2Legs_Gun`, which despite its name has **no arm bones at all**:
+it is a gun pod on two legs and could not hold, aim or reload anything. The
+squad is written as three robots carrying weapons, so the old model was
+contradicting the fiction every frame it was on screen.
+
+GHOSTLINE drives Idle, Walk, Run, Shoot, Attack and Death on the mech, and
+Idle / Walk on `hostile-heavy.glb`. See §3.6 for what had to be rebuilt to get
+there.
+
+`squad-rifle.glb` is byte-identical to `rifle-ar.glb` below and is kept as a
+second copy on purpose: `AssetLoader` caches parsed files by URL and retints
+that one parsed scene in place, so the squad and the guards asking for
+different surface overrides on the same URL would fight over it.
 
 ### `models/` — the people
 
@@ -121,9 +135,10 @@ cabinet — is bone rotations applied once on load by `src/render/Actors.js`.
 
 ## 3. MODIFICATIONS
 
-**The `.glb` files are unmodified.** Every change below happens at load time in
-`src/render/`, which means the binaries stay byte-identical to the CC0
-originals and are trivially re-verifiable against upstream.
+**Every `.glb` is unmodified except `squad-mech.glb`,** which was repacked —
+see §3.6. Everything else below happens at load time in `src/render/`, which
+means those binaries stay byte-identical to the CC0 originals and are trivially
+re-verifiable against upstream.
 
 1. **Renamed** on download, per the tables above. Contents untouched.
 
@@ -142,9 +157,10 @@ originals and are trivially re-verifiable against upstream.
 4. **Flat shading forced,** matching the hand-built geometry already in the
    scene.
 
-5. **`Eye` is isolated per instance** on the two robot models so each unit
+5. **`Eye` is isolated per instance** on `hostile-heavy.glb` so each contact
    can carry its own status colour (cyan nominal / amber degraded / red
-   damaged) without the other two changing with it.
+   damaged) without the others changing with it. The squad mech has no such
+   material and gets a built sensor instead — see §3.6.
 
 6. **The people are posed procedurally.** The character files ship rigged and
    unanimated, so `Actors.js` rotates their bones on load: each bone is swung
@@ -165,6 +181,51 @@ originals and are trivially re-verifiable against upstream.
    status tint, and anything unmapped falls through to concrete. Actors.js
    passes one override map per file — including one each for the two worker
    files, which disagree about whether `Brown` means trousers or irises.
+
+### 3.6 The squad mech, in detail
+
+Four things had to be done to `George` to make it a GHOSTLINE unit. The first
+is to the file; the other three are at load time in `src/render/Units.js`.
+
+**a. The file was repacked — 3.34 MB to 807 KB.** This is the one binary in
+the project that is not upstream byte-for-byte. Two changes, both lossy only in
+ways that cannot be seen at this camera distance:
+
+- The baked atlas was 2048x2048 PNG (2.2 MB). A robot 1.7 m tall is about 120
+  screen pixels at tactical zoom, so it was resampled to 512x512 JPEG at
+  quality 90 with no chroma subsampling (126 KB).
+- 13 of the 20 animation clips are not used by this game (`Dance`, `Hello`,
+  `Kick`, `Yes`, `No`, `Jump`, …). Dropping them, and garbage-collecting the
+  accessors and buffer views that only they referenced, took the JSON chunk
+  from 450 KB to 167 KB as well as shrinking the binary.
+
+Nothing was edited: no geometry, no rig, no keyframes on the surviving clips.
+Re-fetch `George.glb` from the mirror to get the original.
+
+**b. The arms were retargeted, because the idle is a T-pose.** `Idle`, `Shoot`
+and `SwordSlash` each carry exactly two identical keyframes on `UpperArm.L/R`,
+holding the arms straight out at ninety degrees. That is authored, not broken:
+Quaternius put the weapon poses only into the `_Holding` variants of the walk
+and run, and the pack has no `Idle_Holding`. So the carry pose is lifted off
+`Walk_Holding`'s right arm and grafted onto the clips that lack it, and the
+left arm is its mirror — the export mirrors `.L`/`.R` pairs across the YZ
+plane, which for these quaternions is exactly `(x, -y, -z, w)`.
+
+**c. The material was relit.** The mech ships under `KHR_materials_unlit`, so
+GLTFLoader returns a `MeshBasicMaterial` and the robot renders its bake at full
+brightness with the scene's lights, shadows and ambient doing nothing to it —
+a bright sticker walking over a lit compound. It is rebuilt as a
+`MeshStandardMaterial` around the same texture: same download, same GPU
+memory, now lit by the same key light as the ground under its feet.
+
+**d. Three liveries and three back modules.** One download, three clones. Each
+unit gets its own copy of the atlas material tinted to a different value —
+ALPHA lightest, BETA-2 darkest and slightly larger — plus a code-built module
+bolted to the chest bone: a dish for ALPHA's command role, a low-profile pod
+for BETA-1's recon role, twin cells for BETA-2. Colour is the first thing a
+45-degree camera and a fog layer take away from you, so the silhouettes differ
+too. The status light (cyan / amber / red) is a built visor parented to the
+head bone, since there is no `Eye` material to isolate on this model.
 
 ---
 

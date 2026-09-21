@@ -196,6 +196,7 @@ const KIT_SURFACE = {
 // roughness range so they do not read as showroom plastic.
 const KEEP_ORIGINAL = new Set([
   'Atlas', 'Atlas.047', 'M_PCL_Flat_Palette', 'Headlights', 'BrakeLight',
+  'George_Texture',
 ]);
 
 // ...but an atlas authored for a different game is still authored for a
@@ -211,6 +212,7 @@ const KEEP_TINT = {
   BrakeLight: 0x7a3a34,
   'Atlas.047': 0x9c9384,        // gate-barrier — knocked back, stripes kept
   M_PCL_Flat_Palette: 0xa9a08a, // ammo-crate — stencilling stays readable
+  George_Texture: 0x9aa494,     // squad mech — drab base; Units.js tints per unit
 };
 
 // One THREE material per surface, shared by every mesh that asks for it.

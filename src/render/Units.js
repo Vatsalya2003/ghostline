@@ -3,10 +3,10 @@ import gsap from 'gsap';
 import { PALETTE } from './Scene.js';
 import { SensorCone } from './SensorCones.js';
 import { spawnModel } from './AssetLoader.js';
-import { meshesUsing } from './Materials.js';
 
-// Squad robots. A CC0 low-poly walker (see public/assets/SOURCES.md) carrying
-// a skeletal Idle/Walk rig, re-tinted into the GHOSTLINE palette on load.
+// Squad robots. A CC0 humanoid mech (see public/assets/SOURCES.md) — head,
+// torso, shoulders, two arms with hands, pelvis, two legs — carrying a
+// skeletal rig, a baked panel-and-rust atlas, and a rifle in its right hand.
 //
 // The model streams in. Until it lands — and permanently, if the file is
 // missing — the hand-built chassis below stands in, so the mission is never
@@ -90,10 +90,6 @@ function mat(color, { emissive = 0.3 } = {}) {
   });
 }
 
-// Model height in the unit's own local space. The group is scaled 1.2 on top
-// of this, landing the walker at ~1.74 world units — the same on-screen mass
-// the hand-built chassis had, so camera framing and cone geometry are
-// unaffected by the swap.
 // Where the ground is. Units used to be pinned at y = 0, which is correct on
 // mission 1's flat compound pad and wrong everywhere else: on the depot the
 // terrain runs from +1.3 at the overwatch rise to -3.0 in the ammunition
@@ -107,21 +103,54 @@ let groundSampler = null;
 export function setGroundSampler(fn) { groundSampler = typeof fn === 'function' ? fn : null; }
 export const groundAt = (x, z) => (groundSampler ? groundSampler(x, z) : 0);
 
+// Model height in the unit's own local space. Each unit's group scale is
+// applied on top (see UNIT_LIVERY), landing the squad between 1.67 and 1.84
+// world units — human scale, and the same on-screen mass the walker this
+// replaced had, so camera framing and cone geometry are unaffected by the swap.
 const MODEL_HEIGHT = 1.45;
-const UNIT_MODEL = 'squad-walker';
+const UNIT_MODEL = 'squad-mech';
+const UNIT_WEAPON = 'squad-rifle';
 
-// Kit material -> GHOSTLINE surface, for this model only. `Main` is the body
-// shell, `Main2` the feet and shoulder pads, `Edge` the frame around the eye;
-// the two Grey slots are the weapon housing. `Eye` is isolated instead of
-// mapped: it is the status light and each unit tints its own copy.
-const UNIT_SURFACES = {
-  Main: 'armour',
-  Main2: 'armourDark',
-  Edge: 'armourTrim',
-  Grey: 'steelDark',
-  LightGrey: 'steel',
-  Dark: 'rubber',
+// There is no surface table for the body. The mech carries one baked atlas
+// (`George_Texture`) rather than a dozen flat kit slots, and Materials.js
+// leaves it intact via KEEP_ORIGINAL — the panel lines, rust and hazard
+// stripes painted into it are the mechanical detail, and a retint would throw
+// all of it away. The rifle is ordinary kit geometry and still gets mapped.
+//
+// Its surfaces are deliberately a shade lighter than the mech's own paint. At
+// tactical zoom a rifle rendered in the same value as the arm holding it stops
+// being a rifle and becomes a lump on the silhouette.
+const WEAPON_SURFACES = {
+  Main: 'steel',
+  Grey: 'steelLight',
+  White: 'steelLight',
+  Black: 'steelDark',
 };
+
+// Length of the rifle in world metres, and where it sits relative to the
+// right hand. Tuned against the carry pose the arms are grafted into below.
+const WEAPON_LENGTH = 0.62;
+const WEAPON_OFFSET = { x: 0.015, y: -0.005, z: 0.055 };
+
+// Three liveries off one download. The atlas is a weathered olive-and-grey
+// bake, so these are tints multiplied into it rather than replacement colours:
+// they hold the same paintwork and separate the three units by value, which is
+// what has to survive a unit standing in shadow under a sensor cone. ALPHA is
+// the brightest because it is the one you are usually looking for.
+//
+// `lift` is a very dim self-illumination in the unit's own colour. The darker
+// two liveries multiply an already-dark bake, and a robot whose shadow side
+// has crushed to black has lost the panel lines and the rust that are the
+// whole reason for keeping the texture. The lift puts a floor under them
+// without touching the lit side.
+const UNIT_LIVERY = {
+  ALPHA:    { tint: 0xeef2e8, roughness: 0.54, metalness: 0.38, scale: 1.20, lift: 0.00 },
+  'BETA-1': { tint: 0xaab4a2, roughness: 0.64, metalness: 0.30, scale: 1.15, lift: 0.07 },
+  'BETA-2': { tint: 0x79826e, roughness: 0.74, metalness: 0.22, scale: 1.27, lift: 0.16 },
+};
+
+// The one material on the mech, by its name in the file.
+const ATLAS_MATERIAL = 'George_Texture';
 
 function disposeTree(root) {
   root.traverse((o) => {
@@ -167,11 +196,236 @@ function buildStatusPod(color) {
   const g = new THREE.Group();
   const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.045, 0.3, 6), mat(0x1b2422, { emissive: 0.02 }));
   mast.position.y = 1.30;
-  const pod = new THREE.Mesh(new THREE.OctahedronGeometry(0.115), mat(color, { emissive: 1.5 }));
+  // Emissive kept low on purpose. ACES clips a saturated colour to flat white
+  // long before 1.0, and a white lozenge hanging over every robot reads as a
+  // rendering fault — worse, it throws away the colour, which is the entire
+  // status read. Dim and cyan beats bright and colourless. See Materials.js
+  // on `screen` for the same argument about powered surfaces.
+  const pod = new THREE.Mesh(new THREE.OctahedronGeometry(0.095), mat(color, { emissive: 0.5 }));
   pod.position.y = 1.50;
   mast.castShadow = true;
   g.add(mast, pod);
   g.userData.pod = pod;
+  return g;
+}
+
+// ---------------------------------------------------------------------------
+// ARM RETARGETING
+//
+// The mech's Idle, Shoot and SwordSlash clips leave one or both arms in the
+// rest pose, which on this rig is a 90-degree T-pose with the arms straight
+// out. That is not a loader bug and it is not a broken mixer: the clips
+// genuinely carry two identical keyframes on UpperArm.L/R. Quaternius authored
+// the weapon poses only into the `_Holding` variants, and there is no
+// `Idle_Holding` in the pack.
+//
+// So the carry pose is lifted off Walk_Holding's right arm — the pose the
+// artist built for a robot with something in its hands — and grafted onto the
+// clips that are missing it. The left arm is the mirror of the right: the
+// export mirrors .L/.R pairs across the YZ plane, which for these quaternions
+// is exactly (x, -y, -z, w). Verified against the bind pose, where UpperArm.L
+// is precisely the (x, -y, -z, w) of UpperArm.R.
+//
+// Bone names arrive here without their dots: GLTFLoader runs every node name
+// through PropertyBinding.sanitizeNodeName, which strips `.`, so `UpperArm.R`
+// in the file is `UpperArmR` at runtime and the track names match it.
+const ARM_PAIRS = [['UpperArmR', 'UpperArmL'], ['LowerArmR', 'LowerArmL']];
+
+const mirrorQuat = (v, i = 0) => [v[i], -v[i + 1], -v[i + 2], v[i + 3]];
+
+const quatTrack = (clip, node) => clip.tracks.find((t) => t.name === `${node}.quaternion`);
+
+function constantTrack(node, quat, duration) {
+  return new THREE.QuaternionKeyframeTrack(
+    `${node}.quaternion`, [0, duration], [...quat, ...quat],
+  );
+}
+
+function mirroredTrack(src, node) {
+  const values = new Float32Array(src.values.length);
+  for (let i = 0; i < values.length; i += 4) {
+    const q = mirrorQuat(src.values, i);
+    values[i] = q[0]; values[i + 1] = q[1]; values[i + 2] = q[2]; values[i + 3] = q[3];
+  }
+  return new THREE.QuaternionKeyframeTrack(`${node}.quaternion`, src.times.slice(), values);
+}
+
+function replaceTrack(clip, track) {
+  const i = clip.tracks.findIndex((t) => t.name === track.name);
+  if (i >= 0) clip.tracks[i] = track; else clip.tracks.push(track);
+}
+
+// Built once per loaded file and shared by all three units. An AnimationClip
+// is read-only data as far as a mixer is concerned, so three mixers driving
+// three skeletons can share one set of clips — same bargain the geometry gets.
+const clipCache = new WeakMap();
+
+function tacticalClips(animations) {
+  const hit = clipCache.get(animations);
+  if (hit) return hit;
+
+  const src = {};
+  for (const c of animations) src[c.name.split('|').pop()] = c;
+
+  // The pose the artist built for a robot holding something.
+  const carry = {};
+  for (const [right] of ARM_PAIRS) {
+    const t = src.Walk_Holding && quatTrack(src.Walk_Holding, right);
+    if (t) carry[right] = Array.from(t.values.slice(0, 4));
+  }
+
+  const out = {};
+  const take = (as, from) => (src[from] ? (out[as] = src[from].clone()) : null);
+
+  // Idle: both hands on the weapon, torso and head still breathing. The head
+  // track is untouched and it is the one that sells a robot standing watch.
+  const idle = take('Idle', 'Idle');
+  if (idle) {
+    for (const [right, left] of ARM_PAIRS) {
+      if (!carry[right]) continue;
+      replaceTrack(idle, constantTrack(right, carry[right], idle.duration));
+      replaceTrack(idle, constantTrack(left, mirrorQuat(carry[right]), idle.duration));
+    }
+  }
+
+  // Walking and running already lock the right arm onto the weapon and swing
+  // the left, which is what a patrol looks like. Left exactly as authored.
+  take('Walk', 'Walk_Holding');
+  take('Run', 'Run_Holding');
+
+  // Shoot raises the right arm into an aim and puts recoil on it, and forgets
+  // the left entirely. Mirroring the whole right-arm track — times and all —
+  // gives a two-handed aim that recoils with it, for nothing.
+  const shoot = take('Shoot', 'Shoot');
+  if (shoot) {
+    for (const [right, left] of ARM_PAIRS) {
+      const t = quatTrack(shoot, right);
+      if (t) replaceTrack(shoot, mirroredTrack(t, left));
+    }
+  }
+
+  // Ordnance. SwordSlash is an overarm swing that starts and ends on the carry
+  // pose, which is as close to an overarm throw as this rig has. The left hand
+  // stays on the weapon while the right one throws.
+  const attack = take('Attack', 'SwordSlash');
+  if (attack) {
+    for (const [right, left] of ARM_PAIRS) {
+      if (carry[right]) replaceTrack(attack, constantTrack(left, mirrorQuat(carry[right]), attack.duration));
+    }
+  }
+
+  // Death already animates both arms across 44 keys. Nothing to fix.
+  take('Death', 'Death');
+  take('Hit', 'HitRecieve_1');
+
+  clipCache.set(animations, out);
+  return out;
+}
+
+// ---------------------------------------------------------------------------
+// Parent something to a bone, positioned in the UNIT's frame rather than the
+// bone's.
+//
+// Bone local axes on a Blender export are not the axes anyone would guess —
+// the forearm's own +Y runs down the length of the bone, and its rest rotation
+// is baked into the skeleton — so composing the offset in bone space means
+// guessing. Instead the object is placed in world space, where "forward" is
+// the direction the robot is facing, and handed to Object3D.attach(), which
+// reparents it without moving it and bakes the local transform out of the
+// difference. From then on it rides the bone through every clip.
+const _bonePos = new THREE.Vector3();
+const _unitQuat = new THREE.Quaternion();
+
+function attachToBone(bone, object, { anchor, offset, rotation, unit }) {
+  bone.updateWorldMatrix(true, false);
+  unit.updateWorldMatrix(true, false);
+  unit.getWorldQuaternion(_unitQuat);
+
+  object.quaternion.copy(_unitQuat);
+  if (rotation) object.quaternion.multiply(rotation);
+  object.position.copy(offset).applyQuaternion(_unitQuat).add(anchor || _bonePos.setFromMatrixPosition(bone.matrixWorld));
+  bone.attach(object);
+}
+
+// Where the hand actually is. A bone's origin is its head, so LowerArm.R sits
+// at the elbow — half a forearm away from anywhere a rifle should be. The palm
+// bones hang off the wrist, so their centroid is the grip.
+function handAnchor(model, out = new THREE.Vector3()) {
+  const palms = ['PalmIR', 'PalmPR', 'PalmTR', 'PalmRR']
+    .map((n) => model.getObjectByName(n))
+    .filter(Boolean);
+  if (!palms.length) return null;
+  out.set(0, 0, 0);
+  const v = new THREE.Vector3();
+  for (const p of palms) { p.updateWorldMatrix(true, false); out.add(p.getWorldPosition(v)); }
+  return out.divideScalar(palms.length);
+}
+
+// The rifle is modelled down its own +X with +Z up (verified against the
+// pack's modular parts: Barrel_AR_1 runs to +X, Magazine_AR hangs to -Z).
+// The unit faces its own +Z. This maps one onto the other.
+const WEAPON_ROTATION = new THREE.Quaternion().setFromRotationMatrix(
+  new THREE.Matrix4().makeBasis(
+    new THREE.Vector3(0, 0, 1),   // rifle +X (muzzle) -> unit forward
+    new THREE.Vector3(1, 0, 0),   // rifle +Y (thickness) -> unit right
+    new THREE.Vector3(0, 1, 0),   // rifle +Z (top) -> up
+  ),
+);
+
+// The unit's status light, on the head where the camera can read it.
+//
+// The walker this replaced shipped an `Eye` material that could be isolated
+// and tinted per instance; the mech has one baked atlas and no such slot, so
+// the sensor is built here instead and parented to the head bone. It inherits
+// the head's idle motion, which is the part that makes it look like something
+// is actually looking.
+function buildVisor(color) {
+  const g = new THREE.Group();
+  const lens = new THREE.Mesh(new THREE.BoxGeometry(0.135, 0.038, 0.025), mat(color, { emissive: 0.55 }));
+  const hood = new THREE.Mesh(new THREE.BoxGeometry(0.17, 0.03, 0.05), mat(0x1b2422, { emissive: 0.02 }));
+  hood.position.y = 0.042;
+  hood.castShadow = true;
+  g.add(hood, lens);
+  g.userData.lens = lens;
+  return g;
+}
+
+// Role kit, bolted to the back of the torso.
+//
+// Three robots off one file separate by colour, and colour is the first thing
+// a 45-degree camera and a fog layer take away from you. A different lump on
+// each back separates them by silhouette as well — and the back is what this
+// camera mostly sees, so it is the cheapest place to spend the polygons.
+function buildLoadout(id) {
+  const g = new THREE.Group();
+  const shell = (w, h, d, color = 0x3d4740) =>
+    new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat(color, { emissive: 0.03 }));
+
+  if (id === 'ALPHA') {
+    // Command: a dish on a short mast. The unit doing the talking is the one
+    // carrying the radio.
+    const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.016, 0.022, 0.19, 6), mat(0x232b28, { emissive: 0.02 }));
+    mast.position.y = 0.16;
+    const dish = new THREE.Mesh(new THREE.CylinderGeometry(0.105, 0.105, 0.018, 10), mat(0x46524b, { emissive: 0.05 }));
+    dish.position.set(0, 0.27, -0.04);
+    dish.rotation.x = Math.PI / 2.5;
+    g.add(shell(0.28, 0.2, 0.1), mast, dish);
+  } else if (id === 'BETA-1') {
+    // Recon: low profile, nothing that snags, one rearward sensor.
+    const lens = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.045, 0.02), mat(0x5c6d63, { emissive: 0.14 }));
+    lens.position.set(0.06, 0.01, -0.055);
+    g.add(shell(0.24, 0.14, 0.085), lens);
+  } else {
+    // Heavy: twin cells and a feed running up over the shoulder.
+    const a = shell(0.12, 0.29, 0.13); a.position.x = -0.085;
+    const b = shell(0.12, 0.29, 0.13); b.position.x = 0.085;
+    const feed = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.24, 6), mat(0x1c2422, { emissive: 0.02 }));
+    feed.position.set(0.02, 0.2, 0.02);
+    feed.rotation.z = 0.45;
+    g.add(a, b, feed);
+  }
+
+  g.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
   return g;
 }
 
@@ -193,7 +447,7 @@ export class Unit {
     this.badge = buildBadge(UNIT_BADGE[id] || '?', STATUS_COLOR[STATUS.HEALTHY]);
     this.group.add(this.badge);
     this.group.position.set(x, groundAt(x, z), z);
-    this.group.scale.setScalar(1.2);
+    this.group.scale.setScalar((UNIT_LIVERY[id] || UNIT_LIVERY.ALPHA).scale);
     this.group.rotation.y = heading;
     this.group.name = id;
     scene.add(this.group);
@@ -216,15 +470,23 @@ export class Unit {
     this.scene = scene;
   }
 
-  // Swap the stand-in for the real walker once its file lands.
+  // Swap the stand-in for the real mech once its file lands.
   loadModel() {
     const { group, ready } = spawnModel(UNIT_MODEL, {
       height: MODEL_HEIGHT,
       skinned: true,                 // rebuild the skeleton per instance
-      isolate: ['Eye'],              // status light, tinted per unit
-      overrides: UNIT_SURFACES,
     });
     this.group.add(group);
+
+    // The rifle is a second, much smaller download that lands in the mech's
+    // right hand. It is requested now so the two are usually in flight
+    // together; if it never arrives the robot simply stands there empty-handed
+    // rather than the mission stalling. Same contract as everything else here.
+    const weapon = spawnModel(UNIT_WEAPON, {
+      size: WEAPON_LENGTH,
+      anchor: 'center',              // keep the rifle's own origin, at the grip
+      overrides: WEAPON_SURFACES,
+    });
 
     this.modelReady = ready.then((res) => {
       if (!res) return null;         // file missing — keep the stand-in
@@ -233,22 +495,52 @@ export class Unit {
       this.fallback = null;
       this.model = res.model;
 
-      // The eye is the unit's own material copy, so it joins the tint set.
-      // One representative mesh is enough: every mesh sharing the material
-      // changes with it, and FX.hitFlash would otherwise tween it five times.
-      const eye = res.tinted.Eye;
-      const eyeMesh = eye ? meshesUsing(res.model, eye)[0] : null;
+      this.applyLivery(res.model);
+
+      // Head-mounted sensor, tinted per unit and parented to the head bone so
+      // it carries the idle's head motion. This is what replaces the walker's
+      // isolated `Eye` material — the mech has one baked atlas and no slot to
+      // isolate, so the light is built rather than found.
+      const head = res.model.getObjectByName('Head');
+      this.visor = buildVisor(STATUS_COLOR[this.status]);
+      if (head) {
+        attachToBone(head, this.visor, {
+          anchor: null,
+          offset: new THREE.Vector3(0, 0.085, 0.115),
+          unit: this.group,
+        });
+      } else {
+        this.visor.position.set(0, 1.45, 0.2);
+        this.group.add(this.visor);
+      }
+
+      // Role kit on the back of the torso, riding the chest bone so it leans
+      // with the robot instead of hovering behind it.
+      const chest = res.model.getObjectByName('Chest');
+      if (chest) {
+        attachToBone(chest, buildLoadout(this.id), {
+          anchor: null,
+          offset: new THREE.Vector3(0, 0.1, -0.17),
+          unit: this.group,
+        });
+      }
+
       this.group.userData.tintParts = [
         this.statusPod.userData.pod,
-        ...(eyeMesh ? [eyeMesh] : []),
+        this.visor.userData.lens,
       ];
 
       this.mixer = new THREE.AnimationMixer(res.model);
-      this.clips = {};
-      for (const clip of res.animations) {
-        // Clips are exported as "CharacterArmature|Idle".
-        this.clips[clip.name.split('|').pop()] = clip;
-      }
+      // Clips are exported as "RobotArmature|Idle", and several of them need
+      // their arms rebuilt before they are fit to play. See tacticalClips.
+      this.clips = tacticalClips(res.animations);
+
+      this.weaponReady = weapon.ready.then((w) => {
+        if (!w) return null;
+        this.armWith(weapon.group);
+        return w;
+      });
+
       this.play('Idle');
 
       // Re-apply whatever status the mission already put us in: the swap can
@@ -256,6 +548,90 @@ export class Unit {
       this.setStatus(this.status, { animate: false });
       return res;
     });
+  }
+
+  // This unit's own copy of the atlas material, tinted to its livery — and
+  // relit, which matters more.
+  //
+  // The mech ships its material under KHR_materials_unlit, so GLTFLoader hands
+  // back a MeshBasicMaterial: the robots arrive rendering the raw bake at full
+  // brightness, ignoring the key light, the cold ambient and every shadow in
+  // the compound. Three bright green stickers walking over a lit scene. So the
+  // material is rebuilt as a standard one around the same texture — same
+  // download, same GPU memory, but now the squad is lit by the same lights as
+  // the ground it is standing on.
+  //
+  // All three robots also clone one parsed file, so they arrive sharing a
+  // single material and recolouring it in place would repaint the whole squad.
+  // One copy per unit is the whole cost of telling ALPHA from BETA-2.
+  applyLivery(model) {
+    const livery = UNIT_LIVERY[this.id] || UNIT_LIVERY.ALPHA;
+    const own = new Map();
+    model.traverse((obj) => {
+      if (!obj.isMesh && !obj.isSkinnedMesh) return;
+      const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
+      const next = mats.map((m) => {
+        if (m?.name !== ATLAS_MATERIAL) return m;
+        if (!own.has(m.uuid)) {
+          const copy = new THREE.MeshStandardMaterial({
+            map: m.map,
+            color: livery.tint,
+            roughness: livery.roughness,
+            metalness: livery.metalness,
+            side: m.side,
+            // Smooth, not faceted. The chassis is round-shouldered and its
+            // panel breaks are painted into the bake; faceting it would only
+            // fight the texture that is doing the work.
+            flatShading: false,
+          });
+          if (livery.lift) {
+            copy.emissive.setHex(livery.tint);
+            copy.emissiveIntensity = livery.lift;
+            // The bake doubles as the emissive map, so the lift follows the
+            // paintwork instead of flooding the whole chassis evenly.
+            copy.emissiveMap = m.map;
+          }
+          copy.name = ATLAS_MATERIAL;
+          own.set(m.uuid, copy);
+        }
+        return own.get(m.uuid);
+      });
+      obj.material = Array.isArray(obj.material) ? next : next[0];
+    });
+  }
+
+  // Put the rifle in the right hand.
+  //
+  // The rig is posed into its carry stance first. The mixer may not have run
+  // yet, or may be mid-clip, and the fit has to be measured against the pose
+  // the robot actually holds the weapon in — not against the T-pose it binds
+  // in. Writing the bones directly is safe: the next mixer.update overwrites
+  // them, and the rifle keeps the local transform baked out of this frame.
+  armWith(weapon) {
+    const model = this.model;
+    const hand = model.getObjectByName('LowerArmR');
+    if (!hand) return;
+
+    const idle = this.clips?.Idle;
+    if (idle) {
+      for (const [right, left] of ARM_PAIRS) {
+        for (const node of [right, left]) {
+          const track = quatTrack(idle, node);
+          const bone = model.getObjectByName(node);
+          if (track && bone) bone.quaternion.fromArray(track.values, 0);
+        }
+      }
+    }
+    model.updateMatrixWorld(true);
+
+    const anchor = handAnchor(model);
+    attachToBone(hand, weapon, {
+      anchor,
+      offset: new THREE.Vector3(WEAPON_OFFSET.x, WEAPON_OFFSET.y, WEAPON_OFFSET.z),
+      rotation: WEAPON_ROTATION,
+      unit: this.group,
+    });
+    this.weapon = weapon;
   }
 
   // Cross-fade to a clip. No-op if the rig has not arrived or lacks it.
