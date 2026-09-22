@@ -40,6 +40,10 @@ export const textureErrors = [];
 // `?tier=high` or `?tier=low` forces it, which is how the headless screenshot
 // harness gets a look at what a real GPU will actually draw.
 let tier = 'high';
+// `tier` has a default so a material built before any renderer exists still
+// gets a shader; `tierKnown` records whether that default has been checked
+// against an actual GPU yet. Only the resolution choice cares — see HAS_4K.
+let tierKnown = false;
 export const renderTier = () => tier;
 
 function forcedTier() {
@@ -49,6 +53,7 @@ function forcedTier() {
 }
 
 export function detectTier(renderer) {
+  tierKnown = true;
   const forced = forcedTier();
   if (forced) {
     tier = forced;
@@ -66,6 +71,41 @@ export function detectTier(renderer) {
   }
   return tier;
 }
+
+// --------------------------------------------------------------- resolution
+
+// The library ships every slot at 2048 and three slots at 4096, and the tier
+// picks which directory to read at load time:
+//
+//   <slot>/2k/albedo.jpg   every slot — and everything 'low' will ever fetch
+//   <slot>/4k/albedo.jpg   the three surfaces that fill the frame
+//
+// WHY NOT 4K EVERYWHERE: a 4096² map is 67 MB of VRAM once it is decoded to
+// RGBA, and a third again for its mip chain. Three maps for each of eleven
+// slots at that size is about 3 GB, which thrashes or kills most GPUs and is
+// far worse on the software rasteriser the headless harness runs on. The JPEG
+// on disk is 6 MB; the decoded footprint is the cost that matters, and it does
+// not care how well the file compressed.
+//
+// WHY THESE THREE: `scale` is in world units, so it decides how much screen a
+// texel gets. The terrain runs at 0.33 and the pad at 0.38 — one repeat every
+// three metres, across the widest surfaces on the board. A prop runs at 3 to 5,
+// which puts a whole repeat inside about twenty screen pixels at the tactical
+// zoom; a 4K map there would buy several hundred megabytes of mip levels that
+// nothing ever samples. `ground-sand` stays at 2K for the same reason from the
+// other direction: the depot ground shader only reads its albedo, and only as
+// a partial splat weight over the dirt.
+//
+// 'low' cannot reach a 4K file, and neither can code that runs before the GPU
+// has been looked at. Both guards are deliberate: `tierKnown` is the one that
+// matters, because `tier` defaults to 'high' and a set built at module scope
+// would otherwise commit to 4K on a software rasteriser. A headless run
+// fetching three 4096² concrete maps it could never sample is exactly what
+// this cost before the guard went in.
+const HAS_4K = new Set(['ground-dirt', 'ground-gravel', 'concrete']);
+
+export const setResolution = (name) =>
+  (tierKnown && tier === 'high' && HAS_4K.has(name) ? '4k' : '2k');
 
 // ------------------------------------------------------------------ loading
 
@@ -88,7 +128,7 @@ const NEUTRAL = {
 };
 
 function loadMap(set, file, srgb) {
-  const url = `${BASE}${set}/${file}`;
+  const url = `${BASE}${set}/${setResolution(set)}/${file}`;
   const tex = loader.load(
     url,
     undefined,
@@ -107,21 +147,58 @@ function loadMap(set, file, srgb) {
 
 // A named PBR set from public/assets/textures/<name>/.
 //
-// The low tier samples albedo only, so it does not fetch the other two maps.
-// That is two thirds of roughly 22 MB left on disk, and it matters more than
-// the bytes suggest: a software rasteriser decodes and uploads a 2048² JPEG
-// slowly enough that loading all three tripled time-to-first-frame and pushed
-// the headless e2e run past its twenty-second boot budget. A map the shader
-// will not read is not worth a millisecond.
+// The low tier samples albedo only, so it does not fetch the other two maps —
+// two thirds of the library left on disk. That matters more than the bytes
+// suggest: a software rasteriser decodes and uploads a 2048² JPEG slowly
+// enough that loading all three tripled time-to-first-frame and pushed the
+// headless e2e run past its twenty-second boot budget. A map the shader will
+// not read is not worth a millisecond.
+//
+// Between the two, low draws eleven 2048² albedos and nothing else — about
+// 250 MB decoded with mips, against roughly 1.3 GB for high.
+//
+// BUILT ON FIRST ACCESS, NOT ON THE CALL. `MAT` in DepotLevel.js is a
+// module-scope table of finished materials, so it runs fadeMat() — and asks
+// for its sets — while the module graph is still evaluating. That is before
+// any renderer exists and therefore before detectTier() has looked at the GPU,
+// so building eagerly pinned those four sets (concrete, metal-corrugated,
+// metal-plate, metal-rust) to the default tier. The observed symptom was a
+// SwiftShader run pulling concrete/4k/albedo.jpg, normal.jpg and rough.jpg —
+// three 4096² maps onto a rasteriser that does not even compile the code to
+// sample them, plus five more maps the low shader ignores. Eleven fetches
+// where nineteen used to be.
+//
+// (Materials.js is not affected: its SURFACE table is plain data and
+// surfaceMaterial() builds on demand, which is already late enough.)
+//
+// Nothing reads a map until shader-compile time — `compile()` here and the
+// ground's onBeforeCompile in Depot.js are the only readers, and both run on
+// the first render, long after detectTier(). So deferring to the getter puts
+// the decision in the right order without DepotLevel or Materials having to
+// change how they declare a table.
 export function textureSet(name) {
   const hit = sets.get(name);
   if (hit) return hit;
 
-  const full = tier === 'high';
+  let maps = null;
+  const build = () => {
+    if (maps) return maps;
+    const full = tier === 'high';
+    maps = {
+      albedo: loadMap(name, 'albedo.jpg', true),
+      normal: full ? loadMap(name, 'normal.jpg', false) : NEUTRAL.normal,
+      rough:  full ? loadMap(name, 'rough.jpg', false) : NEUTRAL.rough,
+    };
+    return maps;
+  };
   const set = {
-    albedo: loadMap(name, 'albedo.jpg', true),
-    normal: full ? loadMap(name, 'normal.jpg', false) : NEUTRAL.normal,
-    rough:  full ? loadMap(name, 'rough.jpg', false) : NEUTRAL.rough,
+    get albedo() { return build().albedo; },
+    get normal() { return build().normal; },
+    get rough() { return build().rough; },
+    // For preloadTextures and for a check that wants to know whether the
+    // fetch has actually been kicked off, as opposed to merely registered.
+    get fetched() { return maps !== null; },
+    force: build,
   };
   sets.set(name, set);
   return set;
@@ -129,8 +206,12 @@ export function textureSet(name) {
 
 // Fetch a set's maps up front so the swap from flat colour to surface happens
 // behind the title card rather than a few seconds into the mission.
+// Runs immediately after detectTier() in createRenderer, which is what makes
+// it safe to force the build here: the tier is known by this point, so these
+// sets fetch the right resolution and do it up front rather than on the frame
+// that first needs them.
 export function preloadTextures(names) {
-  for (const n of names) textureSet(n);
+  for (const n of names) textureSet(n).force();
   return Promise.resolve();
 }
 
@@ -143,7 +224,13 @@ if (typeof window !== 'undefined') {
     textures: {
       errors: textureErrors,
       tier: () => tier,
-      loaded: () => [...sets.keys()],
+      loaded: () => [...sets.entries()].filter(([, s]) => s.fetched).map(([n]) => n),
+      registered: () => [...sets.keys()],
+      // Which directory each fetched slot actually resolved to. The point of
+      // this is for a check to assert the low tier never named a 4K file —
+      // reading the branch above and believing it is not the same thing.
+      resolutions: () => Object.fromEntries([...sets.entries()]
+        .filter(([, s]) => s.fetched).map(([n]) => [n, setResolution(n)])),
     },
   });
 }
